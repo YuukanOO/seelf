@@ -25,6 +25,8 @@ Compose and Git are packaged inside seelf itself so you don't have to bother wit
 
 In below examples, we use the traefik deployed by seelf to expose seelf itself but you can also set up the reverse proxy yourself. That's why there's traefik labels configuring how seelf itself will be made available.
 
+The recommended way to deploy seelf is by using [Docker Compose](#with-docker-compose) since it makes the update process much more easier.
+
 ### With Docker
 
 Don't forget to sets the [appropriate environment variables](#configuration) according to your needs.
@@ -56,7 +58,7 @@ Simply use the following `compose.yml` file and configure it according to your n
 services:
   web:
     restart: unless-stopped
-    image: yuukanoo/seelf
+    image: yuukanoo/seelf:latest
     environment:
       - BALANCER_DOMAIN=http://docker.localhost # <- Change this to your own domain, applications will be deployed as subdomains
       - SEELF_ADMIN_EMAIL=admin@example.com # <- Change this
@@ -96,6 +98,38 @@ Retrieve the seelf sources by either cloning the repository or downloading them 
 make build
 ./seelf serve
 ```
+
+## Updating
+
+### With Docker
+
+```bash
+docker rm $(docker stop $(docker ps -a -q --filter="ancestor=yuukanoo/seelf")) && docker pull yuukanoo/seelf:latest && docker run -d \
+  --name seelf \
+  -e "SEELF_ADMIN_EMAIL=admin@example.com" \
+  -e "SEELF_ADMIN_PASSWORD=admin" \
+  -e "BALANCER_DOMAIN=http://docker.localhost" \
+  -l "traefik.enable=true" \
+  -l "traefik.docker.network=seelf-public" \
+  -l "traefik.http.routers.seelf.rule=Host(\`seelf.docker.localhost\`)" \
+  -v "/var/run/docker.sock:/var/run/docker.sock" \
+  -v "seelfdata:/seelf/data" \
+  --network seelf-public \
+  --restart=unless-stopped \
+  yuukanoo/seelf:latest
+```
+
+### With Docker Compose
+
+Go where the initial `compose.yml` file has been created and run:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+### From sources
+
+Simply build the application again with the latest sources and you're good to go.
 
 ## Configuration
 

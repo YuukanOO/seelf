@@ -2,7 +2,7 @@
 
 I mean, for real!
 
-https://github.com/YuukanOO/seelf/assets/939842/8c307439-8970-4c74-9409-47995a8771bc
+https://github.com/YuukanOO/seelf/assets/939842/d234bf40-1927-4057-a62b-8357c935506b
 
 _The seelf initial public version has some limitation (only local Docker engine, single user mostly) but you can check out [the roadmap](https://github.com/YuukanOO/seelf/milestone/1) to see what's planned!_
 

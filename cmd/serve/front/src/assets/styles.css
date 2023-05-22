@@ -1,0 +1,93 @@
+:root {
+	/** 
+     * Colors based on depth with a basis of 4. The more deep you go (< 4), the more
+     * the color should appear far away.
+     */
+	--co-background-4: #010409;
+	--co-background-5: #0d1117;
+	--co-divider-4: #30363d;
+	--co-text-3: #6c7179;
+	--co-text-4: #8b949e;
+	--co-text-5: #fff;
+	--co-help-1: rgba(56, 139, 253, 0.1);
+	--co-help-3: #1f6feb;
+	--co-help-4: #2f81f7;
+	--co-danger-1: rgba(185, 28, 28, 0.1);
+	--co-danger-3: #7f1d1d;
+	--co-danger-4: #ef4444;
+	--co-warning-1: rgba(251, 191, 36, 0.1);
+	--co-warning-3: #f59e0b;
+	--co-warning-4: #fbbf24;
+	--co-primary-0: #111;
+	--co-primary-3: #065f46;
+	--co-primary-4: #10b981;
+	--co-primary-5: #34d399;
+	--co-pending-4: #87909a;
+	--co-running-4: #fcd34d;
+	--co-success-4: #34d399;
+	--co-error-4: #ef4444;
+	--co-shadow-3: rgba(255, 255, 255, 0.26);
+	--co-shadow-4: rgba(255, 255, 255, 0.54);
+	--co-shadow--4: rgba(0, 0, 0, 0.7); /** FIXME: shadow may not be the appropriate name here */
+
+	/** Types */
+	--fo-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
+		Helvetica Neue, Arial, Noto Sans, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+		Segoe UI Symbol, 'Noto Color Emoji';
+	--fo-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+		monospace;
+
+	--ty-caption: 0.75rem/1rem var(--fo-body);
+	--ty-caption-mono: 0.75rem/1rem var(--fo-mono);
+	--ty-body: 1rem/1.5rem var(--fo-body);
+
+	--ty-heading-1: 600 1.875rem/2.25rem var(--fo-body);
+	--ty-heading-2: 600 1.25rem/1.75rem var(--fo-body);
+	--ty-heading-3: 600 1.125rem/1.75rem var(--fo-body);
+
+	/** Spaces */
+	--sp-1: 0.25rem;
+	--sp-2: 0.5rem;
+	--sp-3: 0.75rem;
+	--sp-4: 1rem;
+	--sp-5: 1.25rem;
+	--sp-6: 1.5rem;
+	--sp-7: 1.75rem;
+	--sp-8: 2rem;
+	--sp-10: 2.5rem;
+	--sp-12: 3rem;
+
+	/** Radius */
+	--ra-2: 0.25rem;
+	--ra-4: 0.5rem;
+
+	/** Outlines */
+	--ou-primary: var(--co-primary-3) solid 3px;
+
+	/** Misc. */
+	--mi-container-width: 56rem;
+}
+
+html {
+	background-color: var(--co-background-4);
+	color: var(--co-text-4);
+	font: var(--ty-body);
+}
+
+abbr {
+	text-decoration: underline dotted;
+	text-underline-offset: 2px;
+	cursor: help;
+}
+
+/** Apply global styles to make things simplier */
+*:disabled,
+*[aria-disabled='true'] {
+	pointer-events: none;
+	filter: grayscale();
+}
+
+::placeholder {
+	color: var(--co-text-3);
+	font-style: italic;
+}

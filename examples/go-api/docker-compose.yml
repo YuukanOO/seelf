@@ -1,0 +1,20 @@
+services:
+  app:
+    restart: unless-stopped
+    build: .
+    environment:
+      - DSN=postgres://app:apppa55word@db/app?sslmode=disable
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+  db:
+    restart: unless-stopped
+    image: postgres:14-alpine
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=apppa55word
+volumes:
+  dbdata:

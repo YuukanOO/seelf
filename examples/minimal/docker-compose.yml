@@ -1,0 +1,14 @@
+services:
+  one:
+    restart: unless-stopped
+    image: traefik/whoami
+    ports:
+      - "8888:80"
+
+  two:
+    restart: unless-stopped
+    image: traefik/whoami
+    ports:
+      - "8889:80"
+    profiles:
+      - staging

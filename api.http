@@ -1,0 +1,141 @@
+@url=http://localhost:8080/api/v1
+#@url=http://seelf.docker.localhost/api/v1
+
+GET {{url}}/healthcheck
+
+###
+
+POST {{url}}/sessions
+Content-Type: application/json
+
+{
+    "email": "admin@example.com",
+    "password": "admin"
+}
+
+###
+
+DELETE {{url}}/session
+
+###
+
+GET {{url}}/profile
+
+###
+
+PATCH {{url}}/profile
+Content-Type: application/json
+
+{
+    "email": "admin@example.com",
+    "password": "admin"
+}
+
+###
+
+GET {{url}}/users
+
+###
+
+GET {{url}}/users/2IdkLl1EaJpkQlBj26dGKcMznwe
+
+###
+# @name createApp
+
+POST {{url}}/apps
+Content-Type: application/json
+
+{
+    "name": "go-api",
+    "vcs": {
+        "url": "https://git.voixdu.net/jleicher/go-api-example.git"
+    },
+    "env": {
+        "production": {
+            "app": {
+                "DEBUG": "false"
+            }
+        },
+        "staging": {
+            "app": {
+                "DEBUG": "true"
+            }
+        }
+    }
+}
+
+###
+
+GET {{url}}/apps
+
+###
+
+GET {{url}}/apps/{{createApp.response.body.$.id}}
+
+###
+
+PATCH {{url}}/apps/{{createApp.response.body.$.id}}
+Content-Type: application/json
+
+{
+    "vcs": {
+        "url": "https://git.voixdu.net/jleicher/go-api-example.git"
+    },
+    "env": {}
+}
+
+###
+# @name queueDeployment
+
+POST {{url}}/apps/{{createApp.response.body.$.id}}/deployments
+Content-Type: application/json
+
+{
+    "environment": "staging",
+    "raw": "services:\n  app:\n    image: traefik/whoami\n    ports:\n      - \"8888:80\"\n\n  two:\n    image: traefik/whoami\n    ports:\n      - \"8889:80\"\n"
+}
+
+###
+
+POST {{url}}/apps/{{createApp.response.body.$.id}}/deployments
+Content-Type: application/json
+
+{
+    "environment": "production",
+    "git": {
+        "branch": "master",
+        "hash": "cf74d09c42"
+    }
+}
+
+###
+
+POST {{url}}/apps/{{createApp.response.body.$.id}}/deployments
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="environment"
+
+production
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="archive"; filename="go-api.tar.gz"
+Content-Type: application/tar+gzip
+
+< ./examples/go-api/go-api.tar.gz
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+GET {{url}}/apps/{{createApp.response.body.$.id}}/deployments
+
+###
+
+GET {{url}}/apps/{{queueDeployment.response.body.$.app_id}}/deployments/{{queueDeployment.response.body.$.deployment_number}}
+
+###
+
+GET {{url}}/apps/{{queueDeployment.response.body.$.app_id}}/deployments/{{queueDeployment.response.body.$.deployment_number}}/logs
+
+###
+
+DELETE {{url}}/apps/{{createApp.response.body.$.id}}

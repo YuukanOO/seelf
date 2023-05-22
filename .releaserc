@@ -1,0 +1,26 @@
+{
+  "branches": [
+    "main"
+  ],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "SEELF_VERSION=${nextRelease.version} make prepare-release && echo \"docker_tags=yuukanoo/seelf:${nextRelease.version},yuukanoo/seelf:latest\" >> \"$GITHUB_ENV\"",
+        "publishCmd": "echo \"docker_publish=true\" >> \"$GITHUB_ENV\""
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "cmd/version.go"
+        ],
+        "message": "chore(release): bump version to ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}

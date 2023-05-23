@@ -37,7 +37,6 @@ import (
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
-	vstrings "github.com/YuukanOO/seelf/pkg/validation/strings"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -58,15 +57,7 @@ const (
 	noticeSecretKeyGenerated = `a default secret key has been generated. If you want to override it, you can set the HTTP_SECRET environment variable.`
 )
 
-var (
-	errAdminAccountRequired = errors.New(`seelf requires a default user to be created but your database looks empty.
-	Please set the SEELF_ADMIN_EMAIL and SEELF_ADMIN_PASSWORD environment variables and relaunch the command, for example:
-
-	$ SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=admin seelf serve
-
-	Please note this is a one time only action`)
-	errServerReset = errors.New("server_reset")
-)
+var errServerReset = errors.New("server_reset")
 
 type (
 	// Configuration options needed by the server to handle request correctly.
@@ -108,7 +99,7 @@ type (
 		authGateway            authquery.Gateway
 		deploymentGateway      deplquery.Gateway
 		login                  func(context.Context, authcmd.LoginCommand) (string, error)
-		register               func(context.Context, authcmd.RegisterCommand) (string, error)
+		createFirstAccount     func(context.Context, authcmd.CreateFirstAccountCommand) error
 		updateUser             func(context.Context, authcmd.UpdateUserCommand) error
 		createApp              func(context.Context, deplcmd.CreateAppCommand) (string, error)
 		updateApp              func(context.Context, deplcmd.UpdateAppCommand) error
@@ -231,7 +222,7 @@ func (s *server) configureServices() error {
 	passwordHasher := authinfra.NewBCryptHasher()
 
 	s.login = authcmd.Login(usersStore, passwordHasher)
-	s.register = authcmd.Register(usersStore, usersStore, passwordHasher, authinfra.NewKeyGenerator())
+	s.createFirstAccount = authcmd.CreateFirstAccount(usersStore, usersStore, passwordHasher, authinfra.NewKeyGenerator())
 	s.updateUser = authcmd.UpdateUser(usersStore, usersStore, passwordHasher)
 
 	s.createApp = deplcmd.CreateApp(appsStore, appsStore)
@@ -275,7 +266,10 @@ func (s *server) startCheckup() error {
 	}
 
 	// Create an admin account if no one exists yet
-	if err := s.createAdminUserIfNeeded(ctx); err != nil {
+	if err := s.createFirstAccount(ctx, authcmd.CreateFirstAccountCommand{
+		Email:    s.options.DefaultEmail(),
+		Password: s.options.DefaultPassword(),
+	}); err != nil {
 		return err
 	}
 
@@ -413,33 +407,4 @@ func (s *server) checkNonSupportedConfigChanges() error {
 	}
 
 	return ostools.WriteFile(fingerprintPath, []byte(fingerprint))
-}
-
-func (s *server) createAdminUserIfNeeded(ctx context.Context) error {
-	usersCount, err := s.authGateway.GetUsersCount(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	if usersCount > 0 {
-		return nil
-	}
-
-	s.logger.Infow("creating first user account (admin)",
-		"email", s.options.DefaultEmail())
-
-	cmd := authcmd.RegisterCommand{
-		Email:    s.options.DefaultEmail(),
-		Password: s.options.DefaultPassword(),
-	}
-
-	// Both are empty, that's an error!
-	if vstrings.Required(cmd.Email) != nil || vstrings.Required(cmd.Password) != nil {
-		return errAdminAccountRequired
-	}
-
-	_, err = s.register(ctx, cmd)
-
-	return err
 }

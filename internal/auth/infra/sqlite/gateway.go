@@ -17,12 +17,6 @@ func NewGateway(db sqlite.Database) query.Gateway {
 	return &gateway{db}
 }
 
-func (s *gateway) GetUsersCount(ctx context.Context) (uint, error) {
-	return builder.
-		Query[uint]("SELECT COUNT(id) FROM users").
-		Extract(s, ctx)
-}
-
 func (s *gateway) GetAllUsers(ctx context.Context) ([]query.User, error) {
 	return builder.
 		Query[query.User](`

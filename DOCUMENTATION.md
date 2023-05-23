@@ -32,8 +32,7 @@ The recommended way to deploy seelf is by using [Docker Compose](#with-docker-co
 Don't forget to sets the [appropriate environment variables](#configuration) according to your needs.
 
 ```bash
-docker network create seelf-public
-docker run -d \
+docker network create seelf-public && docker run -d \
   --name seelf \
   -e "SEELF_ADMIN_EMAIL=admin@example.com" \
   -e "SEELF_ADMIN_PASSWORD=admin" \
@@ -104,7 +103,7 @@ make build
 ### With Docker
 
 ```bash
-docker rm $(docker stop $(docker ps -a -q --filter="ancestor=yuukanoo/seelf")) && docker pull yuukanoo/seelf:latest && docker run -d \
+docker pull yuukanoo/seelf:latest && docker rm $(docker stop $(docker ps -a -q --filter="ancestor=yuukanoo/seelf")) && docker run -d \
   --name seelf \
   -e "SEELF_ADMIN_EMAIL=admin@example.com" \
   -e "SEELF_ADMIN_PASSWORD=admin" \

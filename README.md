@@ -33,8 +33,7 @@ _Althought Docker is the only backend supported at the moment, I would like to i
 Want to give seelf a try locally? Run those commands to start it (the network here represents the public gateway used by the balancer internally so you have to name it `seelf-public`):
 
 ```bash
-docker network create seelf-public
-docker run -d \
+docker network create seelf-public && docker run -d \
   --name seelf \
   -e "SEELF_ADMIN_EMAIL=admin@example.com" \
   -e "SEELF_ADMIN_PASSWORD=admin" \
@@ -54,7 +53,7 @@ Head over [http://seelf.docker.localhost](http://seelf.docker.localhost) and sig
 
 To quickly check how seelf behaves, you can use [examples](examples/README.md) packaged as `.tar.gz` archives in this repository.
 
-See all [available options in the documentation](DOCUMENTATION.md#configuration) to get more serious and configure seelf for you server.
+See all [available options in the documentation](DOCUMENTATION.md#configuration) to get more serious and configure seelf for your server.
 
 ## Documentation
 

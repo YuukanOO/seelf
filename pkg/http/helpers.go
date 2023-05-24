@@ -13,7 +13,7 @@ import (
 
 // Tiny interface to represents needed contrat in order to use helpers provided by this package.
 type Server interface {
-	UseSSL() bool
+	IsSecure() bool
 	Logger() log.Logger
 }
 
@@ -46,7 +46,7 @@ func Send(s Server, handler func(*gin.Context) error) gin.HandlerFunc {
 func Created[TOut any](s Server, ctx *gin.Context, data TOut, location string, args ...any) error {
 	scheme := "http://"
 
-	if s.UseSSL() {
+	if s.IsSecure() {
 		scheme = "https://"
 	}
 

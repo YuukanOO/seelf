@@ -70,7 +70,7 @@ type (
 		IsVerbose() bool
 		ConnectionString() string
 		Secret() []byte
-		UseSSL() bool
+		IsSecure() bool
 		ListenAddress() string
 		DefaultEmail() string
 		DefaultPassword() string
@@ -172,7 +172,7 @@ func (s *server) Listen() (finalErr error) {
 }
 
 func (s *server) Logger() log.Logger { return s.logger }
-func (s *server) UseSSL() bool       { return s.options.UseSSL() }
+func (s *server) IsSecure() bool     { return s.options.IsSecure() }
 
 // Configure every services needed by this service. Think of it as the composition root.
 func (s *server) configureServices() error {
@@ -293,7 +293,7 @@ func (s *server) configureRouter() {
 	// Configure the session store
 	store := cookie.NewStore(s.options.Secret())
 	store.Options(sessions.Options{
-		Secure:   s.options.UseSSL(),
+		Secure:   s.options.IsSecure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	})

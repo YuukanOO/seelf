@@ -55,6 +55,7 @@ services:
       - BALANCER_DOMAIN=http://docker.localhost # <- Change this to your own domain, applications will be deployed as subdomains
       - SEELF_ADMIN_EMAIL=admin@example.com # <- Change this
       - SEELF_ADMIN_PASSWORD=admin # <- Change this
+      # - HTTP_SECURE= # By default, the seelf server use Secure cookies if BALANCER_DOMAIN starts with https://, you can override this behavior by setting it explicitly to true or false here. If you wish to go back to the initial value, just set HTTP_SECURE= as demonstrated here
       # - DEPLOYMENT_DIR_TEMPLATE={{ .Number }}-{{ .Environment }} # You can configure the deployment build directory path if you want to keep every deployment source files for example.
       # - ACME_EMAIL=youremail@provider.com # <- If BALANCER_DOMAIN starts with https://, let's encrypt certificate will be used and the email associated will default to SEELF_ADMIN_EMAIL but you can override it if you need to
     ports:
@@ -84,7 +85,7 @@ make build
 
 ## Exposing seelf itself
 
-You probably want to expose seelf itself on an url without a port and with a certificate. You can manage this part yourself or just leverage the traefik deployed by seelf.
+You probably want to expose seelf itself on an url without a port and with a valid certificate. You can manage this part yourself or just leverage the traefik proxy deployed by seelf.
 
 To do this, we recommend to use the [docker compose installation](#with-docker-compose) and add the missing parts (see comments).
 
@@ -97,6 +98,8 @@ services:
       - BALANCER_DOMAIN=http://docker.localhost
       - SEELF_ADMIN_EMAIL=admin@example.com
       - SEELF_ADMIN_PASSWORD=admin
+      - HTTP_SECURE= # Force fallback to the default handling of http secure (based on the BALANCER_DOMAIN)
+
     # Remove the ports part since they are not needed anymore
     labels:
       - traefik.enable=true # Enable traefik for seelf
@@ -111,8 +114,10 @@ volumes:
 
 networks:
   default:
-    name: seelf-public # Connect to the public network used by traefik
+    name: seelf-public # Connect to the public network used by traefik to make seelf available (since ports have been removed)
 ```
+
+_Note: You can also do this directly with the docker command with `-l "traefik.enable=true"` and so on, `docker network connect seelf-public <seelf container id>` but that's way more complicated._
 
 ## Updating
 
@@ -138,7 +143,7 @@ Simply build the application again with the latest sources and you're good to go
 
 ## Configuration
 
-seelf can be configured by a yaml configuration file (as below) and/or environment variables (see comments for the appropriate name). Those environment variables can also be set using a `.env` or `.env.local` in the working directory when launching seelf. Either way, the resulting configuration will be written to the application folder during the application startup.
+seelf can be configured by a yaml configuration file (as below) and/or environment variables (see comments for the appropriate name). Those environment variables can also be set using a `.env` or `.env.local` in the working directory when launching seelf. Either way, the resulting configuration will be written to the application folder during the application startup so the next run may not include initial configuration options.
 
 When configured using a file, you can provide it with the `-c <your_file.yml>` or `--config <your_file.yml>`. Here is the full configuration file:
 
@@ -150,6 +155,7 @@ data:
 http:
   host: 0.0.0.0 # HTTP_HOST Host to listen to
   port: 8080 # HTTP_PORT,PORT Port to listen to
+  secure: false # HTTP_SECURE Wether or not the web server is served over https. If omitted, determine this information from the BALANCER_DOMAIN. It controls wether or not cookie are sent with the Secure flag and the scheme used on the Location header of created resources
   secret: "<generated if empty>" # HTTP_SECRET Secret key to use when signing cookies
 balancer:
   domain: "http://docker.locahost" # BALANCER_DOMAIN Main domain to use when deploying an application. If starting with https://, Let's Encrypt certificates will be generated and the acme email is mandatory. If you change this domain afterward, you'll have to redeploy your apps for now

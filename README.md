@@ -8,18 +8,7 @@ _The seelf initial public version has some limitation (only local Docker engine,
 
 ## Goal
 
-[seelf](https://github.com/YuukanOO/seelf) is a self-hosted deployment platform to make deploying an application stack as easy as possible.
-
-This project was born because, as a developer, I often have tiny toy applications to deploy and found it somehow frustating. I've tested many self-hosted PaaS such as Dokku and Caprover but none fit me.
-
-The initial idea that led to this project was to take a developer **docker compose** file representing a project stack (as seen in many projects nowadays) and use it **without any modification** to deploy it on your own infrastructure.
-
-Key aspects of seelf are:
-
-- Tiny (in size)
-- Lightweight (in resource usage)
-- Reliable
-- Easy to understand
+Got an already working docker compose file for your project ? Just send it to your [seelf](https://github.com/YuukanOO/seelf) instance and _boom_, that's live on your own infrastructure with all services correctly deployed and exposed on nice urls as needed! See [the documentation](DOCUMENTATION.md) for more information.
 
 _Althought Docker is the only backend supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example._
 

@@ -50,6 +50,7 @@ func Test_Run(t *testing.T) {
 		testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
+			"--providers.docker.network=seelf-public",
 			"--providers.docker.exposedbydefault=false",
 		}, project.Services[0].Command)
 		testutil.HasLength(t, project.Services[0].Ports, 1)
@@ -78,6 +79,7 @@ func Test_Run(t *testing.T) {
 		testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
+			"--providers.docker.network=seelf-public",
 			"--providers.docker.exposedbydefault=false",
 			"--entrypoints.web.address=:80",
 			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
@@ -219,19 +221,17 @@ volumes:
 				}, service.Environment)
 				if opts.Domain().UseSSL() {
 					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:          string(app.ID()),
-						docker.EnvironmentLabel:  string(domain.Production),
-						"traefik.enable":         "true",
-						"traefik.docker.network": "seelf-public",
+						docker.AppLabel:         string(app.ID()),
+						docker.EnvironmentLabel: string(domain.Production),
+						"traefik.enable":        "true",
 						"traefik.http.routers.my-app-production-app.rule":             "Host(`my-app.docker.localhost`)",
 						"traefik.http.routers.my-app-production-app.tls.certresolver": "seelfresolver",
 					}, service.Labels)
 				} else {
 					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:          string(app.ID()),
-						docker.EnvironmentLabel:  string(domain.Production),
-						"traefik.enable":         "true",
-						"traefik.docker.network": "seelf-public",
+						docker.AppLabel:         string(app.ID()),
+						docker.EnvironmentLabel: string(domain.Production),
+						"traefik.enable":        "true",
 						"traefik.http.routers.my-app-production-app.rule": "Host(`my-app.docker.localhost`)",
 					}, service.Labels)
 				}
@@ -255,19 +255,17 @@ volumes:
 				testutil.DeepEquals(t, types.MappingWithEquals{}, service.Environment)
 				if opts.Domain().UseSSL() {
 					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:          string(app.ID()),
-						docker.EnvironmentLabel:  string(domain.Production),
-						"traefik.enable":         "true",
-						"traefik.docker.network": "seelf-public",
+						docker.AppLabel:         string(app.ID()),
+						docker.EnvironmentLabel: string(domain.Production),
+						"traefik.enable":        "true",
 						"traefik.http.routers.my-app-production-sidecar.rule":             "Host(`sidecar.my-app.docker.localhost`)",
 						"traefik.http.routers.my-app-production-sidecar.tls.certresolver": "seelfresolver",
 					}, service.Labels)
 				} else {
 					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:          string(app.ID()),
-						docker.EnvironmentLabel:  string(domain.Production),
-						"traefik.enable":         "true",
-						"traefik.docker.network": "seelf-public",
+						docker.AppLabel:         string(app.ID()),
+						docker.EnvironmentLabel: string(domain.Production),
+						"traefik.enable":        "true",
 						"traefik.http.routers.my-app-production-sidecar.rule": "Host(`sidecar.my-app.docker.localhost`)",
 					}, service.Labels)
 				}

@@ -30,30 +30,17 @@ _Althought Docker is the only backend supported at the moment, I would like to i
 
 ## Quick start
 
-Want to give seelf a try locally? Run those commands to start it (the network here represents the public gateway used by the balancer internally so you have to name it `seelf-public`):
+Want to give seelf a try?
 
 ```bash
-docker network create seelf-public && docker run -d \
-  --name seelf \
-  -e "SEELF_ADMIN_EMAIL=admin@example.com" \
-  -e "SEELF_ADMIN_PASSWORD=admin" \
-  -l "traefik.enable=true" \
-  -l "traefik.docker.network=seelf-public" \
-  -l "traefik.http.routers.seelf.rule=Host(\`seelf.docker.localhost\`)" \
-  -v "/var/run/docker.sock:/var/run/docker.sock" \
-  -v "seelfdata:/seelf/data" \
-  --network seelf-public \
-  --restart=unless-stopped \
-  yuukanoo/seelf
+docker run -d -e "SEELF_ADMIN_EMAIL=admin@example.com" -e "SEELF_ADMIN_PASSWORD=admin" -v "/var/run/docker.sock:/var/run/docker.sock" -v "seelfdata:/seelf/data" -p "8080:8080" yuukanoo/seelf
 ```
 
-_Note: Traefik will be deployed by seelf itself when starting up so you don't have to worry about it._
-
-Head over [http://seelf.docker.localhost](http://seelf.docker.localhost) and sign in using `admin@example.com` and `admin` as password!
+Head over [http://localhost:8080](http://localhost:8080) and sign in using `admin@example.com` and `admin` as password!
 
 To quickly check how seelf behaves, you can use [examples](examples/README.md) packaged as `.tar.gz` archives in this repository.
 
-See all [available options in the documentation](DOCUMENTATION.md#configuration) to get more serious and configure seelf for your server.
+See all [available options in the documentation](DOCUMENTATION.md#installation) to get more serious and configure seelf for your server.
 
 ## Documentation
 

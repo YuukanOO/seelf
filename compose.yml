@@ -10,7 +10,6 @@ services:
       # - ACME_EMAIL=youremail@provider.com # <- If BALANCER_DOMAIN starts with https://, let's encrypt certificate will be used and the email associated will default to SEELF_ADMIN_EMAIL but you can override it if you need to
     labels:
       - traefik.enable=true # Here we expose seelf with the traefik instance managed by seelf at startup, that's not mandatory but so much easier
-      - traefik.docker.network=seelf-public
       - traefik.http.routers.seelf.rule=Host(`seelf.docker.localhost`) # <- Change this to where you want seelf to be exposed (use the same domain as above)
       # - traefik.http.routers.seelf.tls.certresolver=seelfresolver # <- If BALANCER_DOMAIN starts with https://, uncomment this line too
     volumes:

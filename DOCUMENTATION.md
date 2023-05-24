@@ -23,8 +23,6 @@ Whatever installation you choose, you **MUST** have [Docker](https://docs.docker
 
 Compose and Git are packaged inside seelf itself so you don't have to bother with them.
 
-In below examples, we use the traefik deployed by seelf to expose seelf itself but you can also set up the reverse proxy yourself. That's why there's traefik labels configuring how seelf itself will be made available.
-
 The recommended way to deploy seelf is by using [Docker Compose](#with-docker-compose) since it makes the update process much more easier.
 
 ### With Docker
@@ -32,22 +30,17 @@ The recommended way to deploy seelf is by using [Docker Compose](#with-docker-co
 Don't forget to sets the [appropriate environment variables](#configuration) according to your needs.
 
 ```bash
-docker network create seelf-public && docker run -d \
-  --name seelf \
+docker run -d \
   -e "SEELF_ADMIN_EMAIL=admin@example.com" \
   -e "SEELF_ADMIN_PASSWORD=admin" \
   -e "BALANCER_DOMAIN=http://docker.localhost" \
-  -l "traefik.enable=true" \
-  -l "traefik.docker.network=seelf-public" \
-  -l "traefik.http.routers.seelf.rule=Host(\`seelf.docker.localhost\`)" \
   -v "/var/run/docker.sock:/var/run/docker.sock" \
   -v "seelfdata:/seelf/data" \
-  --network seelf-public \
-  --restart=unless-stopped \
+  -p "8080:8080" \
   yuukanoo/seelf
 ```
 
-_Note: add flag `-l "traefik.http.routers.seelf.tls.certresolver=seelfresolver"` if your `BALANCER_DOMAIN` starts with `https` making seelf available thought `https` itself._
+_Note: On windows, you may have to run the command on one line without the backslashes._
 
 ### With Docker Compose
 
@@ -57,33 +50,24 @@ Simply use the following `compose.yml` file and configure it according to your n
 services:
   web:
     restart: unless-stopped
-    image: yuukanoo/seelf:latest
+    image: yuukanoo/seelf
     environment:
       - BALANCER_DOMAIN=http://docker.localhost # <- Change this to your own domain, applications will be deployed as subdomains
       - SEELF_ADMIN_EMAIL=admin@example.com # <- Change this
       - SEELF_ADMIN_PASSWORD=admin # <- Change this
       # - DEPLOYMENT_DIR_TEMPLATE={{ .Number }}-{{ .Environment }} # You can configure the deployment build directory path if you want to keep every deployment source files for example.
       # - ACME_EMAIL=youremail@provider.com # <- If BALANCER_DOMAIN starts with https://, let's encrypt certificate will be used and the email associated will default to SEELF_ADMIN_EMAIL but you can override it if you need to
-    labels:
-      - traefik.enable=true # Here we expose seelf with the traefik instance managed by seelf at startup, that's not mandatory but so much easier
-      - traefik.docker.network=seelf-public
-      - traefik.http.routers.seelf.rule=Host(`seelf.docker.localhost`) # <- Change this to where you want seelf to be exposed (use the same domain as above)
-      # - traefik.http.routers.seelf.tls.certresolver=seelfresolver # <- If BALANCER_DOMAIN starts with https://, uncomment this line too
+    ports:
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - seelfdata:/seelf/data # The /seelf/data directory contains the database, configuration file and everything deployed by seelf, so keep it :)
 
 volumes:
   seelfdata:
-
-networks:
-  default:
-    name: seelf-public # Do not change this since this is the network shared by the balancer and deployed applications
 ```
 
-_Note: Traefik will be deployed by seelf itself when starting up so you don't have to worry about it._
-
-_Note²: If you want to build the image yourself (because your platform is not supported for example), you can use the command `docker build -t yuukanoo/seelf .` or use the `compose.yml` in this repository which build the image._
+_Note: If you want to build the image yourself (because your platform is not supported for example), you can use the command `docker build -t yuukanoo/seelf .` or use the `compose.yml` in this repository which build the image._
 
 ### From sources
 
@@ -98,24 +82,46 @@ make build
 ./seelf serve
 ```
 
+## Exposing seelf itself
+
+You probably want to expose seelf itself on an url without a port and with a certificate. You can manage this part yourself or just leverage the traefik deployed by seelf.
+
+To do this, we recommend to use the [docker compose installation](#with-docker-compose) and add the missing parts (see comments).
+
+```yml
+services:
+  web:
+    restart: unless-stopped
+    image: yuukanoo/seelf
+    environment:
+      - BALANCER_DOMAIN=http://docker.localhost
+      - SEELF_ADMIN_EMAIL=admin@example.com
+      - SEELF_ADMIN_PASSWORD=admin
+    # Remove the ports part since they are not needed anymore
+    labels:
+      - traefik.enable=true # Enable traefik for seelf
+      - traefik.http.routers.seelf.rule=Host(`seelf.docker.localhost`) # Expose seelf on the given host. Replace seelf.docker.localhost by where you want seelf to be available
+      # - traefik.http.routers.seelf.tls.certresolver=seelfresolver # If BALANCER_DOMAIN starts with https://, uncomment this line too to generate needed certificates
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - seelfdata:/seelf/data
+
+volumes:
+  seelfdata:
+
+networks:
+  default:
+    name: seelf-public # Connect to the public network used by traefik
+```
+
 ## Updating
 
 ### With Docker
 
+Since the configuration has been saved in the volume `seelfdata`, you can omit the settings used when launching seelf for the first time.
+
 ```bash
-docker pull yuukanoo/seelf:latest && docker rm $(docker stop $(docker ps -a -q --filter="ancestor=yuukanoo/seelf")) && docker run -d \
-  --name seelf \
-  -e "SEELF_ADMIN_EMAIL=admin@example.com" \
-  -e "SEELF_ADMIN_PASSWORD=admin" \
-  -e "BALANCER_DOMAIN=http://docker.localhost" \
-  -l "traefik.enable=true" \
-  -l "traefik.docker.network=seelf-public" \
-  -l "traefik.http.routers.seelf.rule=Host(\`seelf.docker.localhost\`)" \
-  -v "/var/run/docker.sock:/var/run/docker.sock" \
-  -v "seelfdata:/seelf/data" \
-  --network seelf-public \
-  --restart=unless-stopped \
-  yuukanoo/seelf:latest
+docker pull yuukanoo/seelf && docker rm $(docker stop $(docker ps -a -q --filter="ancestor=yuukanoo/seelf")) && docker run -d -v "/var/run/docker.sock:/var/run/docker.sock" -v "seelfdata:/seelf/data" -p "8080:8080" yuukanoo/seelf
 ```
 
 ### With Docker Compose

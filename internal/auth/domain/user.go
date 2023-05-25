@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -13,6 +14,12 @@ import (
 var (
 	ErrEmailAlreadyTaken      = apperr.New("email_already_taken")
 	ErrInvalidEmailOrPassword = apperr.New("invalid_email_or_password")
+	ErrAdminAccountRequired   = errors.New(`seelf requires a default user to be created but your database looks empty.
+	Please set the SEELF_ADMIN_EMAIL and SEELF_ADMIN_PASSWORD environment variables and relaunch the command, for example:
+
+	$ SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=admin seelf serve
+
+	Please note this is a one time only action`)
 )
 
 type (
@@ -47,6 +54,7 @@ type (
 	}
 
 	UsersReader interface {
+		GetUsersCount(context.Context) (uint, error)
 		GetIDFromAPIKey(context.Context, APIKey) (UserID, error)
 		IsEmailUnique(context.Context, Email) (UniqueEmail, error)
 		IsEmailUniqueForUser(context.Context, UserID, Email) (UniqueEmail, error)

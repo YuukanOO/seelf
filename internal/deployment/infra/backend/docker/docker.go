@@ -103,6 +103,7 @@ func (d *docker) Setup() error {
 				Restart: types.RestartPolicyUnlessStopped,
 				Command: []string{
 					"--providers.docker",
+					fmt.Sprintf("--providers.docker.network=%s", publicNetworkName),
 					"--providers.docker.exposedbydefault=false",
 				},
 				Ports: []types.ServicePortConfig{
@@ -479,7 +480,6 @@ func (d *docker) generateProject(depl domain.Deployment, logger log.StepLogger) 
 		service.Networks[publicNetworkName] = nil // nil here because there's no additional options to give
 
 		service.Labels["traefik.enable"] = "true"
-		service.Labels["traefik.docker.network"] = publicNetworkName
 		service.Labels[fmt.Sprintf("traefik.http.routers.%s.rule", serviceQualifiedName)] =
 			fmt.Sprintf("Host(`%s`)", url.Host())
 

@@ -21,14 +21,19 @@ type Processable interface {
 }
 
 // Load the configuration into the target from a yaml file and environment variables.
-// It will look for dotenv files in the current directory.
+// It will look for dotenv files in the current directory. If no dotenvFiles are given,
+// default ones will be used: .env and .env.local.
 // target can implement the Processable interface to do any stuff after the config has been loaded.
-func Load(configFilePath string, target any) error {
+func Load(configFilePath string, target any, dotenvFiles ...string) error {
 	if err := loadFromYaml(configFilePath, target); err != nil {
 		return err
 	}
 
-	if err := loadFromEnvironment(dotenvFilenames, target); err != nil {
+	if len(dotenvFiles) == 0 {
+		dotenvFiles = dotenvFilenames
+	}
+
+	if err := loadFromEnvironment(dotenvFiles, target); err != nil {
 		return err
 	}
 

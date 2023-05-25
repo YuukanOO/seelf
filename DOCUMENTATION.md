@@ -23,30 +23,24 @@ Whatever installation you choose, you **MUST** have [Docker](https://docs.docker
 
 Compose and Git are packaged inside seelf itself so you don't have to bother with them.
 
-In below examples, we use the traefik deployed by seelf to expose seelf itself but you can also set up the reverse proxy yourself. That's why there's traefik labels configuring how seelf itself will be made available.
+The recommended way to deploy seelf is by using [Docker Compose](#with-docker-compose) since it makes the update process much more easier.
 
 ### With Docker
 
 Don't forget to sets the [appropriate environment variables](#configuration) according to your needs.
 
 ```bash
-docker network create seelf-public
 docker run -d \
-  --name seelf \
   -e "SEELF_ADMIN_EMAIL=admin@example.com" \
   -e "SEELF_ADMIN_PASSWORD=admin" \
   -e "BALANCER_DOMAIN=http://docker.localhost" \
-  -l "traefik.enable=true" \
-  -l "traefik.docker.network=seelf-public" \
-  -l "traefik.http.routers.seelf.rule=Host(\`seelf.docker.localhost\`)" \
   -v "/var/run/docker.sock:/var/run/docker.sock" \
   -v "seelfdata:/seelf/data" \
-  --network seelf-public \
-  --restart=unless-stopped \
+  -p "8080:8080" \
   yuukanoo/seelf
 ```
 
-_Note: add flag `-l "traefik.http.routers.seelf.tls.certresolver=seelfresolver"` if your `BALANCER_DOMAIN` starts with `https` making seelf available thought `https` itself._
+_Note: On windows, you may have to run the command on one line without the backslashes._
 
 ### With Docker Compose
 
@@ -61,28 +55,20 @@ services:
       - BALANCER_DOMAIN=http://docker.localhost # <- Change this to your own domain, applications will be deployed as subdomains
       - SEELF_ADMIN_EMAIL=admin@example.com # <- Change this
       - SEELF_ADMIN_PASSWORD=admin # <- Change this
+      # - HTTP_SECURE= # By default, the seelf server use Secure cookies if BALANCER_DOMAIN starts with https://, you can override this behavior by setting it explicitly to true or false here. If you wish to go back to the initial value, just set HTTP_SECURE= as demonstrated here
       # - DEPLOYMENT_DIR_TEMPLATE={{ .Number }}-{{ .Environment }} # You can configure the deployment build directory path if you want to keep every deployment source files for example.
       # - ACME_EMAIL=youremail@provider.com # <- If BALANCER_DOMAIN starts with https://, let's encrypt certificate will be used and the email associated will default to SEELF_ADMIN_EMAIL but you can override it if you need to
-    labels:
-      - traefik.enable=true # Here we expose seelf with the traefik instance managed by seelf at startup, that's not mandatory but so much easier
-      - traefik.docker.network=seelf-public
-      - traefik.http.routers.seelf.rule=Host(`seelf.docker.localhost`) # <- Change this to where you want seelf to be exposed (use the same domain as above)
-      # - traefik.http.routers.seelf.tls.certresolver=seelfresolver # <- If BALANCER_DOMAIN starts with https://, uncomment this line too
+    ports:
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - seelfdata:/seelf/data # The /seelf/data directory contains the database, configuration file and everything deployed by seelf, so keep it :)
 
 volumes:
   seelfdata:
-
-networks:
-  default:
-    name: seelf-public # Do not change this since this is the network shared by the balancer and deployed applications
 ```
 
-_Note: Traefik will be deployed by seelf itself when starting up so you don't have to worry about it._
-
-_Note²: If you want to build the image yourself (because your platform is not supported for example), you can use the command `docker build -t yuukanoo/seelf .` or use the `compose.yml` in this repository which build the image._
+_Note: If you want to build the image yourself (because your platform is not supported for example), you can use the command `docker build -t yuukanoo/seelf .` or use the `compose.yml` in this repository which build the image._
 
 ### From sources
 
@@ -97,9 +83,67 @@ make build
 ./seelf serve
 ```
 
+## Exposing seelf itself
+
+You probably want to expose seelf itself on an url without a port and with a valid certificate. You can manage this part yourself or just leverage the traefik proxy deployed by seelf.
+
+To do this, we recommend to use the [docker compose installation](#with-docker-compose) and add the missing parts (see comments).
+
+```yml
+services:
+  web:
+    restart: unless-stopped
+    image: yuukanoo/seelf
+    environment:
+      - BALANCER_DOMAIN=http://docker.localhost
+      - SEELF_ADMIN_EMAIL=admin@example.com
+      - SEELF_ADMIN_PASSWORD=admin
+      - HTTP_SECURE= # Force fallback to the default handling of http secure (based on the BALANCER_DOMAIN)
+
+    # Remove the ports part since they are not needed anymore
+    labels:
+      - traefik.enable=true # Enable traefik for seelf
+      - traefik.http.routers.seelf.rule=Host(`seelf.docker.localhost`) # Expose seelf on the given host. Replace seelf.docker.localhost by where you want seelf to be available
+      # - traefik.http.routers.seelf.tls.certresolver=seelfresolver # If BALANCER_DOMAIN starts with https://, uncomment this line too to generate needed certificates
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - seelfdata:/seelf/data
+
+volumes:
+  seelfdata:
+
+networks:
+  default:
+    name: seelf-public # Connect to the public network used by traefik to make seelf available (since ports have been removed)
+```
+
+_Note: You can also do this directly with the docker command with `-l "traefik.enable=true"` and so on, `docker network connect seelf-public <seelf container id>` but that's way more complicated._
+
+## Updating
+
+### With Docker
+
+Since the configuration has been saved in the volume `seelfdata`, you can omit the settings used when launching seelf for the first time.
+
+```bash
+docker pull yuukanoo/seelf && docker rm $(docker stop $(docker ps -a -q --filter="ancestor=yuukanoo/seelf")) && docker run -d -v "/var/run/docker.sock:/var/run/docker.sock" -v "seelfdata:/seelf/data" -p "8080:8080" yuukanoo/seelf
+```
+
+### With Docker Compose
+
+Go where the initial `compose.yml` file has been created and run:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+### From sources
+
+Simply build the application again with the latest sources and you're good to go.
+
 ## Configuration
 
-seelf can be configured by a yaml configuration file (as below) and/or environment variables (see comments for the appropriate name). Those environment variables can also be set using a `.env` or `.env.local` in the working directory when launching seelf. Either way, the resulting configuration will be written to the application folder during the application startup.
+seelf can be configured by a yaml configuration file (as below) and/or environment variables (see comments for the appropriate name). Those environment variables can also be set using a `.env` or `.env.local` in the working directory when launching seelf. Either way, the resulting configuration will be written to the application folder during the application startup so the next run may not include initial configuration options.
 
 When configured using a file, you can provide it with the `-c <your_file.yml>` or `--config <your_file.yml>`. Here is the full configuration file:
 
@@ -111,6 +155,7 @@ data:
 http:
   host: 0.0.0.0 # HTTP_HOST Host to listen to
   port: 8080 # HTTP_PORT,PORT Port to listen to
+  secure: false # HTTP_SECURE Wether or not the web server is served over https. If omitted, determine this information from the BALANCER_DOMAIN. It controls wether or not cookie are sent with the Secure flag and the scheme used on the Location header of created resources
   secret: "<generated if empty>" # HTTP_SECRET Secret key to use when signing cookies
 balancer:
   domain: "http://docker.locahost" # BALANCER_DOMAIN Main domain to use when deploying an application. If starting with https://, Let's Encrypt certificates will be generated and the acme email is mandatory. If you change this domain afterward, you'll have to redeploy your apps for now

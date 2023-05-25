@@ -11,7 +11,6 @@ type (
 		GetAllUsers(context.Context) ([]User, error)
 		GetUserByID(context.Context, string) (User, error)
 		GetProfile(context.Context, string) (Profile, error)
-		GetUsersCount(context.Context) (uint, error)
 	}
 
 	User struct {

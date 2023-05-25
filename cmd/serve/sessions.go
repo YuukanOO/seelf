@@ -30,7 +30,7 @@ func (s *server) createSessionHandler() gin.HandlerFunc {
 			return err
 		}
 
-		return http.Created(s, ctx, user, "/api/v1/session")
+		return http.Created(s, ctx, user, "/api/v1/profile")
 	})
 }
 

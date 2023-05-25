@@ -5,14 +5,15 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	sstrings "strings"
+	"strings"
 	"text/template"
 
+	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/crypto"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
 )
 
 var (
@@ -49,9 +50,10 @@ type (
 	}
 
 	httpConfiguration struct {
-		Host   string `env:"HTTP_HOST" yaml:",omitempty"`
-		Port   int    `env:"HTTP_PORT,PORT"`
-		Secret string `env:"HTTP_SECRET"`
+		Host   string            `env:"HTTP_HOST" yaml:",omitempty"`
+		Port   int               `env:"HTTP_PORT,PORT"`
+		Secure monad.Maybe[bool] `env:"HTTP_SECURE" yaml:",omitempty"`
+		Secret string            `env:"HTTP_SECRET"`
 	}
 
 	// Contains configuration related to where files produced by seelf will be stored.
@@ -106,10 +108,19 @@ func (c configuration) DefaultEmail() string                                { re
 func (c configuration) DefaultPassword() string                             { return c.Private.Password }
 func (c configuration) Secret() []byte                                      { return []byte(c.Http.Secret) }
 func (c configuration) IsUsingGeneratedSecret() bool                        { return c.Http.Secret == generatedSecretKey }
-func (c configuration) UseSSL() bool                                        { return c.Domain().UseSSL() }
 func (c configuration) IsVerbose() bool                                     { return c.Verbose }
 func (c configuration) ConfigPath() string                                  { return c.path }
 func (c configuration) CurrentVersion() string                              { return c.currentVersion }
+
+func (c configuration) IsSecure() bool {
+	// If secure has been explicitly set, returns it
+	if c.Http.Secure.HasValue() {
+		return c.Http.Secure.MustGet()
+	}
+
+	// Else, fallback to the domain SSL value
+	return c.domain.UseSSL()
+}
 
 func (c configuration) AcmeEmail() string {
 	if c.Balancer.Acme.Email == "" {
@@ -130,17 +141,22 @@ func (c configuration) ListenAddress() string {
 }
 
 func (c *configuration) PostLoad() error {
+	var (
+		acmeEmail    auth.Email
+		domainUrlErr = validation.Value(c.Balancer.Domain, &c.domain, domain.UrlFrom)
+	)
+
 	return validation.Check(validation.Of{
 		"data.deployment_dir_template": validation.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
-		"balancer.domain":              validation.Value(c.Balancer.Domain, &c.domain, domain.UrlFrom),
-		"balancer.acme.email": validation.If(c.UseSSL(), func() error {
-			return validation.Is(c.AcmeEmail(), strings.Required)
+		"balancer.domain":              domainUrlErr,
+		"balancer.acme.email": validation.If(domainUrlErr == nil && c.domain.UseSSL(), func() error {
+			return validation.Value(c.AcmeEmail(), &acmeEmail, auth.EmailFrom)
 		}),
 	})
 }
 
 func (c configuration) Execute(data domain.DeploymentTemplateData) string {
-	var w sstrings.Builder
+	var w strings.Builder
 
 	if err := c.deploymentDirTemplate.Execute(&w, data); err != nil {
 		panic(err)

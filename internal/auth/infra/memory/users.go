@@ -37,6 +37,10 @@ func NewUsersStore(existingUsers ...domain.User) UsersStore {
 	return s
 }
 
+func (s *usersStore) GetUsersCount(ctx context.Context) (uint, error) {
+	return uint(len(s.users)), nil
+}
+
 func (s *usersStore) IsEmailUnique(ctx context.Context, email domain.Email) (domain.UniqueEmail, error) {
 	_, err := s.GetByEmail(ctx, email)
 

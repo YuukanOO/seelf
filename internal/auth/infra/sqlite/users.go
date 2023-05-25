@@ -25,6 +25,12 @@ func NewUsersStore(db sqlite.Database) UsersStore {
 	return &usersStore{db}
 }
 
+func (s *usersStore) GetUsersCount(ctx context.Context) (uint, error) {
+	return builder.
+		Query[uint]("SELECT COUNT(id) FROM users").
+		Extract(s, ctx)
+}
+
 func (s *usersStore) IsEmailUnique(ctx context.Context, email domain.Email) (domain.UniqueEmail, error) {
 	return s.getUniqueEmail(ctx, email, monad.None[domain.UserID]())
 }

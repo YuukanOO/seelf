@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Represents an optional value of type T. It implements some infrastructure interfaces
@@ -119,11 +122,49 @@ func (m *Maybe[T]) UnmarshalJSON(data []byte) error {
 	// Handle the literal string "null" which maps to a nil pointer so that's because
 	// the monad doesn't have a value.
 	if target == nil {
+		m.hasValue = false
 		return nil
 	}
 
 	m.hasValue = true
 	m.value = *target
+
+	return nil
+}
+
+func (m Maybe[T]) MarshalYAML() (any, error) {
+	if m.hasValue {
+		return m.value, nil
+	}
+
+	return nil, nil
+}
+
+func (m Maybe[T]) IsZero() bool { return !m.hasValue }
+
+func (m *Maybe[T]) UnmarshalYAML(value *yaml.Node) error {
+	// Values sets explicitly in a yaml file should have the correct type
+	if err := value.Decode(&m.value); err != nil {
+		return err
+	}
+
+	m.hasValue = true
+
+	return nil
+}
+
+func (m *Maybe[T]) UnmarshalEnvironmentValue(data string) error {
+	// If the value is a string, it should be quoted for the json.Unmarshal to work correctly
+	if _, isString := any(&m.value).(*string); data != "" && isString {
+		data = fmt.Sprintf(`"%s"`, data)
+	}
+
+	if err := json.Unmarshal([]byte(data), &m.value); err != nil {
+		m.hasValue = false
+		return nil
+	}
+
+	m.hasValue = true
 
 	return nil
 }

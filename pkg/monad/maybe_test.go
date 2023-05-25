@@ -6,6 +6,7 @@ import (
 
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/testutil"
+	"gopkg.in/yaml.v3"
 )
 
 func Test_Maybe(t *testing.T) {
@@ -90,5 +91,63 @@ func Test_Maybe(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.IsTrue(t, driverValue == now)
+	})
+
+	t.Run("should correctly marshal to json", func(t *testing.T) {
+		var m monad.Maybe[string]
+
+		data, err := m.MarshalJSON()
+
+		testutil.IsNil(t, err)
+		testutil.Equals(t, "null", string(data))
+
+		m = m.WithValue("ok")
+
+		data, err = m.MarshalJSON()
+
+		testutil.IsNil(t, err)
+		testutil.Equals(t, `"ok"`, string(data))
+	})
+
+	t.Run("should correctly marshal to yaml", func(t *testing.T) {
+		var m monad.Maybe[string]
+
+		data, err := m.MarshalYAML()
+
+		testutil.IsNil(t, err)
+		testutil.IsTrue(t, m.IsZero())
+		testutil.IsNil(t, data)
+
+		m = m.WithValue("ok")
+
+		data, err = m.MarshalYAML()
+
+		testutil.IsNil(t, err)
+		testutil.IsFalse(t, m.IsZero())
+		testutil.Equals(t, "ok", data)
+	})
+
+	t.Run("should correctly unmarshal from yaml", func(t *testing.T) {
+		var m monad.Maybe[string]
+
+		err := m.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "ok"})
+
+		testutil.IsNil(t, err)
+		testutil.IsTrue(t, m.HasValue())
+		testutil.Equals(t, "ok", m.MustGet())
+	})
+
+	t.Run("should correctly unmarshal from env variables", func(t *testing.T) {
+		var m monad.Maybe[string]
+
+		err := m.UnmarshalEnvironmentValue("")
+
+		testutil.IsNil(t, err)
+		testutil.IsFalse(t, m.HasValue())
+
+		err = m.UnmarshalEnvironmentValue("ok")
+		testutil.IsNil(t, err)
+		testutil.IsTrue(t, m.HasValue())
+		testutil.Equals(t, "ok", m.MustGet())
 	})
 }

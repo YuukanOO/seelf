@@ -171,6 +171,14 @@ func Test_Deployment(t *testing.T) {
 		testutil.Equals(t, dpl.Trigger(), redpl.Trigger())
 	})
 
+	t.Run("should err if trying to redeploy a deployment on the wrong app", func(t *testing.T) {
+		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, meta, domain.Production, tmpl, uid)
+
+		_, err := domain.NewApp("my-app", uid).Redeploy(source, 2, tmpl, "uid")
+
+		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
+	})
+
 	t.Run("could not promote an already in production deployment", func(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
 		dpl, _ := app.NewDeployment(number, meta, domain.Production, tmpl, uid)
@@ -178,6 +186,14 @@ func Test_Deployment(t *testing.T) {
 		_, err := app.Promote(dpl, 2, tmpl, "another-user")
 
 		testutil.ErrorIs(t, domain.ErrCouldNotPromoteProductionDeployment, err)
+	})
+
+	t.Run("should err if trying to promote a deployment on the wrong app", func(t *testing.T) {
+		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, meta, domain.Staging, tmpl, uid)
+
+		_, err := domain.NewApp("my-app", uid).Promote(source, 2, tmpl, "uid")
+
+		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
 
 	t.Run("could promote a staging deployment", func(t *testing.T) {

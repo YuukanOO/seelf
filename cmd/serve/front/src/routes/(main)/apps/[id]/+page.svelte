@@ -11,7 +11,7 @@
 
 	export let data;
 
-	const { data: app } = service.pollById(data.app.id);
+	const { data: app } = service.queryById(data.app.id);
 
 	$: ({ production, staging } = $app?.environments ?? {});
 </script>

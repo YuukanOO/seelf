@@ -13,8 +13,8 @@
 
 	export let data;
 
-	$: ({ data: logs } = service.pollLogs(data.app.id, data.deployment.deployment_number));
-	$: ({ data: deployment } = service.pollByAppAndNumber(
+	$: ({ data: logs } = service.queryLogs(data.app.id, data.deployment.deployment_number));
+	$: ({ data: deployment } = service.queryByAppAndNumber(
 		data.app.id,
 		data.deployment.deployment_number
 	));

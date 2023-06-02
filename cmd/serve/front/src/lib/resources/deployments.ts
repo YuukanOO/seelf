@@ -1,7 +1,6 @@
-import cache, { type CacheHit, type CacheService } from '$lib/cache';
 import { LOGS_POLLING_INTERVAL_MS, POLLING_INTERVAL_MS } from '$lib/config';
 import type { Paginated } from '$lib/pagination';
-import remote, { type FetchOptions, type RemoteService } from '$lib/remote';
+import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import type { ByUserData } from '$lib/resources/users';
 
 export enum DeploymentStatus {
@@ -59,9 +58,12 @@ export interface DeploymentsService {
 	queue(appid: string, data: QueueDeploymentData): Promise<DeploymentData>;
 	redeploy(appid: string, number: number): Promise<DeploymentData>;
 	promote(appid: string, number: number): Promise<DeploymentData>;
-	queryAllByApp(id: string, filters?: QueryDeploymentsFilters): CacheHit<Paginated<DeploymentData>>;
-	pollLogs(appid: string, number: number): CacheHit<string>;
-	pollByAppAndNumber(appid: string, number: number): CacheHit<DeploymentData>;
+	queryAllByApp(
+		id: string,
+		filters?: QueryDeploymentsFilters
+	): QueryResult<Paginated<DeploymentData>>;
+	queryLogs(appid: string, number: number): QueryResult<string>;
+	queryByAppAndNumber(appid: string, number: number): QueryResult<DeploymentData>;
 	fetchByAppAndNumber(
 		appid: string,
 		number: number,
@@ -75,80 +77,58 @@ type Options = {
 };
 
 class RemoteDeploymentsService implements DeploymentsService {
-	constructor(
-		private readonly _remote: RemoteService,
-		private readonly _cache: CacheService,
-		private readonly _options: Options
-	) {}
+	constructor(private readonly _fetcher: FetchService, private readonly _options: Options) {}
 
 	fetchByAppAndNumber(
 		appid: string,
 		number: number,
 		options?: FetchOptions
 	): Promise<DeploymentData> {
-		return this._cache.fetch(`/api/v1/apps/${appid}/deployments/${number}`, options);
+		return this._fetcher.get(`/api/v1/apps/${appid}/deployments/${number}`, options);
 	}
 
-	pollLogs(appid: string, number: number): CacheHit<string> {
-		return this._cache.get(`/api/v1/apps/${appid}/deployments/${number}/logs`, {
+	queryLogs(appid: string, number: number): QueryResult<string> {
+		return this._fetcher.query(`/api/v1/apps/${appid}/deployments/${number}/logs`, {
 			refreshInterval: this._options.logsPollingInterval,
 			cache: 'no-store' // Don't know why, but sometimes in my tests, the server responds with 304 with outdated logs...
 		});
 	}
 
-	pollByAppAndNumber(appid: string, number: number): CacheHit<DeploymentData> {
-		return this._cache.get(`/api/v1/apps/${appid}/deployments/${number}`, {
+	queryByAppAndNumber(appid: string, number: number): QueryResult<DeploymentData> {
+		return this._fetcher.query(`/api/v1/apps/${appid}/deployments/${number}`, {
 			refreshInterval: this._options.pollingInterval
 		});
 	}
 
-	async queue(appid: string, data: QueueDeploymentData): Promise<DeploymentData> {
-		const result = await this._remote.post<DeploymentData, QueueDeploymentData>(
-			`/api/v1/apps/${appid}/deployments`,
-			data
-		);
-
-		await this.invalidateAppRelatedCache(appid);
-
-		return result;
+	queue(appid: string, data: QueueDeploymentData): Promise<DeploymentData> {
+		return this._fetcher.post(`/api/v1/apps/${appid}/deployments`, data, {
+			invalidate: [`/api/v1/apps/${appid}`, '/api/v1/apps']
+		});
 	}
 
-	async redeploy(appid: string, number: number): Promise<DeploymentData> {
-		const result = await this._remote.post<DeploymentData, unknown>(
-			`/api/v1/apps/${appid}/deployments/${number}/redeploy`
-		);
-
-		await this.invalidateAppRelatedCache(appid);
-
-		return result;
+	redeploy(appid: string, number: number): Promise<DeploymentData> {
+		return this._fetcher.post(`/api/v1/apps/${appid}/deployments/${number}/redeploy`, undefined, {
+			invalidate: [`/api/v1/apps/${appid}`, `/api/v1/apps/${appid}/deployments`, '/api/v1/apps']
+		});
 	}
 
-	async promote(appid: string, number: number): Promise<DeploymentData> {
-		const result = await this._remote.post<DeploymentData, unknown>(
-			`/api/v1/apps/${appid}/deployments/${number}/promote`
-		);
-
-		await this.invalidateAppRelatedCache(appid);
-
-		return result;
+	promote(appid: string, number: number): Promise<DeploymentData> {
+		return this._fetcher.post(`/api/v1/apps/${appid}/deployments/${number}/promote`, undefined, {
+			invalidate: [`/api/v1/apps/${appid}`, `/api/v1/apps/${appid}/deployments`, '/api/v1/apps']
+		});
 	}
 
 	queryAllByApp(
 		id: string,
 		filters?: QueryDeploymentsFilters
-	): CacheHit<Paginated<DeploymentData>> {
-		return this._cache.get(`/api/v1/apps/${id}/deployments`, {
+	): QueryResult<Paginated<DeploymentData>> {
+		return this._fetcher.query(`/api/v1/apps/${id}/deployments`, {
 			params: filters
 		});
 	}
-
-	private async invalidateAppRelatedCache(appid: string): Promise<void> {
-		await this._cache.invalidate(`/api/v1/apps/${appid}`);
-		await this._cache.invalidate('/api/v1/apps');
-	}
 }
 
-const service: DeploymentsService = new RemoteDeploymentsService(remote, cache, {
+const service: DeploymentsService = new RemoteDeploymentsService(fetcher, {
 	pollingInterval: POLLING_INTERVAL_MS,
 	logsPollingInterval: LOGS_POLLING_INTERVAL_MS
 });

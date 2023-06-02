@@ -1,5 +1,4 @@
-import cache, { type CacheService } from '$lib/cache';
-import remote, { type RemoteService } from '$lib/remote';
+import fetcher, { type FetchService } from '$lib/fetcher';
 
 export type Profile = {
 	id: string;
@@ -23,17 +22,13 @@ export interface UsersService {
 }
 
 export class RemoteUsersService implements UsersService {
-	constructor(private readonly _remote: RemoteService, private readonly _cache: CacheService) {}
+	constructor(private readonly _fetcher: FetchService) {}
 
-	async update(payload: UpdateProfileData): Promise<Profile> {
-		const result = await this._remote.patch<Profile, UpdateProfileData>('/api/v1/profile', payload);
-
-		this._cache.invalidate('/api/v1/profile');
-
-		return result;
+	update(payload: UpdateProfileData): Promise<Profile> {
+		return this._fetcher.patch<Profile, UpdateProfileData>('/api/v1/profile', payload);
 	}
 }
 
-const service: UsersService = new RemoteUsersService(remote, cache);
+const service: UsersService = new RemoteUsersService(fetcher);
 
 export default service;

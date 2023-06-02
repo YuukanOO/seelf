@@ -1,9 +1,8 @@
 import { goto } from '$app/navigation';
 import sessions, { type SessionsService } from '$lib/resources/sessions';
 import type { Profile } from '$lib/resources/users';
-import type { FetchOptions } from '$lib/remote';
+import fetcher, { type FetchOptions, type FetchService } from '$lib/fetcher';
 import routes from '$lib/path';
-import cache, { type CacheService } from '$lib/cache';
 
 type AuthOptions = {
 	onLoginSucceeded?(): Promise<void>;
@@ -15,7 +14,7 @@ const anonymous: Profile = { id: '', email: '', api_key: '', registered_at: '' }
 export class Auth {
 	constructor(
 		private readonly _sessions: SessionsService,
-		private readonly _cache: CacheService,
+		private readonly _fetcher: FetchService,
 		private readonly _options: AuthOptions
 	) {}
 
@@ -24,7 +23,7 @@ export class Auth {
 	 */
 	public async login(email: string, password: string) {
 		await this._sessions.create(email, password);
-		await this._cache.reset();
+		await this._fetcher.reset();
 		await this._options.onLoginSucceeded?.();
 	}
 
@@ -56,7 +55,7 @@ export class Auth {
 	}
 }
 
-export default new Auth(sessions, cache, {
+export default new Auth(sessions, fetcher, {
 	onLoginSucceeded: () => {
 		const params = new URLSearchParams(window.location.search);
 		return goto(params.get('redirectTo') ?? routes.apps);

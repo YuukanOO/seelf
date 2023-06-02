@@ -1,5 +1,4 @@
-import cache, { type CacheHit, type CacheService } from '$lib/cache';
-import remote, { type FetchOptions, type RemoteService } from '$lib/remote';
+import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import { POLLING_INTERVAL_MS } from '$lib/config';
 import type { ByUserData } from '$lib/resources/users';
 import type { DeploymentData } from '$lib/resources/deployments';
@@ -41,8 +40,8 @@ export interface AppsService {
 	delete(id: string): Promise<void>;
 	fetchAll(options?: FetchOptions): Promise<AppData[]>;
 	fetchById(id: string, options?: FetchOptions): Promise<AppDetailData>;
-	pollAll(): CacheHit<AppData[]>;
-	pollById(id: string): CacheHit<AppDetailData>;
+	queryAll(): QueryResult<AppData[]>;
+	queryById(id: string): QueryResult<AppDetailData>;
 }
 
 type Options = {
@@ -50,52 +49,42 @@ type Options = {
 };
 
 export class RemoteAppsService implements AppsService {
-	constructor(
-		private readonly _remote: RemoteService,
-		private readonly _cache: CacheService,
-		private readonly _options: Options
-	) {}
+	constructor(private readonly _fetcher: FetchService, private readonly _options: Options) {}
 
-	async create(payload: CreateAppData): Promise<AppDetailData> {
-		const data = await this._remote.post<AppDetailData, CreateAppData>('/api/v1/apps', payload);
-		await this._cache.invalidate('/api/v1/apps');
-		return data;
+	create(payload: CreateAppData): Promise<AppDetailData> {
+		return this._fetcher.post('/api/v1/apps', payload);
 	}
 
-	async update(id: string, payload: UpdateAppData): Promise<AppDetailData> {
-		const url = `/api/v1/apps/${id}`;
-
-		const data = await this._remote.patch<AppDetailData, UpdateAppData>(url, payload);
-		await this._cache.invalidate(url);
-
-		return data;
+	update(id: string, payload: UpdateAppData): Promise<AppDetailData> {
+		return this._fetcher.patch(`/api/v1/apps/${id}`, payload);
 	}
 
-	async delete(id: string): Promise<void> {
-		await this._remote.delete(`/api/v1/apps/${id}`);
-		await this._cache.invalidate('/api/v1/apps');
+	delete(id: string): Promise<void> {
+		return this._fetcher.delete(`/api/v1/apps/${id}`, {
+			invalidate: ['/api/v1/apps']
+		});
 	}
 
-	pollAll(): CacheHit<AppData[]> {
-		return this._cache.get('/api/v1/apps', { refreshInterval: this._options.pollingInterval });
+	queryAll(): QueryResult<AppData[]> {
+		return this._fetcher.query('/api/v1/apps', { refreshInterval: this._options.pollingInterval });
 	}
 
-	pollById(id: string): CacheHit<AppDetailData> {
-		return this._cache.get(`/api/v1/apps/${id}`, {
+	queryById(id: string): QueryResult<AppDetailData> {
+		return this._fetcher.query(`/api/v1/apps/${id}`, {
 			refreshInterval: this._options.pollingInterval
 		});
 	}
 
 	fetchAll(options?: FetchOptions): Promise<AppData[]> {
-		return this._cache.fetch('/api/v1/apps', options);
+		return this._fetcher.get('/api/v1/apps', options);
 	}
 
 	fetchById(id: string, options?: FetchOptions): Promise<AppDetailData> {
-		return this._cache.fetch(`/api/v1/apps/${id}`, options);
+		return this._fetcher.get(`/api/v1/apps/${id}`, options);
 	}
 }
 
-const service: AppsService = new RemoteAppsService(remote, cache, {
+const service: AppsService = new RemoteAppsService(fetcher, {
 	pollingInterval: POLLING_INTERVAL_MS
 });
 

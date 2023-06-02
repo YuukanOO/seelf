@@ -7,7 +7,7 @@
 	import routes from '$lib/path';
 	import service from '$lib/resources/apps';
 
-	const { data } = service.pollAll();
+	const { data } = service.queryAll();
 </script>
 
 <Breadcrumb segments={['Applications']}>

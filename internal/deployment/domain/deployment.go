@@ -13,7 +13,10 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
-var ErrCouldNotPromoteProductionDeployment = apperr.New("could_not_promote_production_deployment")
+var (
+	ErrCouldNotPromoteProductionDeployment = apperr.New("could_not_promote_production_deployment")
+	ErrInvalidSourceDeployment             = apperr.New("invalid_source_deployment")
+)
 
 type (
 	// VALUE & RELATED OBJECTS
@@ -118,6 +121,10 @@ func (a App) Redeploy(
 	tmpl DeploymentDirTemplate,
 	requestedBy domain.UserID,
 ) (d Deployment, err error) {
+	if source.id.appID != a.id {
+		return d, ErrInvalidSourceDeployment
+	}
+
 	return a.NewDeployment(deployNumber, source.trigger, source.config.environment, tmpl, requestedBy)
 }
 
@@ -130,6 +137,10 @@ func (a App) Promote(
 ) (d Deployment, err error) {
 	if source.config.environment.IsProduction() {
 		return d, ErrCouldNotPromoteProductionDeployment
+	}
+
+	if source.id.appID != a.id {
+		return d, ErrInvalidSourceDeployment
 	}
 
 	return a.NewDeployment(deployNumber, source.trigger, Production, tmpl, requestedBy)

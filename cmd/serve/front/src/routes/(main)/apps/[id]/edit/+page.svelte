@@ -7,18 +7,20 @@
 	import { goto } from '$app/navigation';
 	import routes from '$lib/path';
 	import CleanupNotice from '$components/cleanup-notice.svelte';
-	import { promise } from '$lib/form';
+	import { submitter } from '$lib/form';
 
 	export let data;
 
 	const submit = (form: UpdateAppData) =>
 		service.update(data.app.id, form).then(() => goto(routes.app(data.app.id)));
 
-	const { loading: deleting, submit: deleteApp } = promise(
+	const { loading: deleting, submit: deleteApp } = submitter(
 		() => service.delete(data.app.id).then(() => goto(routes.apps)),
-		`Are you sure you want to delete the application ${data.app.name}?
+		{
+			confirmation: `Are you sure you want to delete the application ${data.app.name}?
 
 This action is IRREVERSIBLE and will DELETE ALL DATA associated with this application: containers, images, volumes, logs and networks.`
+		}
 	);
 </script>
 

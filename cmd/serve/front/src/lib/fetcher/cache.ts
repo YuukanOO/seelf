@@ -79,8 +79,13 @@ export default class CacheFetchService implements FetchService {
 		if (options?.refreshInterval) {
 			listener = () => {
 				let timer: NodeJS.Timeout;
+				let mustStop = false; // Sets to true to handle the case when the fetch has been started and the timeout cleared but the promise is still pending
 
 				const deferRevalidation = () => {
+					if (mustStop) {
+						return;
+					}
+
 					timer = setTimeout(() => {
 						if (cache.mustRevalidate()) {
 							this.revalidate(cache, options)
@@ -96,6 +101,7 @@ export default class CacheFetchService implements FetchService {
 
 				return () => {
 					clearTimeout(timer);
+					mustStop = true;
 				};
 			};
 		}

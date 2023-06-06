@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { afterUpdate } from 'svelte';
-	import type { Readable } from 'svelte/store';
 
 	export let title: string;
-	export let data: Readable<Maybe<string>>;
+	export let data: Maybe<string>;
 
 	let container: HTMLDivElement;
 
@@ -20,7 +19,7 @@
 <div class="console">
 	<h2 class="title">{title}</h2>
 	<div class="scrollarea" bind:this={container}>
-		<pre>{$data}</pre>
+		<pre>{data}</pre>
 	</div>
 </div>
 

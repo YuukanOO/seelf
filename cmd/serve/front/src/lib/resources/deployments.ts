@@ -1,4 +1,4 @@
-import { LOGS_POLLING_INTERVAL_MS, POLLING_INTERVAL_MS } from '$lib/config';
+import { RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS, POLLING_INTERVAL_MS } from '$lib/config';
 import type { Paginated } from '$lib/pagination';
 import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import type { ByUserData } from '$lib/resources/users';
@@ -62,8 +62,8 @@ export interface DeploymentsService {
 		id: string,
 		filters?: QueryDeploymentsFilters
 	): QueryResult<Paginated<DeploymentData>>;
-	queryLogs(appid: string, number: number): QueryResult<string>;
-	queryByAppAndNumber(appid: string, number: number): QueryResult<DeploymentData>;
+	queryLogs(appid: string, number: number, poll?: boolean): QueryResult<string>;
+	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<DeploymentData>;
 	fetchByAppAndNumber(
 		appid: string,
 		number: number,
@@ -73,7 +73,7 @@ export interface DeploymentsService {
 
 type Options = {
 	pollingInterval: number;
-	logsPollingInterval: number;
+	runningDeploymentsPollingInterval: number;
 };
 
 class RemoteDeploymentsService implements DeploymentsService {
@@ -87,16 +87,16 @@ class RemoteDeploymentsService implements DeploymentsService {
 		return this._fetcher.get(`/api/v1/apps/${appid}/deployments/${number}`, options);
 	}
 
-	queryLogs(appid: string, number: number): QueryResult<string> {
+	queryLogs(appid: string, number: number, poll?: boolean): QueryResult<string> {
 		return this._fetcher.query(`/api/v1/apps/${appid}/deployments/${number}/logs`, {
-			refreshInterval: this._options.logsPollingInterval,
+			refreshInterval: poll ? this._options.runningDeploymentsPollingInterval : undefined,
 			cache: 'no-store' // Don't know why, but sometimes in my tests, the server responds with 304 with outdated logs...
 		});
 	}
 
-	queryByAppAndNumber(appid: string, number: number): QueryResult<DeploymentData> {
+	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<DeploymentData> {
 		return this._fetcher.query(`/api/v1/apps/${appid}/deployments/${number}`, {
-			refreshInterval: this._options.pollingInterval
+			refreshInterval: poll ? this._options.runningDeploymentsPollingInterval : undefined
 		});
 	}
 
@@ -130,7 +130,7 @@ class RemoteDeploymentsService implements DeploymentsService {
 
 const service: DeploymentsService = new RemoteDeploymentsService(fetcher, {
 	pollingInterval: POLLING_INTERVAL_MS,
-	logsPollingInterval: LOGS_POLLING_INTERVAL_MS
+	runningDeploymentsPollingInterval: RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS
 });
 
 export default service;

@@ -7,32 +7,55 @@
 	import Console from '$components/console.svelte';
 	import DeploymentCard from '$components/deployment-card.svelte';
 	import Stack from '$components/stack.svelte';
-	import { promise } from '$lib/form';
+	import { submitter } from '$lib/form';
 	import routes from '$lib/path';
 	import service from '$lib/resources/deployments';
 
 	export let data;
 
-	$: ({ data: logs } = service.queryLogs(data.app.id, data.deployment.deployment_number));
+	$: pollNeeded = !data.deployment.state.finished_at; // Poll or not based on wether the deployment has ended
+
 	$: ({ data: deployment } = service.queryByAppAndNumber(
 		data.app.id,
-		data.deployment.deployment_number
+		data.deployment.deployment_number,
+		pollNeeded
+	));
+	$: ({ data: logs } = service.queryLogs(
+		data.app.id,
+		data.deployment.deployment_number,
+		pollNeeded
 	));
 
-	$: ({ loading: redeploying, submit: redeploy } = promise(
+	$: {
+		// Here we want to stop the polling if the deployment match the page's deployment
+		// and it has ended.
+		if (
+			pollNeeded &&
+			$deployment?.deployment_number === data.deployment.deployment_number &&
+			$deployment?.state.finished_at
+		) {
+			pollNeeded = false;
+		}
+	}
+
+	$: ({ loading: redeploying, submit: redeploy } = submitter(
 		() =>
 			service
 				.redeploy(data.app.id, data.deployment.deployment_number)
 				.then((d) => goto(routes.deployment(data.app.id, d.deployment_number))),
-		`The deployment #${data.deployment.deployment_number} will be redeployed. Latest app environment variables will be used. Do you confirm this action?`
+		{
+			confirmation: `The deployment #${data.deployment.deployment_number} will be redeployed. Latest app environment variables will be used. Do you confirm this action?`
+		}
 	));
 
-	$: ({ loading: promoting, submit: promote } = promise(
+	$: ({ loading: promoting, submit: promote } = submitter(
 		() =>
 			service
 				.promote(data.app.id, data.deployment.deployment_number)
 				.then((d) => goto(routes.deployment(data.app.id, d.deployment_number))),
-		`The deployment #${data.deployment.deployment_number} will be promoted to the production environment. Do you confirm this action?`
+		{
+			confirmation: `The deployment #${data.deployment.deployment_number} will be promoted to the production environment. Do you confirm this action?`
+		}
 	));
 </script>
 
@@ -59,7 +82,7 @@
 	{/if}
 
 	{#if $logs}
-		<Console title="Deployment logs" data={logs} />
+		<Console title="Deployment logs" data={$logs} />
 	{:else}
 		<BlankSlate>
 			<p>Waiting for logs...</p>

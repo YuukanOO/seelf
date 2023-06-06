@@ -20,31 +20,42 @@ export function messageFromAttributes(attributes: {
 	return validations.join(', ');
 }
 
-export type PromiseResult = {
+export type Submitter<T> = {
 	loading: Readable<boolean>;
-	submit: () => Promise<unknown>;
+	submit: () => Promise<T>;
+};
+
+export type SubmitterOptions = {
+	/** Optional confirmation string to display before submitting */
+	confirmation?: string;
 };
 
 /**
- * Wrap the given promise and expose a readable loading boolean indicating the state of the request +
- * a submit function to launch the request.
+ * Wrap the given function exposing a loading state and a submitter. It also
+ * handle common options such as displaying a confirmation message before submitting.
  */
-export function promise(fn: () => Promise<unknown>, confirmation?: string): PromiseResult {
+export function submitter<T = unknown>(
+	fn: () => Promise<T>,
+	options?: SubmitterOptions
+): Submitter<T> {
 	const loading = writable(false);
 
-	async function submit() {
-		if (confirmation && !confirm(confirmation)) {
-			return;
+	async function submit(): Promise<T> {
+		if (options?.confirmation && !confirm(options.confirmation)) {
+			return undefined as T;
 		}
 
 		loading.set(true);
 
 		try {
-			await fn();
+			return await fn();
 		} finally {
 			loading.set(false);
 		}
 	}
 
-	return { loading, submit };
+	return {
+		loading,
+		submit
+	};
 }

@@ -5,7 +5,6 @@
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import EnvironmentCard from '$components/environment-card.svelte';
 	import Link from '$components/link.svelte';
-	import Stack from '$components/stack.svelte';
 	import routes from '$lib/path';
 	import service from '$lib/resources/apps';
 

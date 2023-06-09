@@ -1,4 +1,7 @@
 :root {
+	/** Prefer dark color scheme for now */
+	color-scheme: dark;
+
 	/** 
      * Colors based on depth with a basis of 4. The more deep you go (< 4), the more
      * the color should appear far away.

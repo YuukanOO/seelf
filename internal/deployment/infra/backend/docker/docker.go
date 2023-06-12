@@ -459,7 +459,7 @@ func (d *docker) generateProject(depl domain.Deployment, logger log.StepLogger) 
 
 		for _, volume := range service.Volumes {
 			if volume.Type == types.VolumeTypeBind {
-				logger.Warnf("bind mount detected for service %s, this is not supported and your data are not guaranteed to be preserved, use docker volumes instead", service.Name)
+				logger.Warnf("bind mount detected for service %s, this is not supported and your data are not guaranteed to be preserved, use docker volumes instead", deployedService.Name())
 			}
 		}
 
@@ -471,6 +471,11 @@ func (d *docker) generateProject(depl domain.Deployment, logger log.StepLogger) 
 
 		url := deployedService.Url().MustGet()
 		serviceQualifiedName := deployedService.QualifiedName()
+
+		if len(service.Ports) > 1 {
+			logger.Warnf("service %s exposes multiple ports but seelf only supports one port per service at the moment", deployedService.Name())
+		}
+
 		service.Ports = []types.ServicePortConfig{} // Remove them since traefik will expose this service
 
 		if service.Networks == nil {

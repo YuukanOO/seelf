@@ -1,5 +1,5 @@
 import { get, type StartStopNotifier } from 'svelte/store';
-import { invalidateAll } from '$app/navigation';
+import { invalidate, invalidateAll } from '$app/navigation';
 import { browser } from '$app/environment';
 
 import CacheData from './cache_data';
@@ -33,7 +33,7 @@ export default class CacheFetchService implements FetchService {
 		initialData.forEach((data) => {
 			this._cache.set(data.key, data);
 			this._baseKeyMapping.set(data.baseKey, [
-				...(this._baseKeyMapping.get(data.baseKey) || []),
+				...(this._baseKeyMapping.get(data.baseKey) ?? []),
 				data.key
 			]);
 		});
@@ -61,6 +61,9 @@ export default class CacheFetchService implements FetchService {
 		if (cache.mustRevalidate()) {
 			return this.revalidate(cache, options);
 		}
+
+		// Still mark the dependency with the given key to make sure it will be invalidated correctly
+		options?.depends?.(cache.key);
 
 		return get(cache.hit().data) as TOut;
 	}
@@ -133,7 +136,15 @@ export default class CacheFetchService implements FetchService {
 		// Invalidate all the cache entries that matches the base key
 		const keys = [url, ...(options?.invalidate ?? [])];
 		const computedKeys = keys.flatMap((key) => this._baseKeyMapping.get(key) || []);
-		await Promise.all(computedKeys?.map((key) => this._cache.get(key)?.invalidate()));
+
+		// Invalidate computed keys
+		computedKeys.forEach((key) => this._cache.get(key)?.invalidate());
+
+		// If on browser, force sveltekit revalidation of needed stuff.
+		if (browser) {
+			// Computed keys are relative so we check for pathname and keys handle segment used with depends
+			await invalidate((url) => computedKeys.includes(url.pathname) || keys.includes(url.href));
+		}
 
 		return result;
 	}
@@ -152,7 +163,7 @@ export default class CacheFetchService implements FetchService {
 		if (!cacheData) {
 			cacheData = new CacheData(computedKey, key, this._options);
 			this._cache.set(computedKey, cacheData);
-			this._baseKeyMapping.set(key, [...(this._baseKeyMapping.get(key) || []), computedKey]);
+			this._baseKeyMapping.set(key, [...(this._baseKeyMapping.get(key) ?? []), computedKey]);
 		}
 
 		return cacheData;
@@ -168,7 +179,7 @@ async function api<TOut = unknown, TIn = unknown>(
 	method: HttpMethod,
 	url: string,
 	data?: TIn,
-	options?: Omit<FetchOptions, 'params'>
+	options?: Omit<FetchOptions, 'params' | 'depends'>
 ): Promise<TOut> {
 	const additionalHeaders: HeadersInit = {};
 	const isFormData = data instanceof FormData;

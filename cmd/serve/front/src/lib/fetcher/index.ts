@@ -11,6 +11,12 @@ export type FetchOptions = {
 	 * from page.ts files.
 	 */
 	fetch?: typeof globalThis.fetch;
+	/**
+	 * Depends function as given by sveltekit to mark a dependency if the data as been
+	 * cached. It make sure the subsequent invalidates will work as expected because when you
+	 * call `.get` it may returns cached data.
+	 */
+	depends?: (...deps: string[]) => void;
 };
 
 export type QueryOptions = FetchOptions & {

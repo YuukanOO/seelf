@@ -1,10 +1,11 @@
-import { get, type StartStopNotifier } from 'svelte/store';
+import type { StartStopNotifier } from 'svelte/store';
 import { invalidate, invalidateAll } from '$app/navigation';
 import { browser } from '$app/environment';
 
-import CacheData from './cache_data';
-import type { FetchOptions, FetchService, MutateOptions, QueryOptions, QueryResult } from './index';
 import { HttpError } from '$lib/error';
+import type { FetchOptions, FetchService, MutateOptions, QueryOptions, QueryResult } from './index';
+import CacheSet from './set';
+import type CacheData from './cache_data';
 
 export const DEFAULT_DEDUPE_INTERVAL_MS = 2000;
 export const DEFAULT_NOW_FN = () => Date.now();
@@ -18,9 +19,7 @@ export type CacheFetchServiceOptions = {
 
 export default class CacheFetchService implements FetchService {
 	private readonly _options: Required<CacheFetchServiceOptions>;
-	/** Maps baseKey to computed keys for easier invalidation */
-	private readonly _baseKeyMapping: Map<string, string[]> = new Map();
-	private readonly _cache: Map<string, CacheData> = new Map();
+	private readonly _cache: CacheSet;
 
 	public constructor(options?: CacheFetchServiceOptions, ...initialData: CacheData[]) {
 		this._options = {
@@ -29,14 +28,7 @@ export default class CacheFetchService implements FetchService {
 			...options
 		};
 
-		// Build ups the cache based on initial data
-		initialData.forEach((data) => {
-			this._cache.set(data.key, data);
-			this._baseKeyMapping.set(data.baseKey, [
-				...(this._baseKeyMapping.get(data.baseKey) ?? []),
-				data.key
-			]);
-		});
+		this._cache = new CacheSet(this._options, ...initialData);
 	}
 
 	public post<TOut, TIn>(url: string, data?: TIn, options?: MutateOptions): Promise<TOut> {
@@ -56,7 +48,7 @@ export default class CacheFetchService implements FetchService {
 	}
 
 	public async get<TOut>(url: string, options?: FetchOptions): Promise<TOut> {
-		const cache = this.getOrCreate(url, options?.params);
+		const cache = this._cache.getOrCreate(url, options?.params);
 
 		if (cache.mustRevalidate()) {
 			return this.revalidate(cache, options);
@@ -65,15 +57,13 @@ export default class CacheFetchService implements FetchService {
 		// Still mark the dependency with the given key to make sure it will be invalidated correctly
 		options?.depends?.(cache.key);
 
-		return get(cache.hit().data) as TOut;
+		return cache.wait();
 	}
 
 	public query<TOut>(url: string, options?: QueryOptions): QueryResult<TOut> {
-		const cache = this.getOrCreate(url, options?.params);
+		const cache = this._cache.getOrCreate(url, options?.params);
 
-		if (cache.mustRevalidate()) {
-			this.revalidate(cache, options).catch(() => {}); // Already catched in the cache.update so the error field will be set
-		}
+		this.tryRevalidate(cache, options);
 
 		let listener: StartStopNotifier<TOut> | undefined;
 
@@ -90,13 +80,7 @@ export default class CacheFetchService implements FetchService {
 					}
 
 					timer = setTimeout(() => {
-						if (cache.mustRevalidate()) {
-							this.revalidate(cache, options)
-								.catch(() => {})
-								.then(deferRevalidation);
-						} else {
-							deferRevalidation();
-						}
+						this.tryRevalidate(cache, options).then(deferRevalidation);
 					}, options.refreshInterval);
 				};
 
@@ -114,7 +98,6 @@ export default class CacheFetchService implements FetchService {
 
 	public async reset(): Promise<void> {
 		this._cache.clear();
-		this._baseKeyMapping.clear();
 
 		if (browser) {
 			await invalidateAll();
@@ -123,6 +106,15 @@ export default class CacheFetchService implements FetchService {
 
 	private async revalidate<TOut>(cache: CacheData, options?: FetchOptions): Promise<TOut> {
 		return cache.update(() => api<TOut>('GET', cache.key, undefined, options)) as TOut;
+	}
+
+	private async tryRevalidate(cache: CacheData, options?: FetchOptions): Promise<void> {
+		if (!cache.mustRevalidate()) {
+			return;
+		}
+
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		await this.revalidate(cache, options).catch(() => {});
 	}
 
 	private async mutate<TOut, TIn>(
@@ -135,10 +127,7 @@ export default class CacheFetchService implements FetchService {
 
 		// Invalidate all the cache entries that matches the base key
 		const keys = [url, ...(options?.invalidate ?? [])];
-		const computedKeys = keys.flatMap((key) => this._baseKeyMapping.get(key) || []);
-
-		// Invalidate computed keys
-		computedKeys.forEach((key) => this._cache.get(key)?.invalidate());
+		const computedKeys = this._cache.invalidate(...keys);
 
 		// If on browser, force sveltekit revalidation of needed stuff.
 		if (browser) {
@@ -147,26 +136,6 @@ export default class CacheFetchService implements FetchService {
 		}
 
 		return result;
-	}
-
-	private getOrCreate(key: string, params?: unknown): CacheData {
-		/**
-		 * Compute the url with the optional query parameters.
-		 * FIXME: UrlSearchParams will let undefined values in the query string so I should
-		 * probably take care of that.
-		 */
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const computedKey = params ? `${key}?${new URLSearchParams(params as any)}` : key;
-
-		let cacheData = this._cache.get(computedKey);
-
-		if (!cacheData) {
-			cacheData = new CacheData(computedKey, key, this._options);
-			this._cache.set(computedKey, cacheData);
-			this._baseKeyMapping.set(key, [...(this._baseKeyMapping.get(key) ?? []), computedKey]);
-		}
-
-		return cacheData;
 	}
 }
 

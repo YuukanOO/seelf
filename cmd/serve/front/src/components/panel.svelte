@@ -5,11 +5,15 @@
 	export let title: string;
 	export let variant: 'help' | 'danger' | 'warning' = 'help';
 	export let format: 'default' | 'collapsable' | 'inline' = 'default';
+	let className: string = '';
+
+	/** Additional css classes */
+	export { className as class };
 </script>
 
 {#if format === 'collapsable'}
 	<details
-		class="container"
+		class="container {className}"
 		style="--panel-border-color: var(--co-{variant}-3);--panel-background-color: var(--co-{variant}-1);--panel-title-color: var(--co-{variant}-4);"
 	>
 		<summary class="title">{title}</summary>
@@ -20,7 +24,7 @@
 {:else}
 	<Stack
 		style="--panel-border-color: var(--co-{variant}-3);--panel-background-color: var(--co-{variant}-1);--panel-title-color: var(--co-{variant}-4);"
-		class="container"
+		class="container {className}"
 		wrap={format === 'inline' ? 'wrap' : undefined}
 		direction={format === 'inline' ? 'row' : 'column'}
 		gap={2}
@@ -37,6 +41,7 @@
 		outline: 1px solid var(--panel-border-color);
 		background-color: var(--panel-background-color);
 		border-radius: var(--ra-4);
+		color: var(--co-text-4);
 		padding: var(--sp-2);
 		font: var(--ty-caption);
 	}

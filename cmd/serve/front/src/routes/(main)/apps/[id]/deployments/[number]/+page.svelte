@@ -13,6 +13,10 @@
 
 	export let data;
 
+	$: isStale =
+		data.app.environments[data.deployment.environment]?.deployment_number !==
+		data.deployment.deployment_number;
+
 	$: pollNeeded = !data.deployment.state.finished_at; // Poll or not based on wether the deployment has ended
 
 	$: ({ data: deployment } = service.queryByAppAndNumber(
@@ -78,7 +82,7 @@
 
 <Stack direction="column">
 	{#if $deployment}
-		<DeploymentCard data={$deployment} />
+		<DeploymentCard {isStale} data={$deployment} />
 	{/if}
 
 	{#if $logs}

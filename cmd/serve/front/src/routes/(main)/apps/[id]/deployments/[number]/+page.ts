@@ -1,9 +1,9 @@
 import service from '$lib/resources/deployments';
 import { error } from '@sveltejs/kit';
 
-export const load = async ({ fetch, params: { id, number } }) => {
+export const load = async ({ fetch, params: { id, number }, depends }) => {
 	try {
-		const deployment = await service.fetchByAppAndNumber(id, parseInt(number), { fetch });
+		const deployment = await service.fetchByAppAndNumber(id, parseInt(number), { fetch, depends });
 
 		return {
 			deployment

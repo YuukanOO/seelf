@@ -5,8 +5,6 @@ import {
 	type Subscriber,
 	type Readable
 } from 'svelte/store';
-import { invalidate } from '$app/navigation';
-import { browser } from '$app/environment';
 
 import type { QueryResult } from './index';
 import type { CacheFetchServiceOptions } from './cache';
@@ -95,11 +93,8 @@ export default class CacheData {
 	/**
 	 * Invalidate this cache so the next call to `mustRevalidate` will return true.
 	 */
-	public async invalidate(): Promise<void> {
+	public invalidate(): void {
 		this._lastRevalidatedAt = undefined;
-		if (browser) {
-			await invalidate(this.key);
-		}
 	}
 
 	/**

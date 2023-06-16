@@ -2,15 +2,17 @@
 	import { type DeploymentData, DeploymentStatus } from '$lib/resources/deployments';
 	import type { ComponentProps } from 'svelte';
 	import { formatDatetime, formatDuration } from '$lib/date';
+	import routes from '$lib/path';
 	import Card from '$components/card.svelte';
 	import Link from '$components/link.svelte';
 	import Stack from '$components/stack.svelte';
+	import Panel from '$components/panel.svelte';
 	import DeploymentPill from '$components/deployment-pill.svelte';
 	import Display from '$components/display.svelte';
 	import ExternalLaunch from '$assets/icons/external-launch.svelte';
-	import routes from '$lib/path';
 
 	export let data: DeploymentData;
+	export let isStale = false;
 
 	function colorForStatus(status: DeploymentStatus): ComponentProps<Card>['color'] {
 		switch (status) {
@@ -67,6 +69,14 @@
 		{/if}
 		{#if data.state.services && data.state.services?.length > 0}
 			<Display class="large" label="deployed services">
+				{#if isStale}
+					<Panel class="outdated" title="Outdated deployment" format="inline" variant="warning">
+						<p>
+							You're viewing an old deployment and exposed URLs may have changed and represent what
+							have been exposed at that time.
+						</p>
+					</Panel>
+				{/if}
 				<ul>
 					{#each data.state.services as service}
 						<Stack as="li" justify="space-between">
@@ -103,6 +113,14 @@
 
 	.large {
 		grid-column: span 2;
+	}
+
+	.outdated {
+		margin-block-start: var(--sp-2);
+	}
+
+	.outdated + ul {
+		margin-block-start: var(--sp-2);
 	}
 
 	.service-url {

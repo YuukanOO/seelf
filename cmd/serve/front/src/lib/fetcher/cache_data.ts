@@ -3,11 +3,15 @@ import {
 	type StartStopNotifier,
 	type Writable,
 	type Subscriber,
-	type Readable
+	type Readable,
+	get
 } from 'svelte/store';
 
 import type { QueryResult } from './index';
 import type { CacheFetchServiceOptions } from './cache';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PendingResolver = { resolve: (value: any) => void; reject: (reason?: any) => void };
 
 /**
  * Represents a local cached data.
@@ -18,6 +22,7 @@ export default class CacheData {
 	private readonly _loading: Writable<boolean>;
 
 	private _lastRevalidatedAt?: number;
+	private _promises?: PendingResolver[]; // undefined if no update is running
 
 	/**
 	 * Builds up a new cache data.
@@ -56,18 +61,22 @@ export default class CacheData {
 			return;
 		}
 
+		this._promises = [];
 		this._loading.set(true);
 
 		return valueOrFn()
 			.then((data: unknown) => {
 				this.setData(data);
+				this._promises?.forEach(({ resolve }) => resolve(data));
 				return data;
 			})
 			.catch((error: Error) => {
 				this._error.set(error);
+				this._promises?.forEach(({ reject }) => reject(error));
 				throw error;
 			})
 			.finally(() => {
+				this._promises = undefined;
 				this._loading.set(false);
 			});
 	}
@@ -95,6 +104,19 @@ export default class CacheData {
 	 */
 	public invalidate(): void {
 		this._lastRevalidatedAt = undefined;
+	}
+
+	/**
+	 * Wait for the current update to finish if any and resolve when its done.
+	 */
+	public wait<T>(): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
+			if (this._promises == null) {
+				return resolve(get(this._data) as T);
+			}
+
+			this._promises.push({ resolve, reject });
+		});
 	}
 
 	/**

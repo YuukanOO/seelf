@@ -5,16 +5,30 @@ import { browser } from '$app/environment';
 import { HttpError } from '$lib/error';
 import type { FetchOptions, FetchService, MutateOptions, QueryOptions, QueryResult } from './index';
 import CacheSet from './set';
-import type CacheData from './cache_data';
+import type CacheData from './data';
 
 export const DEFAULT_DEDUPE_INTERVAL_MS = 2000;
 export const DEFAULT_NOW_FN = () => Date.now();
+export const DEFAULT_INVALIDATE = async (url: string | URL | ((url: URL) => boolean)) => {
+	if (browser) {
+		return invalidate(url);
+	}
+};
+export const DEFAULT_INVALIDATE_ALL = async () => {
+	if (browser) {
+		return invalidateAll();
+	}
+};
 
 export type CacheFetchServiceOptions = {
 	/** Function to determine the current time (exposed here for testing mostly) */
 	now?(): number;
 	/** Requests in this interval will be deduped */
 	dedupeInterval?: number;
+	/** Function called when invalidating cached data */
+	invalidate?: typeof DEFAULT_INVALIDATE;
+	/** Function called when clearing cached data */
+	invalidateAll?: typeof DEFAULT_INVALIDATE_ALL;
 };
 
 export default class CacheFetchService implements FetchService {
@@ -25,6 +39,8 @@ export default class CacheFetchService implements FetchService {
 		this._options = {
 			now: DEFAULT_NOW_FN,
 			dedupeInterval: DEFAULT_DEDUPE_INTERVAL_MS,
+			invalidate: DEFAULT_INVALIDATE,
+			invalidateAll: DEFAULT_INVALIDATE_ALL,
 			...options
 		};
 
@@ -98,10 +114,6 @@ export default class CacheFetchService implements FetchService {
 
 	public async reset(): Promise<void> {
 		this._cache.clear();
-
-		if (browser) {
-			await invalidateAll();
-		}
 	}
 
 	private async revalidate<TOut>(cache: CacheData, options?: FetchOptions): Promise<TOut> {
@@ -127,13 +139,7 @@ export default class CacheFetchService implements FetchService {
 
 		// Invalidate all the cache entries that matches the base key
 		const keys = [url, ...(options?.invalidate ?? [])];
-		const computedKeys = this._cache.invalidate(...keys);
-
-		// If on browser, force sveltekit revalidation of needed stuff.
-		if (browser) {
-			// Computed keys are relative so we check for pathname and keys handle segment used with depends
-			await invalidate((url) => computedKeys.includes(url.pathname) || keys.includes(url.href));
-		}
+		await this._cache.invalidate(...keys);
 
 		return result;
 	}

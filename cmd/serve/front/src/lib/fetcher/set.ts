@@ -1,5 +1,5 @@
 import type { CacheFetchServiceOptions } from './cache';
-import CacheData from './cache_data';
+import CacheData from './data';
 
 /**
  * Represents a set of cached data with base / computed mapping.
@@ -38,7 +38,7 @@ export default class CacheSet {
 		let cacheData = this._data.get(computedKey);
 
 		if (!cacheData) {
-			cacheData = new CacheData(computedKey, key, this._options);
+			cacheData = new CacheData(this._options, computedKey, key);
 			this._data.set(computedKey, cacheData);
 			this._baseKeyMapping.set(key, [...(this._baseKeyMapping.get(key) ?? []), computedKey]);
 		}
@@ -50,10 +50,12 @@ export default class CacheSet {
 	 * Invalidate all the cache entries that matches the base keys and returns computed keys
 	 * that have actually been invalidated.
 	 */
-	public invalidate(...keys: string[]): string[] {
+	public async invalidate(...keys: string[]): Promise<void> {
 		const computedKeys = keys.flatMap((key) => this._baseKeyMapping.get(key) ?? []);
 		computedKeys.forEach((key) => this._data.get(key)?.invalidate());
-		return computedKeys;
+		await this._options.invalidate(
+			(url) => computedKeys.includes(url.pathname) || keys.includes(url.href)
+		);
 	}
 
 	/**
@@ -62,5 +64,6 @@ export default class CacheSet {
 	public clear(): void {
 		this._data.clear();
 		this._baseKeyMapping.clear();
+		this._options.invalidateAll();
 	}
 }

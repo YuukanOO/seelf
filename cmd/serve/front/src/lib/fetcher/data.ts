@@ -11,12 +11,15 @@ import type { QueryResult } from './index';
 import type { CacheFetchServiceOptions } from './cache';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PendingResolver = { resolve: (value: any) => void; reject: (reason?: any) => void };
+export type PendingResolver = { resolve: (value: any) => void; reject: (reason?: any) => void };
+
+export type CacheDataOptions = Required<Pick<CacheFetchServiceOptions, 'dedupeInterval' | 'now'>>;
 
 /**
  * Represents a local cached data.
  */
 export default class CacheData {
+	public readonly baseKey: string;
 	private readonly _data: Writable<Maybe<unknown>>;
 	private readonly _error: Writable<Maybe<Error>>;
 	private readonly _loading: Writable<boolean>;
@@ -26,17 +29,18 @@ export default class CacheData {
 
 	/**
 	 * Builds up a new cache data.
+	 * @param _options The cache options.
 	 * @param key The cache computed key with query params inlined.
 	 * @param baseKey The cache base key without query params (to invalidate them easily).
-	 * @param _options The cache options.
 	 * @param initialValue The initial value of the cache.
 	 */
 	constructor(
+		private readonly _options: CacheDataOptions,
 		public readonly key: string,
-		public readonly baseKey: string,
-		private readonly _options: Required<CacheFetchServiceOptions>,
+		baseKey?: string,
 		initialValue?: unknown
 	) {
+		this.baseKey = baseKey ?? key.split('?')[0];
 		this._data = writable();
 		this._error = writable();
 		this._loading = writable(false);

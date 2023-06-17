@@ -8,12 +8,12 @@ import {
 } from 'svelte/store';
 
 import type { QueryResult } from './index';
-import type { CacheFetchServiceOptions } from './cache';
 
+/**
+ * Represents a pending resolver waiting for a cache update.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type PendingResolver = { resolve: (value: any) => void; reject: (reason?: any) => void };
-
-export type CacheDataOptions = Required<Pick<CacheFetchServiceOptions, 'dedupeInterval' | 'now'>>;
 
 /**
  * Represents a local cached data.
@@ -29,17 +29,11 @@ export default class CacheData {
 
 	/**
 	 * Builds up a new cache data.
-	 * @param _options The cache options.
 	 * @param key The cache computed key with query params inlined.
 	 * @param baseKey The cache base key without query params (to invalidate them easily).
 	 * @param initialValue The initial value of the cache.
 	 */
-	constructor(
-		private readonly _options: CacheDataOptions,
-		public readonly key: string,
-		baseKey?: string,
-		initialValue?: unknown
-	) {
+	constructor(public readonly key: string, baseKey?: string, initialValue?: unknown) {
 		this.baseKey = baseKey ?? key.split('?')[0];
 		this._data = writable();
 		this._error = writable();
@@ -53,12 +47,15 @@ export default class CacheData {
 	/**
 	 * Update the cache with the given value.
 	 * If a Promise is given, it will update the loading state accordingly.
+	 * If you don't provide a `at` date it will use `Date.now()`.
 	 */
-	public update(value: unknown): void;
-	public update(fn: () => Promise<unknown>): Promise<unknown>;
-	public update(valueOrFn: unknown | (() => Promise<unknown>)): void | Promise<unknown> {
-		const now = this._options.now();
-		this._lastRevalidatedAt = now;
+	public update(value: unknown, at?: number): void;
+	public update(fn: () => Promise<unknown>, at?: number): Promise<unknown>;
+	public update(
+		valueOrFn: unknown | (() => Promise<unknown>),
+		at: number
+	): void | Promise<unknown> {
+		this._lastRevalidatedAt = at ?? Date.now();
 
 		if (typeof valueOrFn !== 'function') {
 			this.setData(valueOrFn);
@@ -96,10 +93,9 @@ export default class CacheData {
 	/**
 	 * Checks if this cache should be revalidated.
 	 */
-	public mustRevalidate(at?: number): boolean {
+	public mustRevalidate(dedupeInterval: number, at?: number): boolean {
 		return (
-			!this._lastRevalidatedAt ||
-			(at ?? this._options.now()) - this._lastRevalidatedAt > this._options.dedupeInterval
+			!this._lastRevalidatedAt || (at ?? Date.now()) - this._lastRevalidatedAt > dedupeInterval
 		);
 	}
 

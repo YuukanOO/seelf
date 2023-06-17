@@ -1,50 +1,36 @@
 import type { StartStopNotifier } from 'svelte/store';
-import { invalidate, invalidateAll } from '$app/navigation';
-import { browser } from '$app/environment';
 
 import { HttpError } from '$lib/error';
 import type { FetchOptions, FetchService, MutateOptions, QueryOptions, QueryResult } from './index';
-import CacheSet from './set';
+import CacheSet, { type Invalidator } from './set';
 import type CacheData from './data';
 
 export const DEFAULT_DEDUPE_INTERVAL_MS = 2000;
 export const DEFAULT_NOW_FN = () => Date.now();
-export const DEFAULT_INVALIDATE = async (url: string | URL | ((url: URL) => boolean)) => {
-	if (browser) {
-		return invalidate(url);
-	}
-};
-export const DEFAULT_INVALIDATE_ALL = async () => {
-	if (browser) {
-		return invalidateAll();
-	}
-};
 
 export type CacheFetchServiceOptions = {
 	/** Function to determine the current time (exposed here for testing mostly) */
 	now?(): number;
 	/** Requests in this interval will be deduped */
 	dedupeInterval?: number;
-	/** Function called when invalidating cached data */
-	invalidate?: typeof DEFAULT_INVALIDATE;
-	/** Function called when clearing cached data */
-	invalidateAll?: typeof DEFAULT_INVALIDATE_ALL;
 };
 
 export default class CacheFetchService implements FetchService {
 	private readonly _options: Required<CacheFetchServiceOptions>;
 	private readonly _cache: CacheSet;
 
-	public constructor(options?: CacheFetchServiceOptions, ...initialData: CacheData[]) {
+	public constructor(
+		invalidator?: Invalidator,
+		options?: CacheFetchServiceOptions,
+		...initialData: CacheData[]
+	) {
 		this._options = {
 			now: DEFAULT_NOW_FN,
 			dedupeInterval: DEFAULT_DEDUPE_INTERVAL_MS,
-			invalidate: DEFAULT_INVALIDATE,
-			invalidateAll: DEFAULT_INVALIDATE_ALL,
 			...options
 		};
 
-		this._cache = new CacheSet(this._options, ...initialData);
+		this._cache = new CacheSet(invalidator, ...initialData);
 	}
 
 	public post<TOut, TIn>(url: string, data?: TIn, options?: MutateOptions): Promise<TOut> {
@@ -65,9 +51,10 @@ export default class CacheFetchService implements FetchService {
 
 	public async get<TOut>(url: string, options?: FetchOptions): Promise<TOut> {
 		const cache = this._cache.getOrCreate(url, options?.params);
+		const now = this._options.now();
 
-		if (cache.mustRevalidate()) {
-			return this.revalidate(cache, options);
+		if (cache.mustRevalidate(this._options.dedupeInterval, now)) {
+			return this.revalidate(cache, options, now);
 		}
 
 		// Still mark the dependency with the given key to make sure it will be invalidated correctly
@@ -79,7 +66,7 @@ export default class CacheFetchService implements FetchService {
 	public query<TOut>(url: string, options?: QueryOptions): QueryResult<TOut> {
 		const cache = this._cache.getOrCreate(url, options?.params);
 
-		this.tryRevalidate(cache, options);
+		this.tryRevalidate(cache, options, this._options.now());
 
 		let listener: StartStopNotifier<TOut> | undefined;
 
@@ -96,7 +83,7 @@ export default class CacheFetchService implements FetchService {
 					}
 
 					timer = setTimeout(() => {
-						this.tryRevalidate(cache, options).then(deferRevalidation);
+						this.tryRevalidate(cache, options, this._options.now()).then(deferRevalidation);
 					}, options.refreshInterval);
 				};
 
@@ -116,17 +103,25 @@ export default class CacheFetchService implements FetchService {
 		this._cache.clear();
 	}
 
-	private async revalidate<TOut>(cache: CacheData, options?: FetchOptions): Promise<TOut> {
-		return cache.update(() => api<TOut>('GET', cache.key, undefined, options)) as TOut;
+	private async revalidate<TOut>(
+		cache: CacheData,
+		options?: FetchOptions,
+		at?: number
+	): Promise<TOut> {
+		return cache.update(() => api<TOut>('GET', cache.key, undefined, options), at) as TOut;
 	}
 
-	private async tryRevalidate(cache: CacheData, options?: FetchOptions): Promise<void> {
-		if (!cache.mustRevalidate()) {
+	private async tryRevalidate(
+		cache: CacheData,
+		options?: FetchOptions,
+		at?: number
+	): Promise<void> {
+		if (!cache.mustRevalidate(this._options.dedupeInterval, at)) {
 			return;
 		}
 
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
-		await this.revalidate(cache, options).catch(() => {});
+		await this.revalidate(cache, options, at).catch(() => {});
 	}
 
 	private async mutate<TOut, TIn>(

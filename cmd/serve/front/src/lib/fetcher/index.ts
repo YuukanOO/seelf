@@ -1,5 +1,6 @@
 import type { Readable } from 'svelte/store';
 import CacheFetchService from './cache';
+import { SvelteInvalidator } from './set';
 
 export type FetchOptions = {
 	/** Query parameters to add to the url. */
@@ -56,6 +57,6 @@ export interface FetchService {
 	reset(): Promise<void>;
 }
 
-const service: FetchService = new CacheFetchService();
+const service: FetchService = new CacheFetchService(new SvelteInvalidator());
 
 export default service;

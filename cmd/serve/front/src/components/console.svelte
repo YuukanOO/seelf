@@ -5,10 +5,25 @@
 	export let data: Maybe<string>;
 
 	let container: HTMLDivElement;
+	let lastScroll: number = 0;
+	let followLogs = true;
+
+	function onScroll(event: Event) {
+		const target = event.target as HTMLDivElement;
+		const { scrollTop, scrollHeight, clientHeight } = target;
+
+		// If the user has scrolled down, activate the follow only if it has reached the bottom
+		if (scrollTop > lastScroll) {
+			followLogs = Math.floor(scrollHeight - scrollTop) === clientHeight;
+		} else {
+			followLogs = false;
+		}
+
+		lastScroll = target.scrollTop;
+	}
 
 	afterUpdate(() => {
-		// FIXME: maybe add a button "follow logs" to actually enable the scrollTo
-		if (!container) {
+		if (!container || !followLogs) {
 			return;
 		}
 
@@ -18,7 +33,7 @@
 
 <div class="console">
 	<h2 class="title">{title}</h2>
-	<div class="scrollarea" bind:this={container}>
+	<div class="scrollarea" bind:this={container} on:scroll={onScroll}>
 		<pre>{data}</pre>
 	</div>
 </div>

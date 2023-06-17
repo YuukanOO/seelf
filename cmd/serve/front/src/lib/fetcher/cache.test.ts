@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import CacheFetchService, {
-	DEFAULT_INVALIDATE,
-	DEFAULT_INVALIDATE_ALL,
-	DEFAULT_NOW_FN
-} from './cache';
+import CacheFetchService, { DEFAULT_NOW_FN } from './cache';
 import CacheData from './data';
 import { get } from 'svelte/store';
 import { HttpError } from '$lib/error';
+
+const opts = {
+	dedupeInterval: 3600000, // For tests, make a really long dedupe interval
+	now: DEFAULT_NOW_FN
+};
 
 describe('the CacheFetchService', () => {
 	it('should fetch data if not cached', async () => {
@@ -21,14 +22,8 @@ describe('the CacheFetchService', () => {
 	});
 
 	it('should return cached data if fetched recently', async () => {
-		const opts = {
-			dedupeInterval: 3600000, // For tests, make a really long dedupe interval
-			now: DEFAULT_NOW_FN,
-			invalidate: DEFAULT_INVALIDATE,
-			invalidateAll: DEFAULT_INVALIDATE_ALL
-		};
-		const cachedData = new CacheData(opts, '/api/v1/apps', '/api/v1/apps', 'cached response data');
-		const service = new CacheFetchService(opts, cachedData);
+		const cachedData = new CacheData('/api/v1/apps', undefined, 'cached response data');
+		const service = new CacheFetchService(undefined, opts, cachedData);
 		const mockFetch = new MockFetch('some response');
 
 		const data = await service.get('/api/v1/apps', { fetch: mockFetch.fetch });
@@ -39,14 +34,8 @@ describe('the CacheFetchService', () => {
 	});
 
 	it('should revalidate data if stale', async () => {
-		const opts = {
-			dedupeInterval: 3600000,
-			now: DEFAULT_NOW_FN,
-			invalidate: DEFAULT_INVALIDATE,
-			invalidateAll: DEFAULT_INVALIDATE_ALL
-		};
-		const cachedData = new CacheData(opts, '/api/v1/apps');
-		const service = new CacheFetchService(opts, cachedData);
+		const cachedData = new CacheData('/api/v1/apps');
+		const service = new CacheFetchService(undefined, opts, cachedData);
 		const mockFetch = new MockFetch('some response');
 
 		const data = await service.get('/api/v1/apps', { fetch: mockFetch.fetch });
@@ -80,52 +69,40 @@ describe('the CacheFetchService', () => {
 	});
 
 	it('should automatically invalidate url when doing a mutating request', async () => {
-		const opts = {
-			dedupeInterval: 3600000,
-			now: DEFAULT_NOW_FN,
-			invalidate: DEFAULT_INVALIDATE,
-			invalidateAll: DEFAULT_INVALIDATE_ALL
-		};
-		const cachedData = new CacheData(opts, '/api/v1/apps', '/api/v1/apps', 'some data');
-		const otherCachedData = new CacheData(
-			opts,
-			'/api/v1/app/1',
-			'/api/v1/app/1',
-			'some other data'
-		);
-		const service = new CacheFetchService(opts, cachedData, otherCachedData);
+		const cachedData = new CacheData('/api/v1/apps', undefined, 'some data');
+		const otherCachedData = new CacheData('/api/v1/app/1', undefined, 'some other data');
+		const service = new CacheFetchService(undefined, opts, cachedData, otherCachedData);
 		const mockFetch = new MockFetch('some response');
 
 		await service.post('/api/v1/apps', undefined, { fetch: mockFetch.fetch });
 
 		expect(mockFetch.input).toBe('/api/v1/apps');
 		expect(mockFetch.init?.method).toBe('POST');
-		expect(cachedData.mustRevalidate()).toBe(true);
-		expect(otherCachedData.mustRevalidate()).toBe(false);
+		expect(cachedData.mustRevalidate(opts.dedupeInterval)).toBe(true);
+		expect(otherCachedData.mustRevalidate(opts.dedupeInterval)).toBe(false);
 	});
 
 	it('should invalidate given keys when doing a mutating request', async () => {
-		const opts = {
-			dedupeInterval: 3600000,
-			now: DEFAULT_NOW_FN,
-			invalidate: DEFAULT_INVALIDATE,
-			invalidateAll: DEFAULT_INVALIDATE_ALL
-		};
-		const cachedData = new CacheData(opts, '/api/v1/app/1', '/api/v1/app/1', 'some data');
+		const cachedData = new CacheData('/api/v1/app/1', undefined, 'some data');
 		const page1Data = new CacheData(
-			opts,
 			'/api/v1/app/1/deployments?env=production&page=1',
 			'/api/v1/app/1/deployments',
 			'some other data'
 		);
 		const page2Data = new CacheData(
-			opts,
 			'/api/v1/app/1/deployments?env=production&page=2',
 			'/api/v1/app/1/deployments',
 			'some other data'
 		);
-		const notRelatedData = new CacheData(opts, '/api/v1/health', '/api/v1/health', 'some data');
-		const service = new CacheFetchService(opts, cachedData, page1Data, page2Data, notRelatedData);
+		const notRelatedData = new CacheData('/api/v1/health', undefined, 'some data');
+		const service = new CacheFetchService(
+			undefined,
+			opts,
+			cachedData,
+			page1Data,
+			page2Data,
+			notRelatedData
+		);
 		const mockFetch = new MockFetch('some response');
 
 		await service.put('/api/v1/app/1', undefined, {
@@ -135,10 +112,10 @@ describe('the CacheFetchService', () => {
 
 		expect(mockFetch.input).toBe('/api/v1/app/1');
 		expect(mockFetch.init?.method).toBe('PUT');
-		expect(cachedData.mustRevalidate()).toBe(true);
-		expect(page1Data.mustRevalidate()).toBe(true);
-		expect(page2Data.mustRevalidate()).toBe(true);
-		expect(notRelatedData.mustRevalidate()).toBe(false);
+		expect(cachedData.mustRevalidate(opts.dedupeInterval)).toBe(true);
+		expect(page1Data.mustRevalidate(opts.dedupeInterval)).toBe(true);
+		expect(page2Data.mustRevalidate(opts.dedupeInterval)).toBe(true);
+		expect(notRelatedData.mustRevalidate(opts.dedupeInterval)).toBe(false);
 	});
 });
 

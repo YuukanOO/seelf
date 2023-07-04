@@ -148,7 +148,7 @@ services:
     depends_on:
       - db
     ports:
-      - "8080:8080"
+      - "8080"
   sidecar:
     image: traefik/whoami
     ports:
@@ -224,15 +224,17 @@ volumes:
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.routers.my-app-production-app.rule":             "Host(`my-app.docker.localhost`)",
-						"traefik.http.routers.my-app-production-app.tls.certresolver": "seelfresolver",
+						"traefik.http.services.my-app-production-app.loadbalancer.server.port": "8080",
+						"traefik.http.routers.my-app-production-app.rule":                      "Host(`my-app.docker.localhost`)",
+						"traefik.http.routers.my-app-production-app.tls.certresolver":          "seelfresolver",
 					}, service.Labels)
 				} else {
 					testutil.DeepEquals(t, types.Labels{
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.routers.my-app-production-app.rule": "Host(`my-app.docker.localhost`)",
+						"traefik.http.services.my-app-production-app.loadbalancer.server.port": "8080",
+						"traefik.http.routers.my-app-production-app.rule":                      "Host(`my-app.docker.localhost`)",
 					}, service.Labels)
 				}
 			case "db":
@@ -258,6 +260,8 @@ volumes:
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
+						"traefik.http.services.my-app-production-sidecar.loadbalancer.server.port": "80",
+
 						"traefik.http.routers.my-app-production-sidecar.rule":             "Host(`sidecar.my-app.docker.localhost`)",
 						"traefik.http.routers.my-app-production-sidecar.tls.certresolver": "seelfresolver",
 					}, service.Labels)
@@ -266,7 +270,8 @@ volumes:
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.routers.my-app-production-sidecar.rule": "Host(`sidecar.my-app.docker.localhost`)",
+						"traefik.http.services.my-app-production-sidecar.loadbalancer.server.port": "80",
+						"traefik.http.routers.my-app-production-sidecar.rule":                      "Host(`sidecar.my-app.docker.localhost`)",
 					}, service.Labels)
 				}
 			default:

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -476,6 +477,7 @@ func (d *docker) generateProject(depl domain.Deployment, logger log.StepLogger) 
 			logger.Warnf("service %s exposes multiple ports but seelf only supports one port per service at the moment", deployedService.Name())
 		}
 
+		containerPort := uint64(service.Ports[0].Target)
 		service.Ports = []types.ServicePortConfig{} // Remove them since traefik will expose this service
 
 		if service.Networks == nil {
@@ -485,6 +487,7 @@ func (d *docker) generateProject(depl domain.Deployment, logger log.StepLogger) 
 		service.Networks[publicNetworkName] = nil // nil here because there's no additional options to give
 
 		service.Labels["traefik.enable"] = "true"
+		service.Labels[fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", serviceQualifiedName)] = strconv.FormatUint(containerPort, 10)
 		service.Labels[fmt.Sprintf("traefik.http.routers.%s.rule", serviceQualifiedName)] =
 			fmt.Sprintf("Host(`%s`)", url.Host())
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/validation"
@@ -29,7 +29,7 @@ type (
 	}
 )
 
-func New(options Options) trigger.Trigger {
+func New(options Options) source.Source {
 	return &service{
 		options: options,
 	}
@@ -44,7 +44,7 @@ func (s *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
 	rawServiceFileContent, ok := payload.(string)
 
 	if !ok {
-		return domain.Meta{}, domain.ErrInvalidTriggerPayload
+		return domain.Meta{}, domain.ErrInvalidSourcePayload
 	}
 
 	if err := validation.Check(validation.Of{
@@ -75,14 +75,14 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	if err := os.RemoveAll(buildDir); err != nil {
 		logger.Error(err)
-		return domain.ErrTriggerFetchFailed
+		return domain.ErrSourceFetchFailed
 	}
 
 	filename := filepath.Join(buildDir, "compose.yml")
 
 	logger.Stepf("writing service file to %s", filename)
 
-	if err := ostools.WriteFile(filename, []byte(depl.Trigger().Data())); err != nil {
+	if err := ostools.WriteFile(filename, []byte(depl.Source().Data())); err != nil {
 		logger.Error(err)
 		return ErrWriteComposeFailed
 	}

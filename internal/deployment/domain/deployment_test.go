@@ -45,7 +45,7 @@ func Test_Deployment(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.DeploymentIDFrom(app.ID(), number), dpl.ID())
-		testutil.Equals(t, meta, dpl.Trigger())
+		testutil.Equals(t, meta, dpl.Source())
 		testutil.Equals(t, "my-app", conf.AppName())
 		testutil.Equals(t, domain.Production, conf.Environment())
 
@@ -53,7 +53,7 @@ func Test_Deployment(t *testing.T) {
 		evt := testutil.EventIs[domain.DeploymentCreated](t, &dpl, 0)
 
 		testutil.Equals(t, dpl.ID(), evt.ID)
-		testutil.Equals(t, dpl.Trigger(), evt.Trigger)
+		testutil.Equals(t, dpl.Source(), evt.Source)
 		testutil.Equals(t, fmt.Sprintf("%d-%s-1.deployment.log", evt.Requested.At().Unix(), app.ID()), evt.State.LogFile())
 		testutil.Equals(t, domain.DeploymentStatusPending, evt.State.Status())
 		testutil.IsFalse(t, evt.Requested.At().IsZero())
@@ -168,7 +168,7 @@ func Test_Deployment(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, dpl.Config().Environment(), redpl.Config().Environment())
-		testutil.Equals(t, dpl.Trigger(), redpl.Trigger())
+		testutil.Equals(t, dpl.Source(), redpl.Source())
 	})
 
 	t.Run("should err if trying to redeploy a deployment on the wrong app", func(t *testing.T) {
@@ -204,7 +204,7 @@ func Test_Deployment(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.Production, promoted.Config().Environment())
-		testutil.Equals(t, dpl.Trigger(), promoted.Trigger())
+		testutil.Equals(t, dpl.Source(), promoted.Source())
 	})
 }
 

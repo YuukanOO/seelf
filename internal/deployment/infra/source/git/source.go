@@ -10,7 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/go-git/go-git/v5/config"
 
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -54,7 +54,7 @@ type (
 )
 
 // Builds a new trigger to process git deployments
-func New(options Options, reader domain.AppsReader) trigger.Trigger {
+func New(options Options, reader domain.AppsReader) source.Source {
 	return &service{
 		options: options,
 		reader:  reader,
@@ -70,7 +70,7 @@ func (s *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
 	p, ok := payload.(Payload)
 
 	if !ok {
-		return domain.Meta{}, domain.ErrInvalidTriggerPayload
+		return domain.Meta{}, domain.ErrInvalidSourcePayload
 	}
 
 	if err := validation.Check(validation.Of{
@@ -122,7 +122,7 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	if err != nil {
 		logger.Error(err)
-		return domain.ErrTriggerFetchFailed
+		return domain.ErrSourceFetchFailed
 	}
 
 	// Could happen if the app vcs config has been removed since the deployment has been queued
@@ -134,14 +134,14 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	if err := os.RemoveAll(buildDir); err != nil {
 		logger.Error(err)
-		return domain.ErrTriggerFetchFailed
+		return domain.ErrSourceFetchFailed
 	}
 
 	config := app.VCS().MustGet()
 
 	// Retrieve the branch and hash for deployment payload
 	// We use the LastIndex because an @ is a vaid character in a branch name
-	data := depl.Trigger().Data()
+	data := depl.Source().Data()
 	lastSeparatorIdx := sstrings.LastIndex(data, separator)
 	branch, hash := data[:lastSeparatorIdx], data[lastSeparatorIdx+1:]
 

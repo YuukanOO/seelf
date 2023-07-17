@@ -22,7 +22,7 @@ func Test_Meta(t *testing.T) {
 }
 
 func Test_Kind(t *testing.T) {
-	t.Run("could check wether it represents a VCS managed trigger", func(t *testing.T) {
+	t.Run("could check wether it represents a VCS managed source", func(t *testing.T) {
 		var rawKind domain.Kind = "raw"
 
 		testutil.IsFalse(t, rawKind.IsVCS())

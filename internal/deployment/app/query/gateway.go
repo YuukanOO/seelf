@@ -51,7 +51,7 @@ type (
 
 	Meta struct {
 		Kind string              `json:"kind"`
-		Data monad.Maybe[string] `json:"data"` // Contain trigger data only when the information is not sensitive
+		Data monad.Maybe[string] `json:"data"` // Contain source data only when the information is not sensitive
 	}
 
 	VCSConfig struct {

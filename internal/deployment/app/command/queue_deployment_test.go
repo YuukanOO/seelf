@@ -10,7 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/command"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger/raw"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validation"
@@ -42,7 +42,7 @@ func Test_QueueDeployment(t *testing.T) {
 			Environment: "production",
 		})
 
-		testutil.ErrorIs(t, domain.ErrInvalidTriggerPayload, err)
+		testutil.ErrorIs(t, domain.ErrInvalidSourcePayload, err)
 	})
 
 	t.Run("should fail if no environment has been given", func(t *testing.T) {

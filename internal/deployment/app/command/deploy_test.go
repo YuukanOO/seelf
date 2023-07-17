@@ -20,27 +20,27 @@ func Test_Deploy(t *testing.T) {
 	app := domain.NewApp("my-app", "some-uid")
 
 	deploy := func(
-		trigger domain.Trigger,
+		source domain.Source,
 		backend domain.Backend,
 		existingDeployments ...domain.Deployment,
 	) (func(context.Context, command.DeployCommand) error, domain.DeploymentsReader) {
 		store := memory.NewDeploymentsStore(existingDeployments...)
-		return command.Deploy(store, store, trigger, backend), store
+		return command.Deploy(store, store, source, backend), store
 	}
 
 	t.Run("should fail if the deployment does not exists", func(t *testing.T) {
-		uc, _ := deploy(trigger(nil), backend(nil))
+		uc, _ := deploy(source(nil), backend(nil))
 		err := uc(ctx, command.DeployCommand{})
 
 		testutil.ErrorIs(t, apperr.ErrNotFound, err)
 	})
 
-	t.Run("should mark the deployment has failed if trigger does not succeed", func(t *testing.T) {
-		triggerErr := errors.New("trigger_failed")
-		tr := trigger(triggerErr)
-		meta, _ := tr.Prepare(app, 42)
+	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
+		srcErr := errors.New("source_failed")
+		src := source(srcErr)
+		meta, _ := src.Prepare(app, 42)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, opts, "some-uid")
-		uc, reader := deploy(tr, backend(nil), depl)
+		uc, reader := deploy(src, backend(nil), depl)
 
 		err := uc(ctx, command.DeployCommand{
 			AppID:            string(app.ID()),
@@ -49,24 +49,24 @@ func Test_Deploy(t *testing.T) {
 
 		depl, _ = reader.GetByID(ctx, domain.DeploymentIDFrom(app.ID(), 1))
 
-		testutil.ErrorIs(t, triggerErr, err)
+		testutil.ErrorIs(t, srcErr, err)
 
 		events := event.Unwrap(&depl)
 		evt := events[len(events)-1].(domain.DeploymentStateChanged)
 
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
-		testutil.Equals(t, triggerErr.Error(), evt.State.ErrCode().MustGet())
+		testutil.Equals(t, srcErr.Error(), evt.State.ErrCode().MustGet())
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 	})
 
 	t.Run("should mark the deployment has failed if backend does not run the deployment successfuly", func(t *testing.T) {
 		backendErr := errors.New("run_failed")
 		be := backend(backendErr)
-		tr := trigger(nil)
-		meta, _ := tr.Prepare(app, 42)
+		src := source(nil)
+		meta, _ := src.Prepare(app, 42)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, opts, "some-uid")
-		uc, reader := deploy(tr, be, depl)
+		uc, reader := deploy(src, be, depl)
 
 		err := uc(ctx, command.DeployCommand{
 			AppID:            string(app.ID()),
@@ -85,10 +85,10 @@ func Test_Deploy(t *testing.T) {
 	})
 
 	t.Run("should mark the deployment has succeeded if all is good", func(t *testing.T) {
-		tr := trigger(nil)
-		meta, _ := tr.Prepare(app, 42)
+		src := source(nil)
+		meta, _ := src.Prepare(app, 42)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, opts, "some-uid")
-		uc, reader := deploy(tr, backend(nil), depl)
+		uc, reader := deploy(src, backend(nil), depl)
 
 		err := uc(ctx, command.DeployCommand{
 			AppID:            string(app.ID()),
@@ -109,19 +109,19 @@ func Test_Deploy(t *testing.T) {
 
 const kind domain.Kind = "dummy"
 
-type dummyTrigger struct {
+type dummySource struct {
 	err error
 }
 
-func trigger(failedWithErr error) domain.Trigger {
-	return &dummyTrigger{failedWithErr}
+func source(failedWithErr error) domain.Source {
+	return &dummySource{failedWithErr}
 }
 
-func (*dummyTrigger) Prepare(domain.App, any) (domain.Meta, error) {
+func (*dummySource) Prepare(domain.App, any) (domain.Meta, error) {
 	return domain.NewMeta(kind, ""), nil
 }
 
-func (t *dummyTrigger) Fetch(context.Context, domain.Deployment) error {
+func (t *dummySource) Fetch(context.Context, domain.Deployment) error {
 	return t.err
 }
 

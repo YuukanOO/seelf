@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 )
@@ -40,7 +40,7 @@ type (
 	}
 )
 
-func New(options Options) trigger.Trigger {
+func New(options Options) source.Source {
 	return &service{
 		options: options,
 	}
@@ -55,7 +55,7 @@ func (t *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
 	file, ok := payload.(*multipart.FileHeader)
 
 	if !ok {
-		return domain.Meta{}, domain.ErrInvalidTriggerPayload
+		return domain.Meta{}, domain.ErrInvalidSourcePayload
 	}
 
 	tmpfile, err := os.CreateTemp("", tmpPattern)
@@ -100,10 +100,10 @@ func (t *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	if err := ostools.EmptyDir(buildDir); err != nil {
 		logger.Error(err)
-		return domain.ErrTriggerFetchFailed
+		return domain.ErrSourceFetchFailed
 	}
 
-	archivePath := depl.Trigger().Data()
+	archivePath := depl.Source().Data()
 
 	logger.Stepf("extracting archive %s into %s", archivePath, buildDir)
 

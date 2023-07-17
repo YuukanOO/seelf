@@ -118,7 +118,7 @@ func (d *docker) Setup() error {
 		},
 		Networks: types.Networks{
 			"default": types.NetworkConfig{
-				Name: "seelf-public",
+				Name: publicNetworkName,
 			},
 		},
 	}

@@ -116,8 +116,8 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 					"state_services":     evt.State.Services(),
 					"state_started_at":   evt.State.StartedAt(),
 					"state_finished_at":  evt.State.FinishedAt(),
-					"trigger_kind":       evt.Trigger.Kind(),
-					"trigger_data":       evt.Trigger.Data(),
+					"trigger_kind":       evt.Source.Kind(),
+					"trigger_data":       evt.Source.Data(),
 					"requested_at":       evt.Requested.At(),
 					"requested_by":       evt.Requested.By(),
 				}).

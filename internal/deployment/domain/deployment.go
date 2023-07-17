@@ -45,7 +45,7 @@ type (
 		path      string
 		config    Config
 		state     State
-		trigger   Meta
+		source    Meta
 		requested shared.Action[domain.UserID]
 	}
 
@@ -69,7 +69,7 @@ type (
 		Path      string
 		Config    Config
 		State     State
-		Trigger   Meta
+		Source    Meta
 		Requested shared.Action[domain.UserID]
 	}
 
@@ -107,7 +107,7 @@ func (a App) NewDeployment(
 		Path:      path,
 		Config:    NewConfig(a, env),
 		State:     NewState(logfilename),
-		Trigger:   meta,
+		Source:    meta,
 		Requested: shared.ActionFrom(requestedBy, now),
 	})
 
@@ -125,7 +125,7 @@ func (a App) Redeploy(
 		return d, ErrInvalidSourceDeployment
 	}
 
-	return a.NewDeployment(deployNumber, source.trigger, source.config.environment, tmpl, requestedBy)
+	return a.NewDeployment(deployNumber, source.source, source.config.environment, tmpl, requestedBy)
 }
 
 // Promote the given deployment to the production environment
@@ -143,7 +143,7 @@ func (a App) Promote(
 		return d, ErrInvalidSourceDeployment
 	}
 
-	return a.NewDeployment(deployNumber, source.trigger, Production, tmpl, requestedBy)
+	return a.NewDeployment(deployNumber, source.source, Production, tmpl, requestedBy)
 }
 
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
@@ -165,8 +165,8 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&d.state.services,
 		&d.state.startedAt,
 		&d.state.finishedAt,
-		&d.trigger.kind,
-		&d.trigger.data,
+		&d.source.kind,
+		&d.source.data,
 		&requestedAt,
 		&requestedBy,
 	)
@@ -178,7 +178,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 
 func (d Deployment) ID() DeploymentID { return d.id }
 func (d Deployment) Config() Config   { return d.config }
-func (d Deployment) Trigger() Meta    { return d.trigger }
+func (d Deployment) Source() Meta     { return d.source }
 
 // Retrieve the deployment path relative to the given directories.
 func (d Deployment) Path(relativeTo ...string) string {
@@ -248,7 +248,7 @@ func (d *Deployment) apply(e event.Event) {
 		d.path = evt.Path
 		d.config = evt.Config
 		d.state = evt.State
-		d.trigger = evt.Trigger
+		d.source = evt.Source
 		d.requested = evt.Requested
 	case DeploymentStateChanged:
 		d.state = evt.State

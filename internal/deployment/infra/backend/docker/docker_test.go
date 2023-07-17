@@ -13,7 +13,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger/raw"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/compose-spec/compose-go/types"
@@ -137,8 +137,8 @@ func Test_Run(t *testing.T) {
 			},
 		})
 
-		trigger := raw.New(opts)
-		meta, _ := trigger.Prepare(app, `
+		src := raw.New(opts)
+		meta, _ := src.Prepare(app, `
 services:
   app:
     restart: unless-stopped
@@ -173,7 +173,7 @@ volumes:
   dbdata:
 `)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, opts, "uid")
-		testutil.IsNil(t, trigger.Fetch(context.Background(), depl))
+		testutil.IsNil(t, src.Fetch(context.Background(), depl))
 
 		dockerBackend, composeMock, cliMock := backend(opts)
 

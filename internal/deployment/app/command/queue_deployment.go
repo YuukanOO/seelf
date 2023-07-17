@@ -14,13 +14,13 @@ type QueueDeploymentCommand struct {
 	Payload     any    `json:"-"`
 }
 
-// Queue a deployment for a given app and trigger. It will returns the deployment number
+// Queue a deployment for a given app and source. It will returns the deployment number
 // created.
 func QueueDeployment(
 	appsReader domain.AppsReader,
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
-	trigger domain.Trigger,
+	source domain.Source,
 	deploymentDirTemplate domain.DeploymentDirTemplate,
 ) func(ctx context.Context, cmd QueueDeploymentCommand) (int, error) {
 	return func(ctx context.Context, cmd QueueDeploymentCommand) (int, error) {
@@ -38,7 +38,7 @@ func QueueDeployment(
 			return 0, err
 		}
 
-		meta, err := trigger.Prepare(app, cmd.Payload)
+		meta, err := source.Prepare(app, cmd.Payload)
 
 		if err != nil {
 			return 0, err

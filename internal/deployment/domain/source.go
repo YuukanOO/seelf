@@ -7,13 +7,13 @@ import (
 )
 
 var (
-	ErrNoValidTriggerFound   = apperr.New("no_valid_trigger_found")
-	ErrInvalidTriggerPayload = apperr.New("invalid_trigger_payload")
-	ErrTriggerFetchFailed    = apperr.New("trigger_fetch_failed")
+	ErrNoValidSourceFound   = apperr.New("no_valid_source_found")
+	ErrInvalidSourcePayload = apperr.New("invalid_source_payload")
+	ErrSourceFetchFailed    = apperr.New("source_fetch_failed")
 )
 
-// Represents a trigger which has initiated a deployment.
-type Trigger interface {
+// Represents a source which has initiated a deployment.
+type Source interface {
 	Prepare(App, any) (Meta, error)          // Prepare the given payload for the given application, doing any needed validation
 	Fetch(context.Context, Deployment) error // Retrieve deployment data before passing in to a backend
 }

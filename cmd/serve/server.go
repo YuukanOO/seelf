@@ -23,11 +23,11 @@ import (
 	deplquery "github.com/YuukanOO/seelf/internal/deployment/app/query"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/archive"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/git"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	deplsqlite "github.com/YuukanOO/seelf/internal/deployment/infra/sqlite"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger/archive"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger/git"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger/raw"
 	workercmd "github.com/YuukanOO/seelf/internal/worker/app/command"
 	workerinfra "github.com/YuukanOO/seelf/internal/worker/infra"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
@@ -198,7 +198,7 @@ func (s *server) configureServices() error {
 	deploymentsStore := deplsqlite.NewDeploymentsStore(s.db)
 	jobsStore := workersqlite.NewJobsStore(s.db)
 
-	triggerFacade := trigger.NewFacade(
+	sourceFacade := source.NewFacade(
 		raw.New(s.options),
 		archive.New(s.options),
 		git.New(s.options, appsStore),
@@ -206,7 +206,7 @@ func (s *server) configureServices() error {
 
 	s.docker = docker.New(s.options, s.logger)
 	handler := workerinfra.NewHandlerFacade(s.logger,
-		jobs.DeploymentHandler(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, triggerFacade, s.docker)),
+		jobs.DeploymentHandler(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
 		jobs.CleanupAppHandler(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
 	)
 	s.worker = async.NewIntervalWorker(s.logger, 5*time.Second, workercmd.ProcessNext(jobsStore, jobsStore, handler))
@@ -228,7 +228,7 @@ func (s *server) configureServices() error {
 	s.createApp = deplcmd.CreateApp(appsStore, appsStore)
 	s.updateApp = deplcmd.UpdateApp(appsStore, appsStore)
 	s.requestAppCleanup = deplcmd.RequestAppCleanup(appsStore, appsStore)
-	s.queueDeployment = deplcmd.QueueDeployment(appsStore, deploymentsStore, deploymentsStore, triggerFacade, s.options.DeploymentDirTemplate())
+	s.queueDeployment = deplcmd.QueueDeployment(appsStore, deploymentsStore, deploymentsStore, sourceFacade, s.options.DeploymentDirTemplate())
 	s.redeploy = deplcmd.Redeploy(appsStore, deploymentsStore, deploymentsStore, s.options.DeploymentDirTemplate())
 	s.promote = deplcmd.Promote(appsStore, deploymentsStore, deploymentsStore, s.options.DeploymentDirTemplate())
 	s.failRunningDeployments = deplcmd.FailRunningDeployments(deploymentsStore, deploymentsStore)

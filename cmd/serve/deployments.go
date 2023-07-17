@@ -7,7 +7,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/app/command"
 	"github.com/YuukanOO/seelf/internal/deployment/app/query"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/trigger/git"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/git"
 	"github.com/YuukanOO/seelf/pkg/http"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/gin-gonic/gin"

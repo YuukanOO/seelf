@@ -15,7 +15,7 @@ type DeployCommand struct {
 func Deploy(
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
-	trigger domain.Trigger,
+	source domain.Source,
 	backend domain.Backend,
 ) func(context.Context, DeployCommand) error {
 	return func(ctx context.Context, cmd DeployCommand) (finalErr error) {
@@ -65,7 +65,7 @@ func Deploy(
 		}()
 
 		// Fetch deployment files
-		if finalErr = trigger.Fetch(ctx, depl); finalErr != nil {
+		if finalErr = source.Fetch(ctx, depl); finalErr != nil {
 			return
 		}
 

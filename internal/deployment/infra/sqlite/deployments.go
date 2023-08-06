@@ -40,8 +40,8 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 				,state_services
 				,state_started_at
 				,state_finished_at
-				,trigger_kind
-				,trigger_data
+				,source_kind
+				,source_data
 				,requested_at
 				,requested_by
 			FROM deployments
@@ -79,8 +79,8 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 			,state_services
 			,state_started_at
 			,state_finished_at
-			,trigger_kind
-			,trigger_data
+			,source_kind
+			,source_data
 			,requested_at
 			,requested_by
 		FROM deployments
@@ -116,8 +116,8 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 					"state_services":     evt.State.Services(),
 					"state_started_at":   evt.State.StartedAt(),
 					"state_finished_at":  evt.State.FinishedAt(),
-					"trigger_kind":       evt.Source.Kind(),
-					"trigger_data":       evt.Source.Data(),
+					"source_kind":        evt.Source.Kind(),
+					"source_data":        evt.Source.Data(),
 					"requested_at":       evt.Requested.At(),
 					"requested_by":       evt.Requested.By(),
 				}).

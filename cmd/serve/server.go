@@ -245,11 +245,11 @@ func (s *server) startCheckup() error {
 	}
 
 	// Migrate the database first
-	if err := s.db.Migrate(sqlite.MigrationsDir{
-		"auth":       authsqlite.Migrations,
-		"deployment": deplsqlite.Migrations,
-		"worker":     workersqlite.Migrations,
-	}); err != nil {
+	if err := s.db.Migrate(
+		authsqlite.Migrations,
+		deplsqlite.Migrations,
+		workersqlite.Migrations,
+	); err != nil {
 		return err
 	}
 

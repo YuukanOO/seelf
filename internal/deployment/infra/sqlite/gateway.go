@@ -59,8 +59,8 @@ func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, appid string, filt
 			deployments.app_id
 			,deployments.deployment_number
 			,deployments.config_environment
-			,deployments.trigger_kind
-			,deployments.trigger_data
+			,deployments.source_kind
+			,deployments.source_data
 			,deployments.state_status
 			,deployments.state_errcode
 			,deployments.state_services
@@ -85,8 +85,8 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, appid string, deploymen
 			deployments.app_id
 			,deployments.deployment_number
 			,deployments.config_environment
-			,deployments.trigger_kind
-			,deployments.trigger_data
+			,deployments.source_kind
+			,deployments.source_data
 			,deployments.state_status
 			,deployments.state_errcode
 			,deployments.state_services
@@ -143,8 +143,8 @@ func (s *concreteAppDataScanner[T]) Finalize(ctx context.Context, results builde
 				deployments.app_id
 				,deployments.deployment_number
 				,deployments.config_environment
-				,deployments.trigger_kind
-				,deployments.trigger_data
+				,deployments.source_kind
+				,deployments.source_data
 				,deployments.state_status
 				,deployments.state_errcode
 				,deployments.state_services

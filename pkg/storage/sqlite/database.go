@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	migrationsDir                    = "migrations"
 	dbDriverName                     = "sqlite3"
 	migrateSourceName                = "embed"
 	transactionContextKey contextKey = "sqlitetx"
@@ -27,11 +26,16 @@ type (
 		builder.Executor
 		Dispatcher() event.Dispatcher
 		WithTransaction(ctx context.Context) (context.Context, *sql.Tx)
-		Migrate(MigrationsDir) error
+		Migrate(...MigrationsModule) error
 		Close() error
 	}
 
-	MigrationsDir map[string]fs.FS
+	// Represents a single module for database migrations.
+	MigrationsModule struct {
+		name string // Name of the module, used as a prefix for the migrations history table.
+		dir  string // Relative directory in the fs containing *.sql migrations files.
+		fs   fs.FS
+	}
 
 	// Handle to a sqlite database with useful helper methods on it :)
 	database struct {
@@ -64,16 +68,16 @@ func (db *database) Close() error {
 }
 
 // Migrates the opened database to the latest version.
-func (db *database) Migrate(migrations MigrationsDir) error {
-	for name, dir := range migrations {
-		source, err := iofs.New(dir, migrationsDir)
+func (db *database) Migrate(modules ...MigrationsModule) error {
+	for _, module := range modules {
+		source, err := iofs.New(module.fs, module.dir)
 
 		if err != nil {
 			return err
 		}
 
 		driver, err := sqlite3.WithInstance(db.conn, &sqlite3.Config{
-			MigrationsTable: fmt.Sprintf("%s_%s", name, sqlite3.DefaultMigrationsTable),
+			MigrationsTable: fmt.Sprintf("%s_%s", module.name, sqlite3.DefaultMigrationsTable),
 		})
 
 		if err != nil {
@@ -86,7 +90,8 @@ func (db *database) Migrate(migrations MigrationsDir) error {
 			return err
 		}
 
-		db.logger.Debugw("migrating database as needed", "context", name)
+		db.logger.Debugw("migrating database as needed",
+			"module", module.name)
 
 		if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
 			return err
@@ -213,4 +218,10 @@ func WriteAndDispatch[T event.Source](
 	}
 
 	return nil
+}
+
+// Builds a new migrations module with the given module name (used as a migrations history table name prefix)
+// and the directory where migrations are stored in the given filesystem.
+func NewMigrationsModule(name string, dir string, fs fs.FS) MigrationsModule {
+	return MigrationsModule{name, dir, fs}
 }

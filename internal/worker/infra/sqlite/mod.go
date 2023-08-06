@@ -1,6 +1,12 @@
 package sqlite
 
-import "embed"
+import (
+	"embed"
+
+	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
+)
 
 //go:embed migrations/*.sql
-var Migrations embed.FS
+var migrations embed.FS
+
+var Migrations = sqlite.NewMigrationsModule("worker", "migrations", migrations)

@@ -1,4 +1,4 @@
-package jobs
+package cleanup
 
 import (
 	"context"
@@ -7,37 +7,37 @@ import (
 	depldomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/worker/app/command"
 	"github.com/YuukanOO/seelf/internal/worker/domain"
-	"github.com/YuukanOO/seelf/internal/worker/infra"
+	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
 	"github.com/YuukanOO/seelf/pkg/log"
 )
 
-const cleanupAppJobName = "deployment:cleanup-app"
+const jobName = "deployment:cleanup-app"
 
 // Creates a new deployment job for the given deployment id.
-func CleanupApp(id depldomain.AppID) command.QueueCommand {
+func Queue(id depldomain.AppID) command.QueueCommand {
 	return command.QueueCommand{
-		Name:    cleanupAppJobName,
+		Name:    jobName,
 		Payload: string(id),
 	}
 }
 
-type cleanupAppHandler struct {
+type handler struct {
 	logger  log.Logger
 	cleanup func(context.Context, deplcmd.CleanupAppCommand) error
 }
 
-func CleanupAppHandler(logger log.Logger, cleanup func(context.Context, deplcmd.CleanupAppCommand) error) infra.JobsHandler {
-	return &cleanupAppHandler{
+func New(logger log.Logger, cleanup func(context.Context, deplcmd.CleanupAppCommand) error) jobs.Handler {
+	return &handler{
 		logger:  logger,
 		cleanup: cleanup,
 	}
 }
 
-func (*cleanupAppHandler) JobName() string {
-	return cleanupAppJobName
+func (*handler) JobName() string {
+	return jobName
 }
 
-func (h *cleanupAppHandler) Process(ctx context.Context, job domain.Job) error {
+func (h *handler) Process(ctx context.Context, job domain.Job) error {
 	appid := job.Payload()
 
 	if err := h.cleanup(ctx, deplcmd.CleanupAppCommand{

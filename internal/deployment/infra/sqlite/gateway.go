@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app/query"
-	shared "github.com/YuukanOO/seelf/internal/shared/app/query"
 	"github.com/YuukanOO/seelf/pkg/monad"
+	shared "github.com/YuukanOO/seelf/pkg/query"
 	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
@@ -53,7 +53,7 @@ func (s *gateway) GetAppByID(ctx context.Context, appid string) (query.AppDetail
 		OneEx(s, ctx, appDataScannerBuilder[query.AppDetail], appDetailDataMapper)
 }
 
-func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, appid string, filters query.GetDeploymentsFilters) (storage.Paginated[query.Deployment], error) {
+func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, appid string, filters query.GetDeploymentsFilters) (shared.Paginated[query.Deployment], error) {
 	return builder.
 		Select[query.Deployment](`
 			deployments.app_id

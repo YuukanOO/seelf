@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/YuukanOO/seelf/internal/shared/domain"
+	"github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )

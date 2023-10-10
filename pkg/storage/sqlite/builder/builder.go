@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/query"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
@@ -69,7 +70,7 @@ type (
 		// Executes the query and returns all results
 		All(Executor, context.Context, storage.Mapper[T]) ([]T, error)
 		// Returns a paginated data result set.
-		Paginate(Executor, context.Context, storage.Mapper[T], int) (storage.Paginated[T], error)
+		Paginate(Executor, context.Context, storage.Mapper[T], int) (query.Paginated[T], error)
 		// Same as All but fetch related data using a custom scanner.
 		AllEx(Executor, context.Context, ScannerBuilder[T, TScanner], storage.KeyedMapper[T, TScanner]) ([]T, error)
 		// Executes the query and returns the first matching result
@@ -83,7 +84,7 @@ type (
 	}
 )
 
-type query[T any, TScanner storage.Scanner] struct {
+type queryBuilder[T any, TScanner storage.Scanner] struct {
 	supportPagination bool
 	parts             []string
 	arguments         []any
@@ -159,13 +160,13 @@ func Command(sql string, args ...any) QueryBuilder[any, storage.Scanner] {
 	return Query[any](sql, args...)
 }
 
-func (q *query[T, TScanner]) F(sql string, args ...any) QueryBuilder[T, TScanner] {
+func (q *queryBuilder[T, TScanner]) F(sql string, args ...any) QueryBuilder[T, TScanner] {
 	q.parts = append(q.parts, sql)
 	q.arguments = append(q.arguments, args...)
 	return q
 }
 
-func (q *query[T, TScanner]) S(statements ...Statement) QueryBuilder[T, TScanner] {
+func (q *queryBuilder[T, TScanner]) S(statements ...Statement) QueryBuilder[T, TScanner] {
 	for _, stmt := range statements {
 		stmt(q)
 	}
@@ -173,9 +174,9 @@ func (q *query[T, TScanner]) S(statements ...Statement) QueryBuilder[T, TScanner
 	return q
 }
 
-func (q *query[T, TScanner]) apply(sql string, args ...any) { q.F(sql, args...) }
+func (q *queryBuilder[T, TScanner]) apply(sql string, args ...any) { q.F(sql, args...) }
 
-func (q *query[T, TScanner]) All(ex Executor, ctx context.Context, mapper storage.Mapper[T]) ([]T, error) {
+func (q *queryBuilder[T, TScanner]) All(ex Executor, ctx context.Context, mapper storage.Mapper[T]) ([]T, error) {
 	rows, err := ex.QueryContext(ctx, q.String(), q.arguments...)
 
 	if err != nil {
@@ -199,12 +200,12 @@ func (q *query[T, TScanner]) All(ex Executor, ctx context.Context, mapper storag
 	return results, nil
 }
 
-func (q *query[T, TScanner]) Paginate(ex Executor, ctx context.Context, mapper storage.Mapper[T], page int) (storage.Paginated[T], error) {
+func (q *queryBuilder[T, TScanner]) Paginate(ex Executor, ctx context.Context, mapper storage.Mapper[T], page int) (query.Paginated[T], error) {
 	// FIXME: Since the query is definitely mutated to paginate the result, it could not
 	// be runned twice. Maybe I should pass the query by value instead, not sure about that.
 	var (
 		err    error
-		result = storage.Paginated[T]{
+		result = query.Paginated[T]{
 			Page:        page,
 			IsFirstPage: page == 1,
 			PerPage:     perPage,
@@ -233,7 +234,7 @@ func (q *query[T, TScanner]) Paginate(ex Executor, ctx context.Context, mapper s
 	return result, err
 }
 
-func (q *query[T, TScanner]) AllEx(
+func (q *queryBuilder[T, TScanner]) AllEx(
 	ex Executor,
 	ctx context.Context,
 	scannerBuilder ScannerBuilder[T, TScanner],
@@ -272,7 +273,7 @@ func (q *query[T, TScanner]) AllEx(
 	return scanner.Finalize(ctx, results)
 }
 
-func (q *query[T, TScanner]) One(ex Executor, ctx context.Context, mapper storage.Mapper[T]) (T, error) {
+func (q *queryBuilder[T, TScanner]) One(ex Executor, ctx context.Context, mapper storage.Mapper[T]) (T, error) {
 	row := ex.QueryRowContext(ctx, q.String(), q.arguments...)
 
 	result, err := mapper(row)
@@ -284,7 +285,7 @@ func (q *query[T, TScanner]) One(ex Executor, ctx context.Context, mapper storag
 	return result, err
 }
 
-func (q *query[T, TScanner]) OneEx(
+func (q *queryBuilder[T, TScanner]) OneEx(
 	ex Executor,
 	ctx context.Context,
 	scannerBuilder ScannerBuilder[T, TScanner],
@@ -317,23 +318,23 @@ func (q *query[T, TScanner]) OneEx(
 	return rows[0], nil
 }
 
-func (q *query[T, TScanner]) Extract(ex Executor, ctx context.Context) (T, error) {
+func (q *queryBuilder[T, TScanner]) Extract(ex Executor, ctx context.Context) (T, error) {
 	return q.One(ex, ctx, extract[T])
 }
 
-func (q *query[T, TScanner]) Exec(ex Executor, ctx context.Context) error {
+func (q *queryBuilder[T, TScanner]) Exec(ex Executor, ctx context.Context) error {
 	_, err := ex.ExecContext(ctx, q.String(), q.arguments...)
 
 	return err
 }
 
-func (q *query[T, TScanner]) String() string {
+func (q *queryBuilder[T, TScanner]) String() string {
 	return strings.Join(q.parts, " ")
 }
 
 // Builds a new query with the given SQL and arguments. Also sets the supportPagination flag.
 func newQuery[T any, TScanner storage.Scanner](supportPagination bool, sql string, args ...any) QueryBuilder[T, TScanner] {
-	return &query[T, TScanner]{
+	return &queryBuilder[T, TScanner]{
 		supportPagination: supportPagination,
 		parts:             []string{sql},
 		arguments:         args,

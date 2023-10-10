@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
-	shared "github.com/YuukanOO/seelf/internal/shared/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/monad"

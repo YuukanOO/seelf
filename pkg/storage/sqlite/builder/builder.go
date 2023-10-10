@@ -59,9 +59,9 @@ type (
 
 	// Query builder result used to interact with the database.
 	QueryBuilder[T any, TScanner storage.Scanner] interface {
-		// Append a raw SQL statement to the builder with the optional arguments.
+		// F for format, append a raw SQL statement to the builder with the optional arguments.
 		F(string, ...any) QueryBuilder[T, TScanner]
-		// Apply one or multiple statements to this builder.
+		// S for Statement, apply one or multiple statements to this builder.
 		S(...Statement) QueryBuilder[T, TScanner]
 
 		// Returns the SQL query generated
@@ -80,8 +80,6 @@ type (
 		Extract(Executor, context.Context) (T, error)
 		// Executes the query without scanning the result.
 		Exec(Executor, context.Context) error
-
-		// TODO: paginates and so on to make things simplier and avoid common mistakes (order of ? for examples)
 	}
 )
 

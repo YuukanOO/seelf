@@ -38,9 +38,7 @@ func UpdateApp(
 					"url": validation.Maybe(config.Url, func(urlValue string) error {
 						return validation.Value(urlValue, &url, domain.UrlFrom)
 					}),
-					"token": validation.Patch(config.Token, func(tokenValue string) error {
-						return validation.Is(tokenValue, strings.Required)
-					}),
+					"token": validation.Patch(config.Token, strings.Required),
 				})
 			}),
 			"env": validation.Patch(cmd.Env, func(envmap map[string]map[string]map[string]string) error {

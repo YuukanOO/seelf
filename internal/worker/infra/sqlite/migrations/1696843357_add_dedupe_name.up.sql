@@ -1,0 +1,1 @@
+ALTER TABLE jobs ADD dedupe_name TEXT NOT NULL DEFAULT '';

@@ -14,6 +14,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validation/numbers"
 )
 
 var (
@@ -23,14 +24,15 @@ var (
 )
 
 const (
-	databaseFilename             = "seelf.db?_foreign_keys=yes"
-	defaultConfigFilename        = "conf.yml"
-	defaultPort                  = 8080
-	defaultHost                  = ""
-	defaultBalancerDomain        = "http://docker.localhost"
-	defaultDeploymentDirTemplate = "{{ .Environment }}"
-	logsDir                      = "logs"
-	appsDir                      = "apps"
+	databaseFilename              = "seelf.db?_foreign_keys=yes"
+	defaultConfigFilename         = "conf.yml"
+	defaultPort                   = 8080
+	defaultHost                   = ""
+	defaultDeploymentRunnersCount = 4
+	defaultBalancerDomain         = "http://docker.localhost"
+	defaultDeploymentDirTemplate  = "{{ .Environment }}"
+	logsDir                       = "logs"
+	appsDir                       = "apps"
 )
 
 type (
@@ -41,6 +43,7 @@ type (
 		Data     dataConfiguration
 		Http     httpConfiguration
 		Balancer balancerConfiguration
+		Runners  runnersConfiguration
 		Private  internalConfiguration `yaml:"-"`
 
 		currentVersion        string
@@ -60,6 +63,11 @@ type (
 	dataConfiguration struct {
 		Path                  string `env:"DATA_PATH"`
 		DeploymentDirTemplate string `env:"DEPLOYMENT_DIR_TEMPLATE" yaml:"deployment_dir_template"`
+	}
+
+	// Configuration related to the async jobs runners.
+	runnersConfiguration struct {
+		Deployment int `env:"DEPLOYMENT_RUNNERS_COUNT" yaml:"deployment"`
 	}
 
 	// internalConfiguration fields not read from the configuration file and use only during specific steps
@@ -93,6 +101,9 @@ func defaultConfiguration() *configuration {
 			Port:   defaultPort,
 			Secret: generatedSecretKey,
 		},
+		Runners: runnersConfiguration{
+			Deployment: defaultDeploymentRunnersCount,
+		},
 		Balancer: balancerConfiguration{
 			Domain: defaultBalancerDomain,
 		},
@@ -111,6 +122,7 @@ func (c configuration) IsUsingGeneratedSecret() bool                        { re
 func (c configuration) IsVerbose() bool                                     { return c.Verbose }
 func (c configuration) ConfigPath() string                                  { return c.path }
 func (c configuration) CurrentVersion() string                              { return c.currentVersion }
+func (c configuration) DeploymentRunnersCount() int                         { return c.Runners.Deployment }
 
 func (c configuration) IsSecure() bool {
 	// If secure has been explicitly set, returns it
@@ -148,6 +160,7 @@ func (c *configuration) PostLoad() error {
 
 	return validation.Check(validation.Of{
 		"data.deployment_dir_template": validation.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
+		"runners.deployment":           validation.Is(c.Runners.Deployment, numbers.Min(0)),
 		"balancer.domain":              domainUrlErr,
 		"balancer.acme.email": validation.If(domainUrlErr == nil && c.domain.UseSSL(), func() error {
 			return validation.Value(c.AcmeEmail(), &acmeEmail, auth.EmailFrom)

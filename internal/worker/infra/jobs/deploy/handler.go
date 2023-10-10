@@ -12,15 +12,19 @@ import (
 	"github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
-const jobName = "deployment:deploy"
+const JobName = "deployment:deploy"
 
 // Creates a new deployment job for the given deployment id.
-func Queue(id depldomain.DeploymentID) command.QueueCommand {
+func Queue(evt depldomain.DeploymentCreated) command.QueueCommand {
+	id := evt.ID
+
 	return command.QueueCommand{
-		Name:    jobName,
-		Payload: fmt.Sprintf("%s:%d", id.AppID(), id.DeploymentNumber()),
+		Name:       JobName,
+		Payload:    fmt.Sprintf("%s:%d", id.AppID(), id.DeploymentNumber()),
+		DedupeName: monad.Value(fmt.Sprintf("%s:%s", JobName, evt.Config.ProjectName())),
 	}
 }
 
@@ -37,7 +41,7 @@ func New(logger log.Logger, deploy func(context.Context, deplcmd.DeployCommand) 
 }
 
 func (*handler) JobName() string {
-	return jobName
+	return JobName
 }
 
 func (h *handler) Process(ctx context.Context, job domain.Job) error {

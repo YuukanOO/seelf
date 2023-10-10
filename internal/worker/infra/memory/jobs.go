@@ -34,18 +34,22 @@ func NewJobsStore(existingJobs ...domain.Job) JobsStore {
 	return s
 }
 
-func (s *jobsStore) GetNextPendingJob(ctx context.Context) (domain.Job, error) {
-	if len(s.jobs) == 0 {
-		return domain.Job{}, apperr.ErrNotFound
+func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string, runningJobs []string) (domain.Job, error) {
+	for _, job := range s.jobs {
+		var inRunning bool
+		for _, runningJob := range runningJobs {
+			if runningJob == job.value.DedupeName() {
+				inRunning = true
+				break
+			}
+		}
+
+		if !inRunning {
+			return *job.value, nil
+		}
 	}
 
-	lastJob := s.jobs[len(s.jobs)-1]
-
-	if lastJob == nil {
-		return domain.Job{}, apperr.ErrNotFound
-	}
-
-	return *lastJob.value, nil
+	return domain.Job{}, apperr.ErrNotFound
 }
 
 func (s *jobsStore) Write(ctx context.Context, jobs ...*domain.Job) error {

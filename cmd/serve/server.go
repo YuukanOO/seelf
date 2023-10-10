@@ -68,6 +68,7 @@ type (
 		git.Options
 		archive.Options
 
+		DeploymentRunnersCount() int
 		IsVerbose() bool
 		ConnectionString() string
 		Secret() []byte
@@ -210,7 +211,11 @@ func (s *server) configureServices() error {
 		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
 		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
 	)
-	s.worker = async.NewIntervalWorker(s.logger, 5*time.Second, workercmd.ProcessNext(jobsStore, jobsStore, handler))
+	s.worker = async.NewPool(
+		s.logger, 5*time.Second, s.options.DeploymentRunnersCount(),
+		workercmd.ProcessNext(jobsStore, jobsStore, handler),
+		deploy.JobName, cleanup.JobName,
+	)
 	s.usersReader = usersStore
 
 	// Queries
@@ -343,7 +348,7 @@ func (s *server) configureRouter() {
 func (s *server) domainEventHandler(ctx context.Context, e event.Event) error {
 	switch evt := e.(type) {
 	case domain.DeploymentCreated:
-		s.queueJob(ctx, deploy.Queue(evt.ID))
+		s.queueJob(ctx, deploy.Queue(evt))
 	case domain.AppCleanupRequested:
 		s.queueJob(ctx, cleanup.Queue(evt.ID))
 	}

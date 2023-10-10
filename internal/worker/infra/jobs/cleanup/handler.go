@@ -11,12 +11,12 @@ import (
 	"github.com/YuukanOO/seelf/pkg/log"
 )
 
-const jobName = "deployment:cleanup-app"
+const JobName = "deployment:cleanup-app"
 
 // Creates a new deployment job for the given deployment id.
 func Queue(id depldomain.AppID) command.QueueCommand {
 	return command.QueueCommand{
-		Name:    jobName,
+		Name:    JobName,
 		Payload: string(id),
 	}
 }
@@ -34,7 +34,7 @@ func New(logger log.Logger, cleanup func(context.Context, deplcmd.CleanupAppComm
 }
 
 func (*handler) JobName() string {
-	return jobName
+	return JobName
 }
 
 func (h *handler) Process(ctx context.Context, job domain.Job) error {

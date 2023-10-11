@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	// Number of elements per page. In the future, this may be configurable.
-	perPage     = 5
-	countClause = "COUNT(*)"
+	perPage     = 5          // Number of elements per page. In the future, this may be configurable.
+	countClause = "COUNT(*)" // Count clause needed for pagination.
 )
 
 var ErrPaginationNotSupported = errors.New("pagination not supported for this query. Did you forget to build the query using the Select function?")
@@ -31,24 +30,6 @@ type (
 		QueryRowContext(context.Context, string, ...any) *sql.Row
 	}
 
-	// Scanner interface to handle entities with relations and to bulk queries.
-	ScannerEx[T any, TConcreteScanner storage.Scanner] interface {
-		storage.Scanner
-		// Extend the given scanner to handle relationships.
-		Contextualize(storage.Scanner) TConcreteScanner
-		// Fetch related resources for the given entities.
-		Finalize(context.Context, KeyedResult[T]) ([]T, error)
-	}
-
-	// Function to build a custom scanner for a given entity type.
-	ScannerBuilder[T any, TScanner storage.Scanner] func(Executor) ScannerEx[T, TScanner]
-
-	// Represents a key indexed set of data.
-	KeyedResult[T any] struct {
-		data        []T
-		indexByKeys map[string]int
-	}
-
 	// Statement function to append an SQL statement to a builder.
 	Statement func(sqlBuilder)
 
@@ -59,24 +40,22 @@ type (
 	}
 
 	// Query builder result used to interact with the database.
-	QueryBuilder[T any, TScanner storage.Scanner] interface {
+	QueryBuilder[T any] interface {
 		// F for format, append a raw SQL statement to the builder with the optional arguments.
-		F(string, ...any) QueryBuilder[T, TScanner]
+		F(string, ...any) QueryBuilder[T]
 		// S for Statement, apply one or multiple statements to this builder.
-		S(...Statement) QueryBuilder[T, TScanner]
+		S(...Statement) QueryBuilder[T]
 
 		// Returns the SQL query generated
 		String() string
+
 		// Executes the query and returns all results
-		All(Executor, context.Context, storage.Mapper[T]) ([]T, error)
-		// Returns a paginated data result set.
-		Paginate(Executor, context.Context, storage.Mapper[T], int) (query.Paginated[T], error)
-		// Same as All but fetch related data using a custom scanner.
-		AllEx(Executor, context.Context, ScannerBuilder[T, TScanner], storage.KeyedMapper[T, TScanner]) ([]T, error)
+		All(Executor, context.Context, storage.Mapper[T], ...Dataloader[T]) ([]T, error)
 		// Executes the query and returns the first matching result
-		One(Executor, context.Context, storage.Mapper[T]) (T, error)
-		// Same as One but fetch related data using a custom scanner.
-		OneEx(Executor, context.Context, ScannerBuilder[T, TScanner], storage.KeyedMapper[T, TScanner]) (T, error)
+		One(Executor, context.Context, storage.Mapper[T], ...Dataloader[T]) (T, error)
+		// Returns a paginated data result set.
+		Paginate(Executor, context.Context, storage.Mapper[T], int, ...Dataloader[T]) (query.Paginated[T], error)
+
 		// Same as One but extract a primitive value by using a simple generic scanner
 		Extract(Executor, context.Context) (T, error)
 		// Executes the query without scanning the result.
@@ -84,31 +63,26 @@ type (
 	}
 )
 
-type queryBuilder[T any, TScanner storage.Scanner] struct {
+type queryBuilder[T any] struct {
 	supportPagination bool
 	parts             []string
 	arguments         []any
 }
 
 // Builds up a new query.
-func Query[T any](sql string, args ...any) QueryBuilder[T, storage.Scanner] {
-	return QueryEx[T, storage.Scanner](sql, args...)
-}
-
-// Builds up a new query with a custom scanner needed to retrieve relational data.
-func QueryEx[T any, TScanner storage.Scanner](sql string, args ...any) QueryBuilder[T, TScanner] {
-	return newQuery[T, TScanner](false, sql, args...)
+func Query[T any](sql string, args ...any) QueryBuilder[T] {
+	return newQuery[T](false, sql, args...)
 }
 
 // Starts a SELECT query with pagination handling. Giving fields with this function will make it
 // possible to retrieve the total element count when calling .Paginate. Without this, pagination could
 // not work.
-func Select[T any](fields ...string) QueryBuilder[T, storage.Scanner] {
-	return newQuery[T, storage.Scanner](true, "SELECT").F(strings.Join(fields, ","))
+func Select[T any](fields ...string) QueryBuilder[T] {
+	return newQuery[T](true, "SELECT").F(strings.Join(fields, ","))
 }
 
 // Builds a new query for an INSERT statement.
-func Insert(table string, values Values) QueryBuilder[any, storage.Scanner] {
+func Insert(table string, values Values) QueryBuilder[any] {
 	var (
 		b       strings.Builder
 		size             = len(values)
@@ -133,7 +107,7 @@ func Insert(table string, values Values) QueryBuilder[any, storage.Scanner] {
 }
 
 // Builds a new query for an UPDATE statement.
-func Update(table string, values Values) QueryBuilder[any, storage.Scanner] {
+func Update(table string, values Values) QueryBuilder[any] {
 	var (
 		b          strings.Builder
 		size                = len(values)
@@ -156,17 +130,17 @@ func Update(table string, values Values) QueryBuilder[any, storage.Scanner] {
 
 // Builds a new query without specifying a return type. Useful for commands such as
 // INSERT, UPDATE and DELETE where no results are expected.
-func Command(sql string, args ...any) QueryBuilder[any, storage.Scanner] {
+func Command(sql string, args ...any) QueryBuilder[any] {
 	return Query[any](sql, args...)
 }
 
-func (q *queryBuilder[T, TScanner]) F(sql string, args ...any) QueryBuilder[T, TScanner] {
+func (q *queryBuilder[T]) F(sql string, args ...any) QueryBuilder[T] {
 	q.parts = append(q.parts, sql)
 	q.arguments = append(q.arguments, args...)
 	return q
 }
 
-func (q *queryBuilder[T, TScanner]) S(statements ...Statement) QueryBuilder[T, TScanner] {
+func (q *queryBuilder[T]) S(statements ...Statement) QueryBuilder[T] {
 	for _, stmt := range statements {
 		stmt(q)
 	}
@@ -174,9 +148,14 @@ func (q *queryBuilder[T, TScanner]) S(statements ...Statement) QueryBuilder[T, T
 	return q
 }
 
-func (q *queryBuilder[T, TScanner]) apply(sql string, args ...any) { q.F(sql, args...) }
+func (q *queryBuilder[T]) apply(sql string, args ...any) { q.F(sql, args...) }
 
-func (q *queryBuilder[T, TScanner]) All(ex Executor, ctx context.Context, mapper storage.Mapper[T]) ([]T, error) {
+func (q *queryBuilder[T]) All(
+	ex Executor,
+	ctx context.Context,
+	mapper storage.Mapper[T],
+	loaders ...Dataloader[T],
+) ([]T, error) {
 	rows, err := ex.QueryContext(ctx, q.String(), q.arguments...)
 
 	if err != nil {
@@ -184,6 +163,14 @@ func (q *queryBuilder[T, TScanner]) All(ex Executor, ctx context.Context, mapper
 	}
 
 	results := make([]T, 0)
+
+	// Instantiates needed stuff for data loaders
+	// FIXME: maybe split this in a dedicated function to avoid the cost when no loaders are given
+	mappings := make([]KeysMapping, len(loaders))
+
+	for i := range mappings {
+		mappings[i] = make(KeysMapping)
+	}
 
 	defer rows.Close()
 
@@ -194,13 +181,37 @@ func (q *queryBuilder[T, TScanner]) All(ex Executor, ctx context.Context, mapper
 			return nil, err
 		}
 
+		for i, loader := range loaders {
+			mappings[i][loader.ExtractKey(row)] = len(results)
+		}
+
 		results = append(results, row)
+	}
+
+	if len(loaders) > 0 {
+		kr := KeyedResult[T]{
+			data: results,
+		}
+
+		for i, loader := range loaders {
+			kr.indexByKeys = mappings[i]
+
+			if err = loader.Fetch(ex, ctx, kr); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return results, nil
 }
 
-func (q *queryBuilder[T, TScanner]) Paginate(ex Executor, ctx context.Context, mapper storage.Mapper[T], page int) (query.Paginated[T], error) {
+func (q *queryBuilder[T]) Paginate(
+	ex Executor,
+	ctx context.Context,
+	mapper storage.Mapper[T],
+	page int,
+	loaders ...Dataloader[T],
+) (query.Paginated[T], error) {
 	// FIXME: Since the query is definitely mutated to paginate the result, it could not
 	// be runned twice. Maybe I should pass the query by value instead, not sure about that.
 	var (
@@ -220,7 +231,7 @@ func (q *queryBuilder[T, TScanner]) Paginate(ex Executor, ctx context.Context, m
 	fields := q.parts[1]
 	q.parts[1] = countClause
 
-	if err := ex.QueryRowContext(ctx, q.String(), q.arguments...).Scan(&result.Total); err != nil {
+	if err = ex.QueryRowContext(ctx, q.String(), q.arguments...).Scan(&result.Total); err != nil {
 		return result, err
 	}
 
@@ -229,51 +240,17 @@ func (q *queryBuilder[T, TScanner]) Paginate(ex Executor, ctx context.Context, m
 	q.F("LIMIT ? OFFSET ?", perPage, (result.Page-1)*perPage)
 
 	result.IsLastPage = result.Total <= result.Page*perPage
-	result.Data, err = q.All(ex, ctx, mapper)
+	result.Data, err = q.All(ex, ctx, mapper, loaders...)
 
 	return result, err
 }
 
-func (q *queryBuilder[T, TScanner]) AllEx(
+func (q *queryBuilder[T]) One(
 	ex Executor,
 	ctx context.Context,
-	scannerBuilder ScannerBuilder[T, TScanner],
-	mapper storage.KeyedMapper[T, TScanner],
-) ([]T, error) {
-	scanner := scannerBuilder(ex)
-	rows, err := ex.QueryContext(ctx, q.String(), q.arguments...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	results := KeyedResult[T]{
-		data:        make([]T, 0),
-		indexByKeys: make(map[string]int),
-	}
-
-	for rows.Next() {
-		key, row, err := mapper(scanner.Contextualize(rows))
-
-		if err != nil {
-			return nil, err
-		}
-
-		results.indexByKeys[key] = len(results.data)
-		results.data = append(results.data, row)
-	}
-
-	// If no results, just return the empty array, don't need to fetch related data
-	if len(results.data) == 0 {
-		return results.data, nil
-	}
-
-	return scanner.Finalize(ctx, results)
-}
-
-func (q *queryBuilder[T, TScanner]) One(ex Executor, ctx context.Context, mapper storage.Mapper[T]) (T, error) {
+	mapper storage.Mapper[T],
+	loaders ...Dataloader[T],
+) (T, error) {
 	row := ex.QueryRowContext(ctx, q.String(), q.arguments...)
 
 	result, err := mapper(row)
@@ -282,74 +259,44 @@ func (q *queryBuilder[T, TScanner]) One(ex Executor, ctx context.Context, mapper
 		return result, apperr.ErrNotFound
 	}
 
+	if len(loaders) > 0 {
+		kr := KeyedResult[T]{
+			data: []T{result},
+		}
+
+		for _, loader := range loaders {
+			kr.indexByKeys = KeysMapping{
+				loader.ExtractKey(result): 0,
+			}
+
+			if err = loader.Fetch(ex, ctx, kr); err != nil {
+				return result, err
+			}
+		}
+	}
+
 	return result, err
 }
 
-func (q *queryBuilder[T, TScanner]) OneEx(
-	ex Executor,
-	ctx context.Context,
-	scannerBuilder ScannerBuilder[T, TScanner],
-	mapper storage.KeyedMapper[T, TScanner],
-) (T, error) {
-
-	scanner := scannerBuilder(ex)
-	row := ex.QueryRowContext(ctx, q.String(), q.arguments...)
-
-	key, result, err := mapper(scanner.Contextualize(row))
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return result, apperr.ErrNotFound
-	}
-
-	if err != nil {
-		return result, err
-	}
-
-	// FIXME: maybe create a finalizeOne which handle a single extended row
-	rows, err := scanner.Finalize(ctx, KeyedResult[T]{
-		data:        []T{result},
-		indexByKeys: map[string]int{key: 0},
-	})
-
-	if err != nil {
-		return result, err
-	}
-
-	return rows[0], nil
-}
-
-func (q *queryBuilder[T, TScanner]) Extract(ex Executor, ctx context.Context) (T, error) {
+func (q *queryBuilder[T]) Extract(ex Executor, ctx context.Context) (T, error) {
 	return q.One(ex, ctx, extract[T])
 }
 
-func (q *queryBuilder[T, TScanner]) Exec(ex Executor, ctx context.Context) error {
+func (q *queryBuilder[T]) Exec(ex Executor, ctx context.Context) error {
 	_, err := ex.ExecContext(ctx, q.String(), q.arguments...)
 
 	return err
 }
 
-func (q *queryBuilder[T, TScanner]) String() string {
+func (q *queryBuilder[T]) String() string {
 	return strings.Join(q.parts, " ")
 }
 
 // Builds a new query with the given SQL and arguments. Also sets the supportPagination flag.
-func newQuery[T any, TScanner storage.Scanner](supportPagination bool, sql string, args ...any) QueryBuilder[T, TScanner] {
-	return &queryBuilder[T, TScanner]{
+func newQuery[T any](supportPagination bool, sql string, args ...any) QueryBuilder[T] {
+	return &queryBuilder[T]{
 		supportPagination: supportPagination,
 		parts:             []string{sql},
 		arguments:         args,
 	}
-}
-
-func (r KeyedResult[T]) Data() []T { return r.data }
-
-// Keys returns the list of keys contained in this dataset.
-func (r KeyedResult[T]) Keys() []string {
-	keys := make([]string, 0, len(r.indexByKeys))
-
-	for key := range r.indexByKeys {
-		keys = append(keys, key)
-	}
-
-	return keys
 }

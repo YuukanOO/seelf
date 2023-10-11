@@ -21,7 +21,7 @@ func NewGateway(db sqlite.Database) query.Gateway {
 
 func (s *gateway) GetAllApps(ctx context.Context) ([]query.App, error) {
 	return builder.
-		QueryEx[query.App, appDataScanner[query.App]](`
+		Query[query.App](`
 			SELECT
 				apps.id
 				,apps.name
@@ -31,12 +31,12 @@ func (s *gateway) GetAllApps(ctx context.Context) ([]query.App, error) {
 				,users.email
 			FROM apps
 			INNER JOIN users ON users.id = apps.created_by`).
-		AllEx(s, ctx, appDataScannerBuilder[query.App], appDataMapper)
+		All(s, ctx, appDataMapper, appLastDeploymentsByEnvDataloader)
 }
 
 func (s *gateway) GetAppByID(ctx context.Context, appid string) (query.AppDetail, error) {
 	return builder.
-		QueryEx[query.AppDetail, appDataScanner[query.AppDetail]](`
+		Query[query.AppDetail](`
 			SELECT
 				apps.id
 				,apps.name
@@ -50,7 +50,7 @@ func (s *gateway) GetAppByID(ctx context.Context, appid string) (query.AppDetail
 			FROM apps
 			INNER JOIN users ON users.id = apps.created_by
 			WHERE apps.id = ?`, appid).
-		OneEx(s, ctx, appDataScannerBuilder[query.AppDetail], appDetailDataMapper)
+		One(s, ctx, appDetailDataMapper, appDetailLastDeploymentsByEnvDataloader)
 }
 
 func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, appid string, filters query.GetDeploymentsFilters) (shared.Paginated[query.Deployment], error) {
@@ -107,40 +107,20 @@ func (s *gateway) GetDeploymentLogfileByID(ctx context.Context, appid string, de
 		Extract(s, ctx)
 }
 
-type (
-	appDataScanner[T any] interface {
-		storage.Scanner
-		Deployments(storage.KeyedMapper[query.Deployment, storage.Scanner], storage.Merger[T, query.Deployment])
-	}
-
-	concreteAppDataScanner[T any] struct {
-		conn             builder.Executor
-		row              storage.Scanner
-		deploymentMapper storage.KeyedMapper[query.Deployment, storage.Scanner]
-		deploymentMerger storage.Merger[T, query.Deployment]
-	}
-)
-
-func appDataScannerBuilder[T any](conn builder.Executor) builder.ScannerEx[T, appDataScanner[T]] {
-	return &concreteAppDataScanner[T]{
-		conn: conn,
-	}
-}
-
-func (s *concreteAppDataScanner[T]) Scan(dest ...any) error {
-	return s.row.Scan(dest...)
-}
-
-func (s *concreteAppDataScanner[T]) Contextualize(row storage.Scanner) appDataScanner[T] {
-	s.row = row
-	return s
-}
-
-func (s *concreteAppDataScanner[T]) Finalize(ctx context.Context, results builder.KeyedResult[T]) ([]T, error) {
-	_, err := builder.
-		Query[query.Deployment](`
+// Specific case because the deployments dataloader can be use to fill the App and AppDetail
+// structs. So this function will be build the appropriate dataloader for each case.
+func newAppWithLastDeploymentsByEnvDataloader[T any](
+	extractor func(T) string,
+	merger storage.Merger[T, query.Deployment],
+) builder.Dataloader[T] {
+	return builder.NewDataloader[T](
+		extractor,
+		func(e builder.Executor, ctx context.Context, kr builder.KeyedResult[T]) error {
+			_, err := builder.
+				Query[query.Deployment](`
 			SELECT
-				deployments.app_id
+				deployments.app_id -- The first one will be used by the dataloader merge process
+				,deployments.app_id
 				,deployments.deployment_number
 				,deployments.config_environment
 				,deployments.source_kind
@@ -156,27 +136,33 @@ func (s *concreteAppDataScanner[T]) Finalize(ctx context.Context, results builde
 				,MAX(requested_at) AS max_requested_at
 			FROM deployments
 			INNER JOIN users ON users.id = deployments.requested_by`).
-		S(builder.Array("WHERE deployments.app_id IN", results.Keys())).
-		F("GROUP BY deployments.app_id, deployments.config_environment").
-		All(s.conn, ctx, builder.Merge(results, s.deploymentMapper, s.deploymentMerger))
+				S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
+				F("GROUP BY deployments.app_id, deployments.config_environment").
+				All(e, ctx, builder.Merge(kr, lastDeploymentMapper, merger))
 
-	if err != nil {
-		return nil, err
-	}
-
-	return results.Data(), nil
+			return err
+		},
+	)
 }
 
-func (s *concreteAppDataScanner[T]) Deployments(
-	mapper storage.KeyedMapper[query.Deployment, storage.Scanner],
-	merger storage.Merger[T, query.Deployment],
-) {
-	s.deploymentMapper = mapper
-	s.deploymentMerger = merger
-}
+var appLastDeploymentsByEnvDataloader = newAppWithLastDeploymentsByEnvDataloader(
+	func(a query.App) string { return a.ID },
+	func(a query.App, d query.Deployment) query.App {
+		a.Environments[d.Environment] = d
+		return a
+	},
+)
+
+var appDetailLastDeploymentsByEnvDataloader = newAppWithLastDeploymentsByEnvDataloader(
+	func(a query.AppDetail) string { return a.ID },
+	func(a query.AppDetail, d query.Deployment) query.AppDetail {
+		a.Environments[d.Environment] = d
+		return a
+	},
+)
 
 // AppData scanner which include last deployments by environment.
-func appDataMapper(s appDataScanner[query.App]) (_ string, a query.App, err error) {
+func appDataMapper(s storage.Scanner) (a query.App, err error) {
 	err = s.Scan(
 		&a.ID,
 		&a.Name,
@@ -188,17 +174,11 @@ func appDataMapper(s appDataScanner[query.App]) (_ string, a query.App, err erro
 
 	a.Environments = make(map[string]query.Deployment)
 
-	s.Deployments(keyedDeploymentScanner, func(app query.App, depl query.Deployment) query.App {
-		app.Environments[depl.Environment] = depl
-		return app
-	},
-	)
-
-	return a.ID, a, err
+	return a, err
 }
 
 // Same as the appDataMapper but includes the app's environment variables.
-func appDetailDataMapper(s appDataScanner[query.AppDetail]) (_ string, a query.AppDetail, err error) {
+func appDetailDataMapper(s storage.Scanner) (a query.AppDetail, err error) {
 	var (
 		url   monad.Maybe[string]
 		token monad.Maybe[shared.SecretString]
@@ -225,16 +205,10 @@ func appDetailDataMapper(s appDataScanner[query.AppDetail]) (_ string, a query.A
 		})
 	}
 
-	s.Deployments(keyedDeploymentScanner, func(app query.AppDetail, depl query.Deployment) query.AppDetail {
-		app.Environments[depl.Environment] = depl
-		return app
-	},
-	)
-
-	return a.ID, a, err
+	return a, err
 }
 
-func keyedDeploymentScanner(s storage.Scanner) (key string, d query.Deployment, err error) {
+func lastDeploymentMapper(s storage.Scanner) (d query.Deployment, err error) {
 	var maxRequestedAt string
 	err = s.Scan(
 		&d.AppID,
@@ -253,7 +227,7 @@ func keyedDeploymentScanner(s storage.Scanner) (key string, d query.Deployment, 
 		&maxRequestedAt, // Needed because go-sqlite3 lib could not extract max(requested_at) into a time.Time... I may switch to another lib in the future
 	)
 
-	return d.AppID, d, err
+	return d, err
 }
 
 func deploymentMapper(scanner storage.Scanner) (d query.Deployment, err error) {

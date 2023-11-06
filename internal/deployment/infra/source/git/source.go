@@ -8,11 +8,11 @@ import (
 	sstrings "strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/go-git/go-git/v5/config"
 
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/validation"
@@ -115,7 +115,7 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	defer logfile.Close()
 
-	logger := log.NewStepLogger(logfile)
+	logger := infra.NewStepLogger(logfile)
 
 	// Retrieve git url and token from the app
 	app, err := s.reader.GetByID(context.Background(), depl.ID().AppID())

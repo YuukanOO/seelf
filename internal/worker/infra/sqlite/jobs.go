@@ -24,7 +24,26 @@ func NewJobsStore(db sqlite.Database) JobsStore {
 	return &jobsStore{db}
 }
 
-func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string, runningJobs []string) (domain.Job, error) {
+func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string) (domain.Job, error) {
+	// This query will lock the database to make sure we can't retrieved the same job twice.
+	return builder.
+		Query[domain.Job](`
+UPDATE jobs
+SET retrieved = 1
+WHERE id IN (
+	SELECT id FROM jobs
+	WHERE 
+		retrieved = 0
+		AND queued_at <= DATETIME('now')
+		AND dedupe_name NOT IN (SELECT DISTINCT dedupe_name FROM jobs WHERE retrieved = 1)`).
+		S(builder.Array("AND name IN", names)).
+		F(`ORDER BY queued_at LIMIT 1
+	)
+RETURNING id, name, dedupe_name, payload, queued_at, errcode`).
+		One(s, ctx, domain.JobFrom)
+}
+
+func (s *jobsStore) GetRunningJobs(ctx context.Context) ([]domain.Job, error) {
 	return builder.
 		Query[domain.Job](`
 			SELECT
@@ -35,11 +54,8 @@ func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string, runni
 				,queued_at
 				,errcode
 			FROM jobs
-			WHERE queued_at <= datetime('now')`).
-		S(builder.Array("AND name IN", names)).
-		S(builder.Array("AND dedupe_name NOT IN", runningJobs)).
-		F("ORDER BY queued_at LIMIT 1").
-		One(s, ctx, domain.JobFrom)
+			WHERE retrieved = 1`).
+		All(s, ctx, domain.JobFrom)
 }
 
 func (s *jobsStore) Write(c context.Context, jobs ...*domain.Job) error {
@@ -60,6 +76,7 @@ func (s *jobsStore) Write(c context.Context, jobs ...*domain.Job) error {
 				Update("jobs", builder.Values{
 					"errcode":   evt.ErrCode,
 					"queued_at": evt.RetryAt,
+					"retrieved": false, // The retrieved field is purely an infrastructure concerned and never manipulated by the domain.
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s, ctx)

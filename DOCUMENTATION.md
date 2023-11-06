@@ -158,7 +158,8 @@ http:
   secure: false # HTTP_SECURE Wether or not the web server is served over https. If omitted, determine this information from the BALANCER_DOMAIN. It controls wether or not cookie are sent with the Secure flag and the scheme used on the Location header of created resources
   secret: "<generated if empty>" # HTTP_SECRET Secret key to use when signing cookies
 runners:
-  deployment: 4 # DEPLOYMENT_RUNNERS_COUNT How many deployment jobs could be run simultaneously
+  poll_interval: 4s # RUNNERS_POLL_INTERVAL Interval at which jobs are picked
+  deployment: 4 # RUNNERS_DEPLOYMENT_COUNT How many deployment jobs could be run simultaneously
 balancer:
   domain: "http://docker.locahost" # BALANCER_DOMAIN Main domain to use when deploying an application. If starting with https://, Let's Encrypt certificates will be generated and the acme email is mandatory. If you change this domain afterward, you'll have to redeploy your apps for now
   acme:

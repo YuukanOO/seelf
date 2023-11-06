@@ -33,7 +33,8 @@ type (
 	// RELATED SERVICES
 
 	JobsReader interface {
-		GetNextPendingJob(ctx context.Context, names []string, runningJobs []string) (Job, error)
+		GetRunningJobs(context.Context) ([]Job, error)
+		GetNextPendingJob(context.Context, []string) (Job, error)
 	}
 
 	JobsWriter interface {
@@ -113,10 +114,9 @@ func (j *Job) Done() {
 	})
 }
 
-func (j Job) ID() JobID          { return j.id }
-func (j Job) Name() string       { return j.name }
-func (j Job) DedupeName() string { return j.dedupeName }
-func (j Job) Payload() string    { return j.payload }
+func (j Job) ID() JobID       { return j.id }
+func (j Job) Name() string    { return j.name }
+func (j Job) Payload() string { return j.payload }
 
 func (j *Job) apply(e event.Event) {
 	switch evt := e.(type) {

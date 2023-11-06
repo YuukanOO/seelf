@@ -68,7 +68,8 @@ type (
 		git.Options
 		archive.Options
 
-		DeploymentRunnersCount() int
+		RunnersPollInterval() time.Duration
+		RunnersDeploymentCount() int
 		IsVerbose() bool
 		ConnectionString() string
 		Secret() []byte
@@ -110,6 +111,7 @@ type (
 		redeploy               func(context.Context, deplcmd.RedeployCommand) (int, error)
 		promote                func(context.Context, deplcmd.PromoteCommand) (int, error)
 		failRunningDeployments func(context.Context, error) error
+		failRunningJobs        func(context.Context, error) error
 		queueJob               func(context.Context, workercmd.QueueCommand) error
 	}
 )
@@ -211,10 +213,15 @@ func (s *server) configureServices() error {
 		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
 		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
 	)
+	processNextJob := workercmd.ProcessNext(jobsStore, jobsStore, handler)
+
 	s.worker = async.NewPool(
-		s.logger, 5*time.Second, s.options.DeploymentRunnersCount(),
-		workercmd.ProcessNext(jobsStore, jobsStore, handler),
-		deploy.JobName, cleanup.JobName,
+		s.logger,
+		s.options.RunnersPollInterval(),
+		func(ctx context.Context, tags []string) error {
+			return processNextJob(ctx, workercmd.ProcessNextCommand{Names: tags})
+		},
+		async.Group(s.options.RunnersDeploymentCount(), deploy.JobName, cleanup.JobName),
 	)
 	s.usersReader = usersStore
 
@@ -239,6 +246,7 @@ func (s *server) configureServices() error {
 	s.promote = deplcmd.Promote(appsStore, deploymentsStore, deploymentsStore, s.options.DeploymentDirTemplate())
 	s.failRunningDeployments = deplcmd.FailRunningDeployments(deploymentsStore, deploymentsStore)
 
+	s.failRunningJobs = workercmd.FailRunningJobs(jobsStore, jobsStore)
 	s.queueJob = workercmd.Queue(jobsStore)
 
 	return nil
@@ -268,6 +276,11 @@ func (s *server) startCheckup() error {
 
 	// Fail stale deployments
 	if err := s.failRunningDeployments(ctx, errServerReset); err != nil {
+		return err
+	}
+
+	// Fail stale jobs
+	if err := s.failRunningJobs(ctx, errServerReset); err != nil {
 		return err
 	}
 

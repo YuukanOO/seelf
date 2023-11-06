@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -28,7 +29,8 @@ const (
 	defaultConfigFilename         = "conf.yml"
 	defaultPort                   = 8080
 	defaultHost                   = ""
-	defaultDeploymentRunnersCount = 4
+	defaultRunnersPollInterval    = "4s"
+	defaultRunnersDeploymentCount = 4
 	defaultBalancerDomain         = "http://docker.localhost"
 	defaultDeploymentDirTemplate  = "{{ .Environment }}"
 	logsDir                       = "logs"
@@ -48,6 +50,7 @@ type (
 
 		currentVersion        string
 		domain                domain.Url
+		pollInterval          time.Duration
 		deploymentDirTemplate *template.Template
 		path                  string // Holds from where the config was loaded / saved
 	}
@@ -67,7 +70,8 @@ type (
 
 	// Configuration related to the async jobs runners.
 	runnersConfiguration struct {
-		Deployment int `env:"DEPLOYMENT_RUNNERS_COUNT" yaml:"deployment"`
+		PollInterval string `env:"RUNNERS_POLL_INTERVAL" yaml:"poll_interval"`
+		Deployment   int    `env:"RUNNERS_DEPLOYMENT_COUNT" yaml:"deployment"`
 	}
 
 	// internalConfiguration fields not read from the configuration file and use only during specific steps
@@ -88,7 +92,7 @@ type (
 )
 
 func defaultConfiguration() *configuration {
-	return &configuration{
+	conf := &configuration{
 		path:           filepath.Join(defaultDataDirectory, defaultConfigFilename),
 		currentVersion: currentVersion(),
 		Verbose:        false,
@@ -102,12 +106,19 @@ func defaultConfiguration() *configuration {
 			Secret: generatedSecretKey,
 		},
 		Runners: runnersConfiguration{
-			Deployment: defaultDeploymentRunnersCount,
+			PollInterval: defaultRunnersPollInterval,
+			Deployment:   defaultRunnersDeploymentCount,
 		},
 		Balancer: balancerConfiguration{
 			Domain: defaultBalancerDomain,
 		},
 	}
+
+	if err := conf.PostLoad(); err != nil {
+		panic(err) // Should never happen since the default config is managed by us
+	}
+
+	return conf
 }
 
 func (c configuration) DataDir() string                                     { return c.Data.Path }
@@ -122,7 +133,8 @@ func (c configuration) IsUsingGeneratedSecret() bool                        { re
 func (c configuration) IsVerbose() bool                                     { return c.Verbose }
 func (c configuration) ConfigPath() string                                  { return c.path }
 func (c configuration) CurrentVersion() string                              { return c.currentVersion }
-func (c configuration) DeploymentRunnersCount() int                         { return c.Runners.Deployment }
+func (c configuration) RunnersPollInterval() time.Duration                  { return c.pollInterval }
+func (c configuration) RunnersDeploymentCount() int                         { return c.Runners.Deployment }
 
 func (c configuration) IsSecure() bool {
 	// If secure has been explicitly set, returns it
@@ -160,6 +172,7 @@ func (c *configuration) PostLoad() error {
 
 	return validation.Check(validation.Of{
 		"data.deployment_dir_template": validation.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
+		"runners.poll_interval":        validation.Value(c.Runners.PollInterval, &c.pollInterval, time.ParseDuration),
 		"runners.deployment":           validation.Is(c.Runners.Deployment, numbers.Min(0)),
 		"balancer.domain":              domainUrlErr,
 		"balancer.acme.email": validation.If(domainUrlErr == nil && c.domain.UseSSL(), func() error {

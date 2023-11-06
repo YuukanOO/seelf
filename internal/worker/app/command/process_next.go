@@ -6,8 +6,11 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/async"
 )
+
+type ProcessNextCommand struct {
+	Names []string `json:"names"`
+}
 
 // Process the next pending job.
 // Here the `async.Runner` is given as it because this is a usecase extremely tied
@@ -16,13 +19,9 @@ func ProcessNext(
 	reader domain.JobsReader,
 	writer domain.JobsWriter,
 	handler domain.Handler,
-) func(context.Context, async.Runner) error {
-	return func(ctx context.Context, runner async.Runner) error {
-		job, err := reader.GetNextPendingJob(
-			ctx,
-			runner.SupportedJobs(),
-			runner.RunningJobs(),
-		)
+) func(context.Context, ProcessNextCommand) error {
+	return func(ctx context.Context, cmd ProcessNextCommand) error {
+		job, err := reader.GetNextPendingJob(ctx, cmd.Names)
 
 		// No job yet, nothing to do.
 		if errors.Is(err, apperr.ErrNotFound) {
@@ -32,14 +31,6 @@ func ProcessNext(
 		if err != nil {
 			return err
 		}
-
-		dedupeName := job.DedupeName()
-
-		runner.Started(dedupeName)
-
-		defer func() {
-			runner.Ended(dedupeName)
-		}()
 
 		if err = handler.Process(ctx, job); err != nil {
 			job.Failed(err)

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/compose-spec/compose-go/cli"
@@ -169,7 +170,7 @@ func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Servic
 
 	defer logfile.Close()
 
-	logger := log.NewStepLogger(logfile)
+	logger := infra.NewStepLogger(logfile)
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
 	project, services, err := d.generateProject(depl, logger)
@@ -185,7 +186,7 @@ func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Servic
 		d.cli.Apply(command.WithStandardStreams())
 	}()
 
-	logger.Step("launching docker compose project (pulling, building and running)")
+	logger.Stepf("launching docker compose project (pulling, building and running)")
 
 	if err = d.compose.Up(ctx, project, api.UpOptions{
 		Create: api.CreateOptions{
@@ -201,7 +202,7 @@ func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Servic
 	}
 
 	if d.options.Domain().UseSSL() {
-		logger.Info("you may have to wait for certificates to be generated before your app is available")
+		logger.Infof("you may have to wait for certificates to be generated before your app is available")
 	}
 
 	// Remove dangling images
@@ -219,7 +220,7 @@ func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Servic
 		}
 	} else {
 		// If there's an error, we just log it and go on since it's not a critical one
-		logger.Warn(err.Error())
+		logger.Warnf(err.Error())
 	}
 
 	return services, nil
@@ -364,7 +365,7 @@ func (d *docker) setupComposeIfNeeded() error {
 //
 // The goal is really for the user to provide a docker-compose file which runs fine locally
 // and we should do our best to expose it accordingly without the user providing anything.
-func (d *docker) generateProject(depl domain.Deployment, logger log.StepLogger) (*types.Project, domain.Services, error) {
+func (d *docker) generateProject(depl domain.Deployment, logger domain.StepLogger) (*types.Project, domain.Services, error) {
 	var (
 		services    domain.Services
 		buildDir    = depl.Path(d.options.AppsDir())

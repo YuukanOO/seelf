@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/YuukanOO/seelf/internal/shared/app/query"
 	"github.com/YuukanOO/seelf/pkg/monad"
+	"github.com/YuukanOO/seelf/pkg/query"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
@@ -14,7 +14,7 @@ type (
 	Gateway interface {
 		GetAppByID(context.Context, string) (AppDetail, error)
 		GetAllApps(context.Context) ([]App, error)
-		GetAllDeploymentsByApp(context.Context, string, GetDeploymentsFilters) (storage.Paginated[Deployment], error)
+		GetAllDeploymentsByApp(context.Context, string, GetDeploymentsFilters) (query.Paginated[Deployment], error)
 		GetDeploymentByID(context.Context, string, int) (Deployment, error)
 		GetDeploymentLogfileByID(context.Context, string, int) (string, error)
 	}

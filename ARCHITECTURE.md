@@ -44,7 +44,7 @@ Every entities should be read from the persistent store as a whole (= it should 
 
 Some value objects implements the `Scanner`, `Valuer`, `Marshaler` and `Unmarshaler` interfaces when they must be persisted in a single column. I may eventualy found another cleaner way to do this but this is sufficient for now.
 
-Retrieving related data is a complex story using the `Scanner` approach and unexported fields constraint. I made it work by enabling a custom `Scanner` to be defined and scan additional related entities. Those custom ones are implemented in the infrastructure layer and retrieve additional relations by using something inspired by graphql dataloaders to prevent N+1 queries.
+Retrieving related data is easy thanks to something inspired by graphql dataloaders. When querying the database, you can provide an optional array of `Dataloader[T]` which will execute additional requests based on key extracted from the parent result set. This approach enables efficient querying of the database by avoiding N+1 queries.
 
 ## Commands and DataGateway
 

@@ -8,9 +8,20 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 )
 
-func ProcessNext(reader domain.JobsReader, writer domain.JobsWriter, handler domain.Handler) func(context.Context) error {
-	return func(ctx context.Context) error {
-		job, err := reader.GetNextPendingJob(ctx)
+type ProcessNextCommand struct {
+	Names []string `json:"names"`
+}
+
+// Process the next pending job.
+// Here the `async.Runner` is given as it because this is a usecase extremely tied
+// to the infrastructure.
+func ProcessNext(
+	reader domain.JobsReader,
+	writer domain.JobsWriter,
+	handler domain.Handler,
+) func(context.Context, ProcessNextCommand) error {
+	return func(ctx context.Context, cmd ProcessNextCommand) error {
+		job, err := reader.GetNextPendingJob(ctx, cmd.Names)
 
 		// No job yet, nothing to do.
 		if errors.Is(err, apperr.ErrNotFound) {

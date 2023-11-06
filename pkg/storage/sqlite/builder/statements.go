@@ -33,8 +33,13 @@ func MaybeValue[T any](value monad.Maybe[T], sql string) Statement {
 // on what's in the list.
 func Array[T any](prefix string, values []T) Statement {
 	return func(builder sqlBuilder) {
+		size := len(values)
+
+		if size == 0 {
+			return
+		}
+
 		var (
-			size         = len(values)
 			placeholders = strings.Repeat(",?", size)[1:] // Remove the first comma
 			args         = make([]any, size)
 		)

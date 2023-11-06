@@ -1,4 +1,4 @@
-package jobs
+package deploy
 
 import (
 	"context"
@@ -10,37 +10,41 @@ import (
 	depldomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/worker/app/command"
 	"github.com/YuukanOO/seelf/internal/worker/domain"
-	"github.com/YuukanOO/seelf/internal/worker/infra"
+	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
-const deploymentJobName = "deployment:deploy"
+const JobName = "deployment:deploy"
 
 // Creates a new deployment job for the given deployment id.
-func Deployment(id depldomain.DeploymentID) command.QueueCommand {
+func Queue(evt depldomain.DeploymentCreated) command.QueueCommand {
+	id := evt.ID
+
 	return command.QueueCommand{
-		Name:    deploymentJobName,
-		Payload: fmt.Sprintf("%s:%d", id.AppID(), id.DeploymentNumber()),
+		Name:       JobName,
+		Payload:    fmt.Sprintf("%s:%d", id.AppID(), id.DeploymentNumber()),
+		DedupeName: monad.Value(fmt.Sprintf("%s:%s", JobName, evt.Config.ProjectName())),
 	}
 }
 
-type deploymentHandler struct {
+type handler struct {
 	logger log.Logger
 	deploy func(context.Context, deplcmd.DeployCommand) error
 }
 
-func DeploymentHandler(logger log.Logger, deploy func(context.Context, deplcmd.DeployCommand) error) infra.JobsHandler {
-	return &deploymentHandler{
+func New(logger log.Logger, deploy func(context.Context, deplcmd.DeployCommand) error) jobs.Handler {
+	return &handler{
 		logger: logger,
 		deploy: deploy,
 	}
 }
 
-func (*deploymentHandler) JobName() string {
-	return deploymentJobName
+func (*handler) JobName() string {
+	return JobName
 }
 
-func (h *deploymentHandler) Process(ctx context.Context, job domain.Job) error {
+func (h *handler) Process(ctx context.Context, job domain.Job) error {
 	parts := strings.Split(job.Payload(), ":")
 	appid := parts[0]
 	number, _ := strconv.Atoi(parts[1])

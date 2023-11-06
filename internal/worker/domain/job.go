@@ -22,23 +22,26 @@ type (
 	Job struct {
 		event.Emitter
 
-		id       JobID
-		name     string
-		payload  string
-		errcode  monad.Maybe[string]
-		queuedAt time.Time
+		id         JobID
+		name       string
+		dedupeName string // Unique token to avoid multiple workers to process the same job (for example, multiple deployments for the same app and environment)
+		payload    string
+		errcode    monad.Maybe[string]
+		queuedAt   time.Time
 	}
 
 	// RELATED SERVICES
 
 	JobsReader interface {
-		GetNextPendingJob(context.Context) (Job, error)
+		GetRunningJobs(context.Context) ([]Job, error)
+		GetNextPendingJob(context.Context, []string) (Job, error)
 	}
 
 	JobsWriter interface {
 		Write(context.Context, ...*Job) error
 	}
 
+	// Represents an object which can handle a specific job.
 	Handler interface {
 		Process(context.Context, Job) error
 	}
@@ -46,10 +49,11 @@ type (
 	// EVENTS
 
 	JobQueued struct {
-		ID       JobID
-		Name     string
-		Payload  string
-		QueuedAt time.Time
+		ID         JobID
+		Name       string
+		DedupeName string
+		Payload    string
+		QueuedAt   time.Time
 	}
 
 	JobDone struct {
@@ -64,12 +68,17 @@ type (
 )
 
 // Creates a new job which will be processed by a worker later on.
-func NewJob(name, payload string) (j Job) {
+// A dedupe name can be provided to avoid multiple workers to process the same kind of job
+// at the same time, such as a deployment for the same app and environment.
+// If no dedupe name is given, the job id will be used instead.
+func NewJob(name, payload string, dedupeName monad.Maybe[string]) (j Job) {
+	jobId := id.New[JobID]()
 	j.apply(JobQueued{
-		ID:       id.New[JobID](),
-		Name:     name,
-		Payload:  payload,
-		QueuedAt: time.Now().UTC(),
+		ID:         jobId,
+		Name:       name,
+		DedupeName: dedupeName.Get(string(jobId)),
+		Payload:    payload,
+		QueuedAt:   time.Now().UTC(),
 	})
 
 	return j
@@ -80,6 +89,7 @@ func JobFrom(scanner storage.Scanner) (j Job, err error) {
 	err = scanner.Scan(
 		&j.id,
 		&j.name,
+		&j.dedupeName,
 		&j.payload,
 		&j.queuedAt,
 		&j.errcode,
@@ -113,6 +123,7 @@ func (j *Job) apply(e event.Event) {
 	case JobQueued:
 		j.id = evt.ID
 		j.name = evt.Name
+		j.dedupeName = evt.DedupeName
 		j.payload = evt.Payload
 		j.queuedAt = evt.QueuedAt
 	case JobFailed:

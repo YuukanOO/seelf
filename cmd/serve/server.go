@@ -29,8 +29,9 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	deplsqlite "github.com/YuukanOO/seelf/internal/deployment/infra/sqlite"
 	workercmd "github.com/YuukanOO/seelf/internal/worker/app/command"
-	workerinfra "github.com/YuukanOO/seelf/internal/worker/infra"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
+	"github.com/YuukanOO/seelf/internal/worker/infra/jobs/cleanup"
+	"github.com/YuukanOO/seelf/internal/worker/infra/jobs/deploy"
 	workersqlite "github.com/YuukanOO/seelf/internal/worker/infra/sqlite"
 	"github.com/YuukanOO/seelf/pkg/async"
 	"github.com/YuukanOO/seelf/pkg/event"
@@ -67,6 +68,8 @@ type (
 		git.Options
 		archive.Options
 
+		RunnersPollInterval() time.Duration
+		RunnersDeploymentCount() int
 		IsVerbose() bool
 		ConnectionString() string
 		Secret() []byte
@@ -108,6 +111,7 @@ type (
 		redeploy               func(context.Context, deplcmd.RedeployCommand) (int, error)
 		promote                func(context.Context, deplcmd.PromoteCommand) (int, error)
 		failRunningDeployments func(context.Context, error) error
+		failRunningJobs        func(context.Context, error) error
 		queueJob               func(context.Context, workercmd.QueueCommand) error
 	}
 )
@@ -205,11 +209,20 @@ func (s *server) configureServices() error {
 	)
 
 	s.docker = docker.New(s.options, s.logger)
-	handler := workerinfra.NewHandlerFacade(s.logger,
-		jobs.DeploymentHandler(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
-		jobs.CleanupAppHandler(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
+	handler := jobs.NewFacade(s.logger,
+		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
+		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
 	)
-	s.worker = async.NewIntervalWorker(s.logger, 5*time.Second, workercmd.ProcessNext(jobsStore, jobsStore, handler))
+	processNextJob := workercmd.ProcessNext(jobsStore, jobsStore, handler)
+
+	s.worker = async.NewPool(
+		s.logger,
+		s.options.RunnersPollInterval(),
+		func(ctx context.Context, tags []string) error {
+			return processNextJob(ctx, workercmd.ProcessNextCommand{Names: tags})
+		},
+		async.Group(s.options.RunnersDeploymentCount(), deploy.JobName, cleanup.JobName),
+	)
 	s.usersReader = usersStore
 
 	// Queries
@@ -233,6 +246,7 @@ func (s *server) configureServices() error {
 	s.promote = deplcmd.Promote(appsStore, deploymentsStore, deploymentsStore, s.options.DeploymentDirTemplate())
 	s.failRunningDeployments = deplcmd.FailRunningDeployments(deploymentsStore, deploymentsStore)
 
+	s.failRunningJobs = workercmd.FailRunningJobs(jobsStore, jobsStore)
 	s.queueJob = workercmd.Queue(jobsStore)
 
 	return nil
@@ -262,6 +276,11 @@ func (s *server) startCheckup() error {
 
 	// Fail stale deployments
 	if err := s.failRunningDeployments(ctx, errServerReset); err != nil {
+		return err
+	}
+
+	// Fail stale jobs
+	if err := s.failRunningJobs(ctx, errServerReset); err != nil {
 		return err
 	}
 
@@ -342,9 +361,9 @@ func (s *server) configureRouter() {
 func (s *server) domainEventHandler(ctx context.Context, e event.Event) error {
 	switch evt := e.(type) {
 	case domain.DeploymentCreated:
-		s.queueJob(ctx, jobs.Deployment(evt.ID))
+		s.queueJob(ctx, deploy.Queue(evt))
 	case domain.AppCleanupRequested:
-		s.queueJob(ctx, jobs.CleanupApp(evt.ID))
+		s.queueJob(ctx, cleanup.Queue(evt.ID))
 	}
 
 	return nil

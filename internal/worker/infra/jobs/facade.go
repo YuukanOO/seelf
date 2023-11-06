@@ -1,4 +1,4 @@
-package infra
+package jobs
 
 import (
 	"context"
@@ -9,19 +9,19 @@ import (
 )
 
 type (
-	worker struct {
+	facade struct {
 		logger   log.Logger
-		handlers map[string]JobsHandler
+		handlers map[string]Handler
 	}
 
-	JobsHandler interface {
+	Handler interface {
 		domain.Handler
 		JobName() string // Retrieve the name of the job handled by this handler.
 	}
 )
 
-func NewHandlerFacade(logger log.Logger, handlers ...JobsHandler) domain.Handler {
-	handlersMap := map[string]JobsHandler{}
+func NewFacade(logger log.Logger, handlers ...Handler) domain.Handler {
+	handlersMap := make(map[string]Handler, len(handlers))
 
 	for _, handler := range handlers {
 		name := handler.JobName()
@@ -34,10 +34,10 @@ func NewHandlerFacade(logger log.Logger, handlers ...JobsHandler) domain.Handler
 		handlersMap[name] = handler
 	}
 
-	return &worker{logger, handlersMap}
+	return &facade{logger, handlersMap}
 }
 
-func (w *worker) Process(ctx context.Context, job domain.Job) (err error) {
+func (w *facade) Process(ctx context.Context, job domain.Job) (err error) {
 	handler, found := w.handlers[job.Name()]
 
 	if !found {

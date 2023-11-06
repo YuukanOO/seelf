@@ -9,7 +9,7 @@ type Meta struct {
 }
 
 // Builds a new deployment meta from a kind and any additional data.
-// You should never call it outside a Trigger implementation since
+// You should never call it outside a Source implementation since
 // it will be picked by a job to actually initiate the deployment.
 func NewMeta(kind Kind, data string) Meta {
 	return Meta{kind, data}

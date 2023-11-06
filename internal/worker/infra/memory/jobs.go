@@ -13,6 +13,7 @@ type (
 	JobsStore interface {
 		domain.JobsReader
 		domain.JobsWriter
+		GetByID(context.Context, domain.JobID) (domain.Job, error) // Defined here because not used in the domain
 	}
 
 	jobsStore struct {
@@ -34,18 +35,37 @@ func NewJobsStore(existingJobs ...domain.Job) JobsStore {
 	return s
 }
 
-func (s *jobsStore) GetNextPendingJob(ctx context.Context) (domain.Job, error) {
-	if len(s.jobs) == 0 {
-		return domain.Job{}, apperr.ErrNotFound
+func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string) (domain.Job, error) {
+	for _, job := range s.jobs {
+		for _, name := range names {
+			if job.value.Name() == name {
+				return *job.value, nil
+			}
+		}
 	}
 
-	lastJob := s.jobs[len(s.jobs)-1]
+	return domain.Job{}, apperr.ErrNotFound
+}
 
-	if lastJob == nil {
-		return domain.Job{}, apperr.ErrNotFound
+func (s *jobsStore) GetByID(ctx context.Context, id domain.JobID) (domain.Job, error) {
+	for _, job := range s.jobs {
+		if job.id == id {
+			return *job.value, nil
+		}
 	}
 
-	return *lastJob.value, nil
+	return domain.Job{}, apperr.ErrNotFound
+}
+
+func (s *jobsStore) GetRunningJobs(ctx context.Context) ([]domain.Job, error) {
+	// For this implementation, just returns all the jobs
+	result := make([]domain.Job, len(s.jobs))
+
+	for idx, job := range s.jobs {
+		result[idx] = *job.value
+	}
+
+	return result, nil
 }
 
 func (s *jobsStore) Write(ctx context.Context, jobs ...*domain.Job) error {
@@ -73,6 +93,13 @@ func (s *jobsStore) Write(ctx context.Context, jobs ...*domain.Job) error {
 				for idx, a := range s.jobs {
 					if a.id == evt.ID {
 						s.jobs = append(s.jobs[:idx], s.jobs[idx+1:]...)
+						break
+					}
+				}
+			default:
+				for _, d := range s.jobs {
+					if d.id == job.ID() {
+						d.value = job
 						break
 					}
 				}

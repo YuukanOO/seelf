@@ -68,6 +68,26 @@ func (s Services) Public(baseUrl Url, conf Config, name, image string) (Services
 	return append(s, service), service
 }
 
+func (s Services) hasExposedServices() bool {
+	for _, service := range s {
+		if service.IsExposed() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s Services) Value() (driver.Value, error) {
+	r, err := json.Marshal(s)
+
+	return string(r), err
+}
+
+func (s *Services) Scan(value any) error {
+	return storage.ScanJSON(value, s)
+}
+
 // Type needed to marshal an unexposed Service data.
 type marshalledService struct {
 	Name          string           `json:"name"`
@@ -100,24 +120,4 @@ func (s *Service) UnmarshalJSON(b []byte) error {
 	s.url = m.Url
 
 	return nil
-}
-
-func (s Services) Value() (driver.Value, error) {
-	r, err := json.Marshal(s)
-
-	return string(r), err
-}
-
-func (s *Services) Scan(value any) error {
-	return storage.ScanJSON(value, s)
-}
-
-func (s Services) hasExposedServices() bool {
-	for _, service := range s {
-		if service.IsExposed() {
-			return true
-		}
-	}
-
-	return false
 }

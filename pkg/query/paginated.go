@@ -1,6 +1,6 @@
-package storage
+package query
 
-// Represents paginated data set.
+// Represents a paginated data set.
 type Paginated[T any] struct {
 	Data        []T  `json:"data"`
 	Page        int  `json:"page"`

@@ -53,7 +53,8 @@ func (c Config) SubDomain() string {
 	return c.ProjectName()
 }
 
-// Retrieve the name of the project.
+// Retrieve the name of the project wich is the combination of the appname and the environment
+// targeted by this configuration.
 func (c Config) ProjectName() string {
 	return fmt.Sprintf("%s-%s", c.appname, c.environment)
 }

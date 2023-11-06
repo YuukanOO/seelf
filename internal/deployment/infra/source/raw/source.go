@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
-	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/validation"
 	"github.com/YuukanOO/seelf/pkg/validation/strings"
@@ -69,7 +69,7 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	defer logfile.Close()
 
-	logger := log.NewStepLogger(logfile)
+	logger := infra.NewStepLogger(logfile)
 
 	buildDir := depl.Path(s.options.AppsDir())
 

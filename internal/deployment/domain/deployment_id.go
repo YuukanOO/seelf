@@ -1,8 +1,8 @@
 package domain
 
-// The deployment unique identifier is a composite key
-// based on the app id and the deployment number.
 type (
+	// The deployment unique identifier is a composite key
+	// based on the app id and the deployment number.
 	DeploymentNumber int
 
 	DeploymentID struct {

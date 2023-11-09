@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/event"
@@ -12,10 +13,19 @@ import (
 
 const retryDelay = 15 * time.Second
 
+var (
+	ErrNoValidHandlerFound = errors.New("no_valid_handler_found")
+	ErrInvalidPayload      = errors.New("invalid_payload")
+
+	JobDataTypes = storage.NewDiscriminatedMapper[JobData]()
+)
+
 type (
 	// VALUE OBJECTS
 
 	JobID string
+
+	JobData storage.Discriminated
 
 	// ENTITY
 
@@ -23,9 +33,8 @@ type (
 		event.Emitter
 
 		id         JobID
-		name       string
 		dedupeName string // Unique token to avoid multiple workers to process the same job (for example, multiple deployments for the same app and environment)
-		payload    string
+		data       JobData
 		errcode    monad.Maybe[string]
 		queuedAt   time.Time
 	}
@@ -43,6 +52,7 @@ type (
 
 	// Represents an object which can handle a specific job.
 	Handler interface {
+		Prepare(any) (JobData, monad.Maybe[string], error) // Try to prepare a job payload and returns the JobData needed to process it and an eventual dedupe name to use
 		Process(context.Context, Job) error
 	}
 
@@ -50,9 +60,8 @@ type (
 
 	JobQueued struct {
 		ID         JobID
-		Name       string
 		DedupeName string
-		Payload    string
+		Data       JobData
 		QueuedAt   time.Time
 	}
 
@@ -71,13 +80,12 @@ type (
 // A dedupe name can be provided to avoid multiple workers to process the same kind of job
 // at the same time, such as a deployment for the same app and environment.
 // If no dedupe name is given, the job id will be used instead.
-func NewJob(name, payload string, dedupeName monad.Maybe[string]) (j Job) {
+func NewJob(data JobData, dedupeName monad.Maybe[string]) (j Job) {
 	jobId := id.New[JobID]()
 	j.apply(JobQueued{
 		ID:         jobId,
-		Name:       name,
 		DedupeName: dedupeName.Get(string(jobId)),
-		Payload:    payload,
+		Data:       data,
 		QueuedAt:   time.Now().UTC(),
 	})
 
@@ -86,14 +94,25 @@ func NewJob(name, payload string, dedupeName monad.Maybe[string]) (j Job) {
 
 // Recreates a job from a storage scanner
 func JobFrom(scanner storage.Scanner) (j Job, err error) {
+	var (
+		dataDiscriminator string
+		dataPayload       string
+	)
+
 	err = scanner.Scan(
 		&j.id,
-		&j.name,
 		&j.dedupeName,
-		&j.payload,
+		&dataDiscriminator,
+		&dataPayload,
 		&j.queuedAt,
 		&j.errcode,
 	)
+
+	if err != nil {
+		return j, err
+	}
+
+	j.data, err = JobDataTypes.From(dataDiscriminator, dataPayload)
 
 	return j, err
 }
@@ -114,17 +133,15 @@ func (j *Job) Done() {
 	})
 }
 
-func (j Job) ID() JobID       { return j.id }
-func (j Job) Name() string    { return j.name }
-func (j Job) Payload() string { return j.payload }
+func (j Job) ID() JobID     { return j.id }
+func (j Job) Data() JobData { return j.data }
 
 func (j *Job) apply(e event.Event) {
 	switch evt := e.(type) {
 	case JobQueued:
 		j.id = evt.ID
-		j.name = evt.Name
 		j.dedupeName = evt.DedupeName
-		j.payload = evt.Payload
+		j.data = evt.Data
 		j.queuedAt = evt.QueuedAt
 	case JobFailed:
 		j.errcode = j.errcode.WithValue(evt.ErrCode)

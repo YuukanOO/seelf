@@ -24,7 +24,7 @@ func NewJobsStore(db sqlite.Database) JobsStore {
 	return &jobsStore{db}
 }
 
-func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string) (domain.Job, error) {
+func (s *jobsStore) GetNextPendingJob(ctx context.Context, jobType []string) (domain.Job, error) {
 	// This query will lock the database to make sure we can't retrieved the same job twice.
 	return builder.
 		Query[domain.Job](`
@@ -36,10 +36,10 @@ WHERE id IN (
 		retrieved = 0
 		AND queued_at <= DATETIME('now')
 		AND dedupe_name NOT IN (SELECT DISTINCT dedupe_name FROM jobs WHERE retrieved = 1)`).
-		S(builder.Array("AND name IN", names)).
+		S(builder.Array("AND data_discriminator IN", jobType)).
 		F(`ORDER BY queued_at LIMIT 1
 	)
-RETURNING id, name, dedupe_name, payload, queued_at, errcode`).
+RETURNING id, dedupe_name, data_discriminator, data, queued_at, errcode`).
 		One(s, ctx, domain.JobFrom)
 }
 
@@ -48,9 +48,9 @@ func (s *jobsStore) GetRunningJobs(ctx context.Context) ([]domain.Job, error) {
 		Query[domain.Job](`
 			SELECT
 				id
-				,name
 				,dedupe_name
-				,payload
+				,data_discriminator
+				,data
 				,queued_at
 				,errcode
 			FROM jobs
@@ -64,11 +64,11 @@ func (s *jobsStore) Write(c context.Context, jobs ...*domain.Job) error {
 		case domain.JobQueued:
 			return builder.
 				Insert("jobs", builder.Values{
-					"id":          evt.ID,
-					"name":        evt.Name,
-					"dedupe_name": evt.DedupeName,
-					"payload":     evt.Payload,
-					"queued_at":   evt.QueuedAt,
+					"id":                 evt.ID,
+					"dedupe_name":        evt.DedupeName,
+					"data_discriminator": evt.Data.Discriminator(),
+					"data":               evt.Data,
+					"queued_at":          evt.QueuedAt,
 				}).
 				Exec(s, ctx)
 		case domain.JobFailed:

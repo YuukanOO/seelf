@@ -59,8 +59,8 @@ func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, appid string, filt
 			deployments.app_id
 			,deployments.deployment_number
 			,deployments.config_environment
-			,deployments.source_kind
-			,deployments.source_data
+			,deployments.source_discriminator
+			,deployments.source
 			,deployments.state_status
 			,deployments.state_errcode
 			,deployments.state_services
@@ -85,8 +85,8 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, appid string, deploymen
 			deployments.app_id
 			,deployments.deployment_number
 			,deployments.config_environment
-			,deployments.source_kind
-			,deployments.source_data
+			,deployments.source_discriminator
+			,deployments.source
 			,deployments.state_status
 			,deployments.state_errcode
 			,deployments.state_services
@@ -123,8 +123,8 @@ func newAppWithLastDeploymentsByEnvDataloader[T any](
 				,deployments.app_id
 				,deployments.deployment_number
 				,deployments.config_environment
-				,deployments.source_kind
-				,deployments.source_data
+				,deployments.source_discriminator
+				,deployments.source
 				,deployments.state_status
 				,deployments.state_errcode
 				,deployments.state_services
@@ -209,13 +209,17 @@ func appDetailDataMapper(s storage.Scanner) (a query.AppDetail, err error) {
 }
 
 func lastDeploymentMapper(s storage.Scanner) (d query.Deployment, err error) {
-	var maxRequestedAt string
+	var (
+		maxRequestedAt string
+		sourceData     string
+	)
+
 	err = s.Scan(
 		&d.AppID,
 		&d.DeploymentNumber,
 		&d.Environment,
-		&d.Meta.Kind,
-		&d.Meta.Data,
+		&d.Source.Discriminator,
+		&sourceData,
 		&d.State.Status,
 		&d.State.ErrCode,
 		&d.State.Services,
@@ -227,16 +231,24 @@ func lastDeploymentMapper(s storage.Scanner) (d query.Deployment, err error) {
 		&maxRequestedAt, // Needed because go-sqlite3 lib could not extract max(requested_at) into a time.Time... I may switch to another lib in the future
 	)
 
+	if err != nil {
+		return d, err
+	}
+
+	d.Source.Data, err = query.SourceDataTypes.From(d.Source.Discriminator, sourceData)
+
 	return d, err
 }
 
 func deploymentMapper(scanner storage.Scanner) (d query.Deployment, err error) {
+	var sourceData string
+
 	err = scanner.Scan(
 		&d.AppID,
 		&d.DeploymentNumber,
 		&d.Environment,
-		&d.Meta.Kind,
-		&d.Meta.Data,
+		&d.Source.Discriminator,
+		&sourceData,
 		&d.State.Status,
 		&d.State.ErrCode,
 		&d.State.Services,
@@ -246,6 +258,12 @@ func deploymentMapper(scanner storage.Scanner) (d query.Deployment, err error) {
 		&d.RequestedBy.ID,
 		&d.RequestedBy.Email,
 	)
+
+	if err != nil {
+		return d, err
+	}
+
+	d.Source.Data, err = query.SourceDataTypes.From(d.Source.Discriminator, sourceData)
 
 	return d, err
 }

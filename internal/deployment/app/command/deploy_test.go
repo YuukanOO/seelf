@@ -107,8 +107,6 @@ func Test_Deploy(t *testing.T) {
 	})
 }
 
-const kind domain.Kind = "dummy"
-
 type dummySource struct {
 	err error
 }
@@ -117,8 +115,8 @@ func source(failedWithErr error) domain.Source {
 	return &dummySource{failedWithErr}
 }
 
-func (*dummySource) Prepare(domain.App, any) (domain.Meta, error) {
-	return domain.NewMeta(kind, ""), nil
+func (*dummySource) Prepare(domain.App, any) (domain.SourceData, error) {
+	return meta{}, nil
 }
 
 func (t *dummySource) Fetch(context.Context, domain.Deployment) error {
@@ -140,3 +138,8 @@ func (b *dummyBackend) Run(context.Context, domain.Deployment) (domain.Services,
 func (b *dummyBackend) Cleanup(context.Context, domain.App) error {
 	return nil
 }
+
+type meta struct{}
+
+func (meta) Discriminator() string { return "test" }
+func (m meta) NeedVCS() bool       { return false }

@@ -12,45 +12,43 @@ import (
 
 func Test_Job(t *testing.T) {
 	t.Run("can be created", func(t *testing.T) {
-		name := "jobname"
-		payload := "somepayload"
+		var data = payload{}
 
-		job := domain.NewJob(name, payload, monad.None[string]())
+		job := domain.NewJob(data, monad.None[string]())
 
 		testutil.NotEquals(t, "", job.ID())
-		testutil.Equals(t, name, job.Name())
-		testutil.Equals(t, payload, job.Payload())
+		testutil.Equals(t, data, job.Data().(payload))
 
 		testutil.HasNEvents(t, &job, 1)
 
 		evt := testutil.EventIs[domain.JobQueued](t, &job, 0)
 
 		testutil.Equals(t, job.ID(), evt.ID)
-		testutil.Equals(t, job.Name(), evt.Name)
-		testutil.Equals(t, job.Payload(), evt.Payload)
+		testutil.Equals(t, job.Data(), evt.Data)
 		testutil.IsFalse(t, evt.QueuedAt.IsZero())
 	})
 
 	t.Run("can be created with a dedupe name", func(t *testing.T) {
-		name := "jobname"
-		payload := "somepayload"
+		var data = payload{}
 
-		job := domain.NewJob(name, payload, monad.None[string]())
+		job := domain.NewJob(data, monad.None[string]())
 
 		evt := testutil.EventIs[domain.JobQueued](t, &job, 0)
 		testutil.Equals(t, string(evt.ID), evt.DedupeName)
 
 		dedupeName := "app-environment"
 
-		job = domain.NewJob(name, payload, monad.Value(dedupeName))
+		job = domain.NewJob(data, monad.Value(dedupeName))
 
 		evt = testutil.EventIs[domain.JobQueued](t, &job, 0)
 		testutil.Equals(t, dedupeName, evt.DedupeName)
 	})
 
 	t.Run("can be marked as failed", func(t *testing.T) {
+		var data = payload{}
+
 		err := errors.New("some error")
-		job := domain.NewJob("jobname", "somepayload", monad.None[string]())
+		job := domain.NewJob(data, monad.None[string]())
 
 		job.Failed(err)
 
@@ -65,7 +63,9 @@ func Test_Job(t *testing.T) {
 	})
 
 	t.Run("can be marked as done", func(t *testing.T) {
-		job := domain.NewJob("jobname", "somepayload", monad.None[string]())
+		var data = payload{}
+
+		job := domain.NewJob(data, monad.None[string]())
 
 		job.Done()
 
@@ -74,3 +74,7 @@ func Test_Job(t *testing.T) {
 		testutil.Equals(t, job.ID(), evt.ID)
 	})
 }
+
+type payload struct{}
+
+func (p payload) Discriminator() string { return "test" }

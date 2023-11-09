@@ -50,13 +50,12 @@
 				: '-'}
 		</Display>
 
-		{#if data.meta.kind === 'git'}
-			{@const [branch, commit] = data.meta.data.split('@', 2)}
+		{#if data.source.discriminator === 'git'}
 			<Display label="branch">
-				{branch}
+				{data.source.data.branch}
 			</Display>
 			<Display label="commit">
-				<abbr title={commit}>{commit.substring(0, 10)}</abbr>
+				<abbr title={data.source.data.hash}>{data.source.data.hash.substring(0, 10)}</abbr>
 			</Display>
 		{/if}
 

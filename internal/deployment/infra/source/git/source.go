@@ -3,9 +3,7 @@ package git
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	sstrings "strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra"
@@ -15,6 +13,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/ostools"
+	"github.com/YuukanOO/seelf/pkg/types"
 	"github.com/YuukanOO/seelf/pkg/validation"
 	"github.com/YuukanOO/seelf/pkg/validation/strings"
 	"github.com/go-git/go-git/v5"
@@ -31,10 +30,7 @@ var (
 	ErrGitCheckoutFailed     = errors.New("git_checkout_failed")
 )
 
-const (
-	basicAuthUser = "seelf"
-	separator     = "@"
-)
+const basicAuthUser = "seelf"
 
 type (
 	Options interface {
@@ -42,7 +38,8 @@ type (
 		LogsDir() string
 	}
 
-	Payload struct {
+	// Public request to trigger a git deployment
+	Request struct {
 		Branch string              `json:"branch"`
 		Hash   monad.Maybe[string] `json:"hash"`
 	}
@@ -61,49 +58,37 @@ func New(options Options, reader domain.AppsReader) source.Source {
 	}
 }
 
-func (*service) CanPrepare(payload any) bool {
-	_, ok := payload.(Payload)
-	return ok
-}
+func (*service) CanPrepare(payload any) bool          { return types.Is[Request](payload) }
+func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (s *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
-	p, ok := payload.(Payload)
+func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
+	req, ok := payload.(Request)
 
 	if !ok {
-		return domain.Meta{}, domain.ErrInvalidSourcePayload
+		return nil, domain.ErrInvalidSourcePayload
 	}
 
 	if err := validation.Check(validation.Of{
-		"branch": validation.Is(p.Branch, strings.Required),
-		"hash": validation.Maybe(p.Hash, func(hash string) error {
+		"branch": validation.Is(req.Branch, strings.Required),
+		"hash": validation.Maybe(req.Hash, func(hash string) error {
 			return validation.Is(hash, strings.Required)
 		}),
 	}); err != nil {
-		return domain.Meta{}, err
+		return nil, err
 	}
 
 	if !app.VCS().HasValue() {
-		return domain.Meta{}, domain.ErrVCSNotConfigured
+		return nil, domain.ErrVCSNotConfigured
 	}
 
 	// Retrieve the latest commit to make sure the branch exists
-	latestCommit, err := getLatestBranchCommit(app.VCS().MustGet(), p.Branch)
+	latestCommit, err := getLatestBranchCommit(app.VCS().MustGet(), req.Branch)
 
 	if err != nil {
-		return domain.Meta{}, validation.WrapIfAppErr(err, "branch")
+		return nil, validation.WrapIfAppErr(err, "branch")
 	}
 
-	if !p.Hash.HasValue() {
-		p.Hash = p.Hash.WithValue(latestCommit)
-	}
-
-	metaPayload := fmt.Sprintf("%s%s%s", p.Branch, separator, p.Hash.MustGet())
-
-	return domain.NewMeta(domain.KindGit, metaPayload), nil
-}
-
-func (*service) CanFetch(meta domain.Meta) bool {
-	return meta.Kind() == domain.KindGit
+	return Data{req.Branch, req.Hash.Get(latestCommit)}, nil
 }
 
 func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
@@ -118,7 +103,7 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 	logger := infra.NewStepLogger(logfile)
 
 	// Retrieve git url and token from the app
-	app, err := s.reader.GetByID(context.Background(), depl.ID().AppID())
+	app, err := s.reader.GetByID(ctx, depl.ID().AppID())
 
 	if err != nil {
 		logger.Error(err)
@@ -139,18 +124,18 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	config := app.VCS().MustGet()
 
-	// Retrieve the branch and hash for deployment payload
-	// We use the LastIndex because an @ is a vaid character in a branch name
-	data := depl.Source().Data()
-	lastSeparatorIdx := sstrings.LastIndex(data, separator)
-	branch, hash := data[:lastSeparatorIdx], data[lastSeparatorIdx+1:]
+	data, ok := depl.Source().(Data)
 
-	logger.Stepf("cloning branch %s at %s from %s using token: %t", branch, hash, config.Url(), config.Token().HasValue())
+	if !ok {
+		return domain.ErrInvalidSourcePayload
+	}
+
+	logger.Stepf("cloning branch %s at %s from %s using token: %t", data.Branch, data.Hash, config.Url(), config.Token().HasValue())
 
 	r, err := git.PlainCloneContext(ctx, buildDir, false, &git.CloneOptions{
 		Auth:          getAuthMethod(config),
 		SingleBranch:  true,
-		ReferenceName: plumbing.NewBranchReferenceName(branch),
+		ReferenceName: plumbing.NewBranchReferenceName(data.Branch),
 		URL:           config.Url().String(),
 		Progress:      logfile,
 	})
@@ -161,7 +146,7 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 	}
 
 	// Resolve short hash names if needed
-	rev, err := r.ResolveRevision(plumbing.Revision(hash))
+	rev, err := r.ResolveRevision(plumbing.Revision(data.Hash))
 
 	if err != nil {
 		logger.Error(err)

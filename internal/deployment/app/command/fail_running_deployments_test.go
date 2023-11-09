@@ -26,12 +26,12 @@ func Test_FailRunningDeployments(t *testing.T) {
 	t.Run("should reset running deployments", func(t *testing.T) {
 		errReset := errors.New("server_reset")
 
-		started, _ := app.NewDeployment(2, domain.Meta{}, domain.Production, opts, "some-uid")
+		started, _ := app.NewDeployment(2, meta{}, domain.Production, opts, "some-uid")
 		err := started.HasStarted()
 
 		testutil.IsNil(t, err)
 
-		succeeded, _ := app.NewDeployment(1, domain.Meta{}, domain.Production, opts, "some-uid")
+		succeeded, _ := app.NewDeployment(1, meta{}, domain.Production, opts, "some-uid")
 		succeeded.HasStarted()
 		err = succeeded.HasEnded(domain.Services{}, nil)
 

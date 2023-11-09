@@ -14,12 +14,10 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/ostools"
+	"github.com/YuukanOO/seelf/pkg/types"
 )
 
-const (
-	kind       domain.Kind = "archive"
-	tmpPattern string      = "seelf-archive-"
-)
+const tmpPattern string = "seelf-archive-"
 
 var (
 	ErrOpenArchiveFailed    = errors.New("open_archive_failed")
@@ -46,22 +44,20 @@ func New(options Options) source.Source {
 	}
 }
 
-func (*service) CanPrepare(payload any) bool {
-	_, ok := payload.(*multipart.FileHeader)
-	return ok
-}
+func (*service) CanPrepare(payload any) bool          { return types.Is[*multipart.FileHeader](payload) }
+func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (t *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
+func (t *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
 	file, ok := payload.(*multipart.FileHeader)
 
 	if !ok {
-		return domain.Meta{}, domain.ErrInvalidSourcePayload
+		return nil, domain.ErrInvalidSourcePayload
 	}
 
 	tmpfile, err := os.CreateTemp("", tmpPattern)
 
 	if err != nil {
-		return domain.Meta{}, err
+		return nil, err
 	}
 
 	defer tmpfile.Close()
@@ -69,20 +65,16 @@ func (t *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
 	archive, err := file.Open()
 
 	if err != nil {
-		return domain.Meta{}, err
+		return nil, err
 	}
 
 	defer archive.Close()
 
 	if _, err := io.Copy(tmpfile, archive); err != nil {
-		return domain.Meta{}, err
+		return nil, err
 	}
 
-	return domain.NewMeta(kind, tmpfile.Name()), nil
-}
-
-func (*service) CanFetch(meta domain.Meta) bool {
-	return meta.Kind() == kind
+	return Data(tmpfile.Name()), nil
 }
 
 func (t *service) Fetch(ctx context.Context, depl domain.Deployment) error {
@@ -103,12 +95,16 @@ func (t *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 		return domain.ErrSourceFetchFailed
 	}
 
-	archivePath := depl.Source().Data()
+	data, ok := depl.Source().(Data)
 
-	logger.Stepf("extracting archive %s into %s", archivePath, buildDir)
+	if !ok {
+		return domain.ErrInvalidSourcePayload
+	}
+
+	logger.Stepf("extracting archive %s into %s", data, buildDir)
 
 	// Open the archive file stored in a temporary location
-	archive, err := os.Open(archivePath)
+	archive, err := os.Open(string(data))
 
 	if err != nil {
 		logger.Error(err)

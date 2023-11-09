@@ -162,6 +162,8 @@ func (q *queryBuilder[T]) All(
 		return nil, err
 	}
 
+	defer rows.Close()
+
 	results := make([]T, 0)
 
 	// Instantiates needed stuff for data loaders
@@ -171,8 +173,6 @@ func (q *queryBuilder[T]) All(
 	for i := range mappings {
 		mappings[i] = make(KeysMapping)
 	}
-
-	defer rows.Close()
 
 	for rows.Next() {
 		row, err := mapper(rows)

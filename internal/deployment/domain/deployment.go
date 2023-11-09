@@ -42,10 +42,10 @@ type (
 		event.Emitter
 
 		id        DeploymentID
-		path      string
+		path      string // Relative path where deployment data will be stored
 		config    Config
 		state     State
-		source    Meta
+		source    SourceData
 		requested shared.Action[domain.UserID]
 	}
 
@@ -69,7 +69,7 @@ type (
 		Path      string
 		Config    Config
 		State     State
-		Source    Meta
+		Source    SourceData
 		Requested shared.Action[domain.UserID]
 	}
 
@@ -83,7 +83,7 @@ type (
 // entity to make sure a new deployment can be created for an app.
 func (a App) NewDeployment(
 	deployNumber DeploymentNumber,
-	meta Meta,
+	meta SourceData,
 	env Environment,
 	tmpl DeploymentDirTemplate,
 	requestedBy domain.UserID,
@@ -92,7 +92,7 @@ func (a App) NewDeployment(
 		return d, ErrAppCleanupRequested
 	}
 
-	if meta.kind.IsVCS() && !a.vcs.HasValue() {
+	if meta.NeedVCS() && !a.vcs.HasValue() {
 		return d, ErrVCSNotConfigured
 	}
 
@@ -148,8 +148,10 @@ func (a App) Promote(
 
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	var (
-		requestedAt time.Time
-		requestedBy domain.UserID
+		requestedAt             time.Time
+		requestedBy             domain.UserID
+		sourceMetaDiscriminator string
+		sourceMetaData          string
 	)
 
 	err = scanner.Scan(
@@ -165,20 +167,25 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&d.state.services,
 		&d.state.startedAt,
 		&d.state.finishedAt,
-		&d.source.kind,
-		&d.source.data,
+		&sourceMetaDiscriminator,
+		&sourceMetaData,
 		&requestedAt,
 		&requestedBy,
 	)
 
+	if err != nil {
+		return d, err
+	}
+
+	d.source, err = SourceDataTypes.From(sourceMetaDiscriminator, sourceMetaData)
 	d.requested = shared.ActionFrom(requestedBy, requestedAt)
 
 	return d, err
 }
 
-func (d Deployment) ID() DeploymentID { return d.id }
-func (d Deployment) Config() Config   { return d.config }
-func (d Deployment) Source() Meta     { return d.source }
+func (d Deployment) ID() DeploymentID   { return d.id }
+func (d Deployment) Config() Config     { return d.config }
+func (d Deployment) Source() SourceData { return d.source }
 
 // Retrieve the deployment path relative to the given directories.
 func (d Deployment) Path(relativeTo ...string) string {

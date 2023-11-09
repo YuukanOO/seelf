@@ -13,14 +13,14 @@
 	import routes from '$lib/path';
 	import service, {
 		type Environment,
-		type Kind,
+		type SourceDataDiscriminator,
 		type QueueDeploymentData
 	} from '$lib/resources/deployments';
 
 	export let data;
 
 	let environment: Environment = 'production';
-	let kind: Kind = data.app.vcs ? 'git' : 'raw';
+	let kind: SourceDataDiscriminator = data.app.vcs ? 'git' : 'raw';
 	let raw = '';
 	let archive: Maybe<FileList> = undefined;
 	let branch = '';

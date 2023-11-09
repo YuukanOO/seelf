@@ -110,7 +110,7 @@ func Test_Run(t *testing.T) {
 	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
 		opts := options{domain: "http://docker.localhost"}
 		app := domain.NewApp("my-app", "uid")
-		depl, _ := app.NewDeployment(1, domain.NewMeta("test", ""), domain.Production, opts, "uid")
+		depl, _ := app.NewDeployment(1, meta{}, domain.Production, opts, "uid")
 		dockerBackend, _, _ := backend(opts)
 
 		_, err := dockerBackend.Run(context.Background(), depl)
@@ -375,3 +375,8 @@ func (o options) AcmeEmail() string { return o.email }
 func (o options) Execute(d domain.DeploymentTemplateData) string {
 	return filepath.Join(strconv.Itoa(int(d.Number)), string(d.Environment))
 }
+
+type meta struct{}
+
+func (meta) Discriminator() string { return "test" }
+func (meta) NeedVCS() bool         { return false }

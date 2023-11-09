@@ -49,7 +49,7 @@ func Test_CleanupApp(t *testing.T) {
 
 	t.Run("should fail if there are still pending or running deployments", func(t *testing.T) {
 		app := domain.NewApp("my-app", "uid")
-		depl, _ := app.NewDeployment(1, domain.NewMeta("some", "data"), domain.Production, options{}, "uid")
+		depl, _ := app.NewDeployment(1, meta{}, domain.Production, options{}, "uid")
 		app.RequestCleanup("uid")
 
 		uc := cleanup(initialData{

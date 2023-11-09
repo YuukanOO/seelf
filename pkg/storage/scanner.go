@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 )
@@ -14,13 +15,14 @@ type (
 	//
 	// Since domain store will always constructs an aggregate as a whole, it makes the process
 	// relatively easy to keep under control.
-	//
-	// The things to keep in mind is the order used when scanning which should always be the
-	// same.
-	//
-	// IMPORTANT: it will fails if the type of a monad.Value is not a primitive type or
-	// does not implements the sql.Scanner interface.
 	Scanner interface {
+		// Scan current row into the destination fields.
+		// The things to keep in mind is the order used when scanning which should always be the
+		// same as the order of fields returned by the underlying implementation (for a database,
+		// the order of SELECT columns).
+		//
+		// IMPORTANT: it will fails if the type of a monad.Value is not a primitive type or
+		// does not implements the sql.Scanner interface.
 		Scan(...any) error
 	}
 
@@ -37,4 +39,12 @@ func ScanJSON[T any](value any, target *T) error {
 	}
 
 	return json.Unmarshal([]byte(str), target)
+}
+
+// Ease the valueing of a json serialized field by calling json.Marshal and returning
+// a string as accepted as a valid driver.Value.
+func ValueJSON[T any](v T) (driver.Value, error) {
+	b, err := json.Marshal(v)
+
+	return string(b), err
 }

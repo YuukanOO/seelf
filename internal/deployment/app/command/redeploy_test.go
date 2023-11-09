@@ -43,7 +43,7 @@ func Test_Redeploy(t *testing.T) {
 	})
 
 	t.Run("should correctly creates a new deployment based on the provided one", func(t *testing.T) {
-		dpl, _ := app.NewDeployment(1, domain.NewMeta("some", "data"), domain.Production, opts, "some-uid")
+		dpl, _ := app.NewDeployment(1, meta{}, domain.Production, opts, "some-uid")
 		uc := redeploy(dpl)
 
 		number, err := uc(ctx, command.RedeployCommand{

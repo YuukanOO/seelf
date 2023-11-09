@@ -10,11 +10,10 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/ostools"
+	"github.com/YuukanOO/seelf/pkg/types"
 	"github.com/YuukanOO/seelf/pkg/validation"
 	"github.com/YuukanOO/seelf/pkg/validation/strings"
 )
-
-const kind domain.Kind = "raw"
 
 var ErrWriteComposeFailed = errors.New("write_compose_failed")
 
@@ -35,29 +34,23 @@ func New(options Options) source.Source {
 	}
 }
 
-func (*service) CanPrepare(payload any) bool {
-	_, ok := payload.(string)
-	return ok
-}
+func (*service) CanPrepare(payload any) bool          { return types.Is[string](payload) }
+func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (s *service) Prepare(app domain.App, payload any) (domain.Meta, error) {
+func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
 	rawServiceFileContent, ok := payload.(string)
 
 	if !ok {
-		return domain.Meta{}, domain.ErrInvalidSourcePayload
+		return nil, domain.ErrInvalidSourcePayload
 	}
 
 	if err := validation.Check(validation.Of{
 		"content": validation.Is(rawServiceFileContent, strings.Required),
 	}); err != nil {
-		return domain.Meta{}, err
+		return nil, err
 	}
 
-	return domain.NewMeta(kind, rawServiceFileContent), nil
-}
-
-func (*service) CanFetch(meta domain.Meta) bool {
-	return meta.Kind() == kind
+	return Data(rawServiceFileContent), nil
 }
 
 func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
@@ -80,9 +73,15 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	filename := filepath.Join(buildDir, "compose.yml")
 
+	data, ok := depl.Source().(Data)
+
+	if !ok {
+		return domain.ErrInvalidSourcePayload
+	}
+
 	logger.Stepf("writing service file to %s", filename)
 
-	if err := ostools.WriteFile(filename, []byte(depl.Source().Data())); err != nil {
+	if err := ostools.WriteFile(filename, []byte(data)); err != nil {
 		logger.Error(err)
 		return ErrWriteComposeFailed
 	}

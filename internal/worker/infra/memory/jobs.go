@@ -35,10 +35,10 @@ func NewJobsStore(existingJobs ...domain.Job) JobsStore {
 	return s
 }
 
-func (s *jobsStore) GetNextPendingJob(ctx context.Context, names []string) (domain.Job, error) {
+func (s *jobsStore) GetNextPendingJob(ctx context.Context, jobTypes []string) (domain.Job, error) {
 	for _, job := range s.jobs {
-		for _, name := range names {
-			if job.value.Name() == name {
+		for _, jobType := range jobTypes {
+			if job.value.Data().Discriminator() == jobType {
 				return *job.value, nil
 			}
 		}

@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var ErrUnexpected = apperr.New("unexpected_error")
+
 // Tiny interface to represents needed contrat in order to use helpers provided by this package.
 type Server interface {
 	IsSecure() bool
@@ -78,22 +80,25 @@ func Ok[TOut any](ctx *gin.Context, data TOut) error {
 
 // Handle the given non-nil error and sets the status code based on error type.
 func handleError(s Server, ctx *gin.Context, err error) {
-	var status int
+	var (
+		status int = http.StatusInternalServerError
+		data   any = ErrUnexpected
+	)
 
 	// Translates the error type to the appropriate HTTP status code
 	if _, isAppErr := apperr.As[apperr.Error](err); isAppErr {
 		status = http.StatusBadRequest // Default to HTTP 400
+		data = err
 
 		if errors.Is(err, apperr.ErrNotFound) {
 			status = http.StatusNotFound // But if it's a not found, that's an HTTP 404
 		}
 	} else {
 		s.Logger().Errorw(err.Error(), "error", err)
-		status = http.StatusInternalServerError
 	}
 
 	ctx.Error(err)
-	ctx.AbortWithStatusJSON(status, err)
+	ctx.AbortWithStatusJSON(status, data)
 }
 
 func addCommonResponseHeaders(ctx *gin.Context) {

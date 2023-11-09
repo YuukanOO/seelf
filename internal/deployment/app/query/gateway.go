@@ -9,6 +9,8 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
+var SourceDataTypes = storage.NewDiscriminatedMapper[SourceData]()
+
 type (
 	// Access to the underlying storage adapter for read use cases
 	Gateway interface {
@@ -43,16 +45,18 @@ type (
 		AppID            string    `json:"app_id"`
 		DeploymentNumber int       `json:"deployment_number"`
 		Environment      string    `json:"environment"`
-		Meta             Meta      `json:"meta"`
+		Source           Source    `json:"source"`
 		State            State     `json:"state"`
 		RequestedAt      time.Time `json:"requested_at"`
 		RequestedBy      User      `json:"requested_by"`
 	}
 
-	Meta struct {
-		Kind string              `json:"kind"`
-		Data monad.Maybe[string] `json:"data"` // Contain source data only when the information is not sensitive
+	Source struct {
+		Discriminator string     `json:"discriminator"`
+		Data          SourceData `json:"data"`
 	}
+
+	SourceData storage.Discriminated
 
 	VCSConfig struct {
 		Url   string                          `json:"url"`

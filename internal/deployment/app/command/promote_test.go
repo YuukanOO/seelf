@@ -43,7 +43,7 @@ func Test_Promote(t *testing.T) {
 	})
 
 	t.Run("should correctly creates a new deployment based on the provided one", func(t *testing.T) {
-		dpl, _ := app.NewDeployment(1, domain.NewMeta("some", "data"), domain.Staging, opts, "some-uid")
+		dpl, _ := app.NewDeployment(1, meta{}, domain.Staging, opts, "some-uid")
 		uc := promote(dpl)
 
 		number, err := uc(ctx, command.PromoteCommand{

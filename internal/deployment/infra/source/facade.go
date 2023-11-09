@@ -10,7 +10,7 @@ type (
 	Source interface {
 		domain.Source
 		CanPrepare(any) bool
-		CanFetch(domain.Meta) bool
+		CanFetch(domain.SourceData) bool
 	}
 
 	facade struct {
@@ -23,14 +23,14 @@ func NewFacade(sources ...Source) domain.Source {
 	return &facade{sources}
 }
 
-func (r *facade) Prepare(app domain.App, payload any) (domain.Meta, error) {
+func (r *facade) Prepare(app domain.App, payload any) (domain.SourceData, error) {
 	for _, src := range r.sources {
 		if src.CanPrepare(payload) {
 			return src.Prepare(app, payload)
 		}
 	}
 
-	return domain.Meta{}, domain.ErrNoValidSourceFound
+	return nil, domain.ErrNoValidSourceFound
 }
 
 func (r *facade) Fetch(ctx context.Context, depl domain.Deployment) error {

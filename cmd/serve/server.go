@@ -209,7 +209,7 @@ func (s *server) configureServices() error {
 	)
 
 	s.docker = docker.New(s.options, s.logger)
-	handler := jobs.NewFacade(s.logger,
+	handler := jobs.NewFacade(
 		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
 		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
 	)
@@ -221,7 +221,7 @@ func (s *server) configureServices() error {
 		func(ctx context.Context, tags []string) error {
 			return processNextJob(ctx, workercmd.ProcessNextCommand{Names: tags})
 		},
-		async.Group(s.options.RunnersDeploymentCount(), deploy.JobName, cleanup.JobName),
+		async.Group(s.options.RunnersDeploymentCount(), deploy.Data{}.Discriminator(), cleanup.Data("").Discriminator()),
 	)
 	s.usersReader = usersStore
 
@@ -247,7 +247,7 @@ func (s *server) configureServices() error {
 	s.failRunningDeployments = deplcmd.FailRunningDeployments(deploymentsStore, deploymentsStore)
 
 	s.failRunningJobs = workercmd.FailRunningJobs(jobsStore, jobsStore)
-	s.queueJob = workercmd.Queue(jobsStore)
+	s.queueJob = workercmd.Queue(jobsStore, handler)
 
 	return nil
 }
@@ -361,9 +361,13 @@ func (s *server) configureRouter() {
 func (s *server) domainEventHandler(ctx context.Context, e event.Event) error {
 	switch evt := e.(type) {
 	case domain.DeploymentCreated:
-		s.queueJob(ctx, deploy.Queue(evt))
+		s.queueJob(ctx, workercmd.QueueCommand{
+			Payload: deploy.Request(evt),
+		})
 	case domain.AppCleanupRequested:
-		s.queueJob(ctx, cleanup.Queue(evt.ID))
+		s.queueJob(ctx, workercmd.QueueCommand{
+			Payload: cleanup.Request(evt),
+		})
 	}
 
 	return nil

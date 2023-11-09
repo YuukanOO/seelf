@@ -10,12 +10,22 @@ export enum DeploymentStatus {
 	Succeeded = 3
 }
 
-export type Kind = 'archive' | 'git' | 'raw';
-
-export type MetaData = {
-	kind: Kind;
-	data: string;
+export type GitData = {
+	branch: string;
+	hash: string;
 };
+
+export type SourceData =
+	| {
+			discriminator: 'git';
+			data: GitData;
+	  }
+	| {
+			discriminator: 'archive' | 'raw';
+			data: string;
+	  };
+
+export type SourceDataDiscriminator = SourceData['discriminator'];
 
 export type Service = {
 	name: string;
@@ -37,7 +47,7 @@ export type DeploymentData = {
 	app_id: string;
 	deployment_number: number;
 	environment: Environment;
-	meta: MetaData;
+	source: SourceData;
 	state: StateData;
 	requested_at: string;
 	requested_by: ByUserData;

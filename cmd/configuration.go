@@ -25,7 +25,7 @@ var (
 )
 
 const (
-	databaseFilename              = "seelf.db?_foreign_keys=yes"
+	databaseFilename              = "seelf.db?_foreign_keys=yes&_txlock=immediate"
 	defaultConfigFilename         = "conf.yml"
 	defaultPort                   = 8080
 	defaultHost                   = ""

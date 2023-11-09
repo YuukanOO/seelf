@@ -78,15 +78,8 @@ func (s Services) hasExposedServices() bool {
 	return false
 }
 
-func (s Services) Value() (driver.Value, error) {
-	r, err := json.Marshal(s)
-
-	return string(r), err
-}
-
-func (s *Services) Scan(value any) error {
-	return storage.ScanJSON(value, s)
-}
+func (s Services) Value() (driver.Value, error) { return storage.ValueJSON(s) }
+func (s *Services) Scan(value any) error        { return storage.ScanJSON(value, s) }
 
 // Type needed to marshal an unexposed Service data.
 type marshalledService struct {

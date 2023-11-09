@@ -21,8 +21,8 @@ func Test_FailRunningJobs(t *testing.T) {
 	t.Run("should reset running jobs", func(t *testing.T) {
 		reason := errors.New("server_reset")
 		ctx := context.Background()
-		job1 := domain.NewJob("1", "", monad.None[string]())
-		job2 := domain.NewJob("2", "", monad.None[string]())
+		job1 := domain.NewJob(payload{}, monad.None[string]())
+		job2 := domain.NewJob(payload{}, monad.None[string]())
 
 		fail, store := sut(job1, job2)
 

@@ -5,46 +5,37 @@ import (
 	"fmt"
 
 	"github.com/YuukanOO/seelf/internal/worker/domain"
-	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
 type (
-	facade struct {
-		logger   log.Logger
-		handlers map[string]Handler
-	}
-
 	Handler interface {
 		domain.Handler
-		JobName() string // Retrieve the name of the job handled by this handler.
+		CanPrepare(any) bool
+		CanProcess(domain.JobData) bool
+	}
+
+	facade struct {
+		handlers []Handler
 	}
 )
 
-func NewFacade(logger log.Logger, handlers ...Handler) domain.Handler {
-	handlersMap := make(map[string]Handler, len(handlers))
+func NewFacade(handlers ...Handler) domain.Handler {
+	return &facade{handlers}
+}
 
-	for _, handler := range handlers {
-		name := handler.JobName()
-
-		// Should never happened, but let's make it clear
-		if _, exists := handlersMap[name]; exists {
-			panic("duplicate job handler for " + name)
+func (w *facade) Prepare(payload any) (domain.JobData, monad.Maybe[string], error) {
+	for _, handler := range w.handlers {
+		if handler.CanPrepare(payload) {
+			return handler.Prepare(payload)
 		}
-
-		handlersMap[name] = handler
 	}
 
-	return &facade{logger, handlersMap}
+	return nil, monad.None[string](), domain.ErrNoValidHandlerFound
 }
 
 func (w *facade) Process(ctx context.Context, job domain.Job) (err error) {
-	handler, found := w.handlers[job.Name()]
-
-	if !found {
-		w.logger.Errorw("could not find a job handler for",
-			"name", job.Name())
-		return nil
-	}
+	data := job.Data()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -52,6 +43,11 @@ func (w *facade) Process(ctx context.Context, job domain.Job) (err error) {
 		}
 	}()
 
-	err = handler.Process(ctx, job)
-	return
+	for _, handler := range w.handlers {
+		if handler.CanProcess(data) {
+			return handler.Process(ctx, job)
+		}
+	}
+
+	return domain.ErrNoValidHandlerFound
 }

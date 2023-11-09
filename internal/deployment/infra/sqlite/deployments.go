@@ -40,8 +40,8 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 				,state_services
 				,state_started_at
 				,state_finished_at
-				,source_kind
-				,source_data
+				,source_discriminator
+				,source
 				,requested_at
 				,requested_by
 			FROM deployments
@@ -79,8 +79,8 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 			,state_services
 			,state_started_at
 			,state_finished_at
-			,source_kind
-			,source_data
+			,source_discriminator
+			,source
 			,requested_at
 			,requested_by
 		FROM deployments
@@ -104,22 +104,22 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 		case domain.DeploymentCreated:
 			return builder.
 				Insert("deployments", builder.Values{
-					"app_id":             evt.ID.AppID(),
-					"deployment_number":  evt.ID.DeploymentNumber(),
-					"path":               evt.Path,
-					"config_appname":     evt.Config.AppName(),
-					"config_environment": evt.Config.Environment(),
-					"config_env":         evt.Config.Env(),
-					"state_status":       evt.State.Status(),
-					"state_logfile":      evt.State.LogFile(),
-					"state_errcode":      evt.State.ErrCode(),
-					"state_services":     evt.State.Services(),
-					"state_started_at":   evt.State.StartedAt(),
-					"state_finished_at":  evt.State.FinishedAt(),
-					"source_kind":        evt.Source.Kind(),
-					"source_data":        evt.Source.Data(),
-					"requested_at":       evt.Requested.At(),
-					"requested_by":       evt.Requested.By(),
+					"app_id":               evt.ID.AppID(),
+					"deployment_number":    evt.ID.DeploymentNumber(),
+					"path":                 evt.Path,
+					"config_appname":       evt.Config.AppName(),
+					"config_environment":   evt.Config.Environment(),
+					"config_env":           evt.Config.Env(),
+					"state_status":         evt.State.Status(),
+					"state_logfile":        evt.State.LogFile(),
+					"state_errcode":        evt.State.ErrCode(),
+					"state_services":       evt.State.Services(),
+					"state_started_at":     evt.State.StartedAt(),
+					"state_finished_at":    evt.State.FinishedAt(),
+					"source_discriminator": evt.Source.Discriminator(),
+					"source":               evt.Source,
+					"requested_at":         evt.Requested.At(),
+					"requested_by":         evt.Requested.By(),
 				}).
 				Exec(s, ctx)
 		case domain.DeploymentStateChanged:

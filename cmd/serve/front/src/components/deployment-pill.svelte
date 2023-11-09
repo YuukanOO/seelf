@@ -18,7 +18,7 @@
 	gap={1}
 >
 	<svelte:component
-		this={select(data.meta.kind, {
+		this={select(data.source.discriminator, {
 			git: Git,
 			archive: Archive,
 			raw: File

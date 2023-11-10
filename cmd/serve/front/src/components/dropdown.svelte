@@ -1,20 +1,22 @@
 <script lang="ts" context="module">
-	export type DropdownOption =
+	export type DropdownOption<T extends string> =
 		| {
 				label: string;
-				value: string;
+				value: T;
 		  }
-		| string;
+		| T;
 </script>
 
 <script lang="ts">
 	import ArrowDown from '$assets/icons/arrow-down.svelte';
 	import InputAdorner from '$components/input-adorner.svelte';
 
+	type T = $$Generic<string>;
+
 	let touched = false;
 
 	export let label: string;
-	export let options: DropdownOption[] = [];
+	export let options: DropdownOption<T>[] = [];
 	export let value: Maybe<string> = undefined;
 </script>
 

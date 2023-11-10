@@ -10,12 +10,14 @@
 	import Stack from '$components/stack.svelte';
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
+	import { buildFormData } from '$lib/form.js';
 	import routes from '$lib/path';
 	import service, {
 		type Environment,
 		type SourceDataDiscriminator,
 		type QueueDeploymentData
 	} from '$lib/resources/deployments';
+	import select from '$lib/select.js';
 
 	export let data;
 
@@ -26,37 +28,37 @@
 	let branch = '';
 	let hash: Maybe<string> = undefined;
 
-	const options = ['production', 'staging'];
-	const kindOptions: DropdownOption[] = [
-		{ label: 'compose file', value: 'raw' },
-		{ label: 'project archive (tar.gz)', value: 'archive' },
-		{ label: 'git', value: 'git' }
-	].filter((k) => (!data.app.vcs ? k.value !== 'git' : true));
+	const options: Environment[] = ['production', 'staging'];
+	const kindOptions = (
+		[
+			{ label: 'compose file', value: 'raw' },
+			{ label: 'project archive (tar.gz)', value: 'archive' },
+			{ label: 'git', value: 'git' }
+		] satisfies DropdownOption<SourceDataDiscriminator>[]
+	).filter((k) => (!data.app.vcs ? k.value !== 'git' : true));
 
 	async function submit() {
-		let payload: QueueDeploymentData;
+		const payload = select<SourceDataDiscriminator, () => QueueDeploymentData>(kind, {
+			archive: () =>
+				buildFormData({
+					environment,
+					archive: archive![0]
+				}),
+			git: () => ({
+				environment,
+				git: {
+					branch,
+					hash: hash ? hash : undefined
+				}
+			}),
+			raw: () => ({
+				environment,
+				raw
+			})
+		})?.();
 
-		switch (kind) {
-			case 'archive':
-				payload = new FormData();
-				payload.append('environment', environment);
-				payload.append('archive', archive![0]);
-				break;
-			case 'git':
-				payload = {
-					environment,
-					git: {
-						branch,
-						hash: hash ? hash : undefined
-					}
-				};
-				break;
-			default:
-				payload = {
-					environment,
-					raw
-				};
-				break;
+		if (!payload) {
+			return;
 		}
 
 		const { deployment_number } = await service.queue(data.app.id, payload);

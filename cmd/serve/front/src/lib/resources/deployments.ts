@@ -10,15 +10,10 @@ export enum DeploymentStatus {
 	Succeeded = 3
 }
 
-export type GitData = {
-	branch: string;
-	hash: string;
-};
-
 export type SourceData =
 	| {
 			discriminator: 'git';
-			data: GitData;
+			data: { branch: string; hash: string };
 	  }
 	| {
 			discriminator: 'archive' | 'raw';

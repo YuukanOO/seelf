@@ -20,6 +20,16 @@ export function messageFromAttributes(attributes: {
 	return validations.join(', ');
 }
 
+/**
+ * Builds a FormData instance from the given record data.
+ */
+export function buildFormData(data: Record<string, string | Blob>): FormData {
+	return Object.entries(data).reduce((fd, [key, value]) => {
+		fd.append(key, value);
+		return fd;
+	}, new FormData());
+}
+
 export type Submitter<T> = {
 	loading: Readable<boolean>;
 	submit: () => Promise<T>;

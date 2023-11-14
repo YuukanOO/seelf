@@ -8,7 +8,7 @@ import (
 
 // // Build the root command where everything start!
 func Root() *cobra.Command {
-	conf := defaultConfiguration()
+	conf := DefaultConfiguration()
 
 	rootCmd := &cobra.Command{
 		Use:          "seelf",

@@ -101,12 +101,6 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, appid string, deploymen
 		One(s, ctx, deploymentMapper)
 }
 
-func (s *gateway) GetDeploymentLogfileByID(ctx context.Context, appid string, deploymentNumber int) (string, error) {
-	return builder.
-		Query[string]("SELECT state_logfile FROM deployments WHERE app_id = ? AND deployment_number = ?", appid, deploymentNumber).
-		Extract(s, ctx)
-}
-
 // Specific case because the deployments dataloader can be use to fill the App and AppDetail
 // structs. So this function will be build the appropriate dataloader for each case.
 func newAppWithLastDeploymentsByEnvDataloader[T any](

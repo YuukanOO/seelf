@@ -18,7 +18,6 @@ type (
 		GetAllApps(context.Context) ([]App, error)
 		GetAllDeploymentsByApp(context.Context, string, GetDeploymentsFilters) (query.Paginated[Deployment], error)
 		GetDeploymentByID(context.Context, string, int) (Deployment, error)
-		GetDeploymentLogfileByID(context.Context, string, int) (string, error)
 	}
 
 	GetDeploymentsFilters struct {

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/types"
@@ -27,21 +26,10 @@ var (
 	ErrWriteDirectoryFailed = errors.New("write_archive_directory_failed")
 )
 
-type (
-	Options interface {
-		AppsDir() string
-		LogsDir() string
-	}
+type service struct{}
 
-	service struct {
-		options Options
-	}
-)
-
-func New(options Options) source.Source {
-	return &service{
-		options: options,
-	}
+func New() source.Source {
+	return &service{}
 }
 
 func (*service) CanPrepare(payload any) bool          { return types.Is[*multipart.FileHeader](payload) }
@@ -77,31 +65,14 @@ func (t *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 	return Data(tmpfile.Name()), nil
 }
 
-func (t *service) Fetch(ctx context.Context, depl domain.Deployment) error {
-	logfile, err := ostools.OpenAppend(depl.LogPath(t.options.LogsDir()))
-
-	if err != nil {
-		return err
-	}
-
-	defer logfile.Close()
-
-	logger := infra.NewStepLogger(logfile)
-
-	buildDir := depl.Path(t.options.AppsDir())
-
-	if err := ostools.EmptyDir(buildDir); err != nil {
-		logger.Error(err)
-		return domain.ErrSourceFetchFailed
-	}
-
+func (t *service) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
 	data, ok := depl.Source().(Data)
 
 	if !ok {
 		return domain.ErrInvalidSourcePayload
 	}
 
-	logger.Stepf("extracting archive %s into %s", data, buildDir)
+	logger.Stepf("extracting archive %s into %s", data, dir)
 
 	// Open the archive file stored in a temporary location
 	archive, err := os.Open(string(data))
@@ -145,7 +116,7 @@ func (t *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 		}
 
 		// the target location where the dir/file should be created
-		target := filepath.Join(buildDir, header.Name)
+		target := filepath.Join(dir, header.Name)
 
 		// check the file type
 		switch header.Typeflag {

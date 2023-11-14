@@ -21,7 +21,6 @@ func QueueDeployment(
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
 	source domain.Source,
-	deploymentDirTemplate domain.DeploymentDirTemplate,
 ) func(ctx context.Context, cmd QueueDeploymentCommand) (int, error) {
 	return func(ctx context.Context, cmd QueueDeploymentCommand) (int, error) {
 		var env domain.Environment
@@ -50,7 +49,7 @@ func QueueDeployment(
 			return 0, err
 		}
 
-		dpl, err := app.NewDeployment(number, meta, env, deploymentDirTemplate, auth.CurrentUser(ctx).MustGet())
+		dpl, err := app.NewDeployment(number, meta, env, auth.CurrentUser(ctx).MustGet())
 
 		if err != nil {
 			return 0, err

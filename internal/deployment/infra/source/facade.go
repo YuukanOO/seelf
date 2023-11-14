@@ -33,12 +33,12 @@ func (r *facade) Prepare(app domain.App, payload any) (domain.SourceData, error)
 	return nil, domain.ErrNoValidSourceFound
 }
 
-func (r *facade) Fetch(ctx context.Context, depl domain.Deployment) error {
+func (r *facade) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
 	meta := depl.Source()
 
 	for _, src := range r.sources {
 		if src.CanFetch(meta) {
-			return src.Fetch(ctx, depl)
+			return src.Fetch(ctx, dir, logger, depl)
 		}
 	}
 

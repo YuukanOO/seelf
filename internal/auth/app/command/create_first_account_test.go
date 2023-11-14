@@ -14,19 +14,24 @@ import (
 
 func Test_CreateFirstAccount(t *testing.T) {
 	ctx := context.Background()
+	hasher := infra.NewBCryptHasher()
+	keygen := infra.NewKeyGenerator()
+
 	createFirstAccount := func(existingUsers ...domain.User) (func(context.Context, command.CreateFirstAccountCommand) error, memory.UsersStore) {
 		store := memory.NewUsersStore(existingUsers...)
-		hasher := infra.NewBCryptHasher()
-		keygen := infra.NewKeyGenerator()
 		return command.CreateFirstAccount(store, store, hasher, keygen), store
 	}
 
 	t.Run("should do nothing if a user already exists", func(t *testing.T) {
-		uc, _ := createFirstAccount(domain.NewUser("existing@example.com", "password", "apikey"))
+		uc, store := createFirstAccount(domain.NewUser("existing@example.com", "password", "apikey"))
 
 		err := uc(ctx, command.CreateFirstAccountCommand{})
 
 		testutil.IsNil(t, err)
+
+		count, err := store.GetUsersCount(ctx)
+		testutil.IsNil(t, err)
+		testutil.Equals(t, 1, count)
 	})
 
 	t.Run("should require both email and password or fail with ErrAdminAccountRequired", func(t *testing.T) {

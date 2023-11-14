@@ -2,8 +2,6 @@ package command_test
 
 import (
 	"context"
-	"path/filepath"
-	"strconv"
 	"testing"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
@@ -16,23 +14,14 @@ import (
 	"github.com/YuukanOO/seelf/pkg/validation"
 )
 
-type options struct{}
-
-func (options) LogsDir() string { return "logs" }
-func (options) AppsDir() string { return "apps" }
-func (options) Execute(d domain.DeploymentTemplateData) string {
-	return filepath.Join(strconv.Itoa(int(d.Number)), string(d.Environment))
-}
-
 func Test_QueueDeployment(t *testing.T) {
-	opts := options{}
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	app := domain.NewApp("my-app", "some-uid")
 	appsStore := memory.NewAppsStore(app)
 
 	queue := func() func(ctx context.Context, cmd command.QueueDeploymentCommand) (int, error) {
 		deploymentsStore := memory.NewDeploymentsStore()
-		return command.QueueDeployment(appsStore, deploymentsStore, deploymentsStore, raw.New(opts), opts)
+		return command.QueueDeployment(appsStore, deploymentsStore, deploymentsStore, raw.New())
 	}
 
 	t.Run("should fail if payload is empty", func(t *testing.T) {

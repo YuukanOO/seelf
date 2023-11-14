@@ -9,12 +9,11 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/command"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
-	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_FailRunningDeployments(t *testing.T) {
-	opts := options{}
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	app := domain.NewApp("my-app", "some-uid")
 
@@ -26,12 +25,12 @@ func Test_FailRunningDeployments(t *testing.T) {
 	t.Run("should reset running deployments", func(t *testing.T) {
 		errReset := errors.New("server_reset")
 
-		started, _ := app.NewDeployment(2, meta{}, domain.Production, opts, "some-uid")
+		started, _ := app.NewDeployment(2, raw.Data(""), domain.Production, "some-uid")
 		err := started.HasStarted()
 
 		testutil.IsNil(t, err)
 
-		succeeded, _ := app.NewDeployment(1, meta{}, domain.Production, opts, "some-uid")
+		succeeded, _ := app.NewDeployment(1, raw.Data(""), domain.Production, "some-uid")
 		succeeded.HasStarted()
 		err = succeeded.HasEnded(domain.Services{}, nil)
 
@@ -44,16 +43,12 @@ func Test_FailRunningDeployments(t *testing.T) {
 		testutil.IsNil(t, err)
 
 		started, _ = store.GetByID(ctx, started.ID())
-		events := event.Unwrap(&started)
-		evt := events[len(events)-1].(domain.DeploymentStateChanged)
-
+		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &started, 2)
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 		testutil.Equals(t, errReset.Error(), evt.State.ErrCode().MustGet())
 
 		succeeded, _ = store.GetByID(ctx, succeeded.ID())
-		events = event.Unwrap(&succeeded)
-		evt = events[len(events)-1].(domain.DeploymentStateChanged)
-
+		evt = testutil.EventIs[domain.DeploymentStateChanged](t, &succeeded, 2)
 		testutil.Equals(t, domain.DeploymentStatusSucceeded, evt.State.Status())
 	})
 }

@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strconv"
 	"testing"
 
 	dockertypes "github.com/docker/docker/api/types"
 
+	"github.com/YuukanOO/seelf/cmd"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
@@ -23,20 +23,29 @@ import (
 	"github.com/docker/docker/client"
 )
 
-func Test_Run(t *testing.T) {
-	t.Cleanup(func() {
-		os.RemoveAll(dataDir)
-	})
+type options interface {
+	docker.Options
+	infra.LocalArtifactOptions
+}
 
-	backend := func(opts docker.Options) (docker.Backend, *composeMockService, *dockerCliMockService) {
-		composeMock := &composeMockService{}
-		dockerMock := newDockerMockService()
-		return docker.New(opts, log.NewLogger(false), docker.WithDockerAndCompose(dockerMock, composeMock)), composeMock, dockerMock.cli
+func Test_Run(t *testing.T) {
+	logger := log.NewLogger(false)
+	composeMock := &composeMockService{}
+	dockerMock := newDockerMockService()
+
+	backend := func(opts options) (docker.Backend, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
+		artifactManager := infra.NewLocalArtifactManager(opts, logger)
+
+		t.Cleanup(func() {
+			os.RemoveAll(opts.DataDir())
+		})
+
+		return docker.New(opts, logger, docker.WithDockerAndCompose(dockerMock, composeMock)), artifactManager, composeMock, dockerMock.cli
 	}
 
 	t.Run("should setup the balancer correctly without SSL", func(t *testing.T) {
-		opts := options{domain: "http://docker.localhost"}
-		dockerBackend, composeMock, _ := backend(opts)
+		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		dockerBackend, _, composeMock, _ := backend(opts)
 
 		err := dockerBackend.Setup()
 
@@ -65,8 +74,11 @@ func Test_Run(t *testing.T) {
 	})
 
 	t.Run("should setup the balancer correctly with SSL", func(t *testing.T) {
-		opts := options{"https://docker.localhost", "someone@example.com"}
-		dockerBackend, composeMock, _ := backend(opts)
+		opts := cmd.DefaultConfiguration(
+			cmd.WithTestDefaults(),
+			cmd.WithBalancer("https://docker.localhost", "someone@example.com"),
+		)
+		dockerBackend, _, composeMock, _ := backend(opts)
 
 		err := dockerBackend.Setup()
 		testutil.IsNil(t, err)
@@ -108,18 +120,28 @@ func Test_Run(t *testing.T) {
 	})
 
 	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
-		opts := options{domain: "http://docker.localhost"}
+		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
 		app := domain.NewApp("my-app", "uid")
-		depl, _ := app.NewDeployment(1, meta{}, domain.Production, opts, "uid")
-		dockerBackend, _, _ := backend(opts)
+		depl, _ := app.NewDeployment(1, raw.Data(""), domain.Production, "uid")
+		dockerBackend, artifactManager, _, _ := backend(opts)
 
-		_, err := dockerBackend.Run(context.Background(), depl)
+		ctx := context.Background()
+		dir, logger, err := artifactManager.PrepareBuild(ctx, depl)
+
+		testutil.IsNil(t, err)
+
+		defer logger.Close()
+
+		_, err = dockerBackend.Run(ctx, dir, logger, depl)
 
 		testutil.IsTrue(t, errors.Is(err, docker.ErrOpenComposeFileFailed))
 	})
 
 	testServices := func(t *testing.T, opts options) {
+		dockerBackend, artifactManager, composeMock, cliMock := backend(opts)
+
 		app := domain.NewApp("my-app", "uid")
+		ctx := context.Background()
 
 		dsn := "postgres://prodapp:passprod@db/app?sslmode=disable"
 		postgresUser := "prodapp"
@@ -137,7 +159,7 @@ func Test_Run(t *testing.T) {
 			},
 		})
 
-		src := raw.New(opts)
+		src := raw.New()
 		meta, _ := src.Prepare(app, `
 services:
   app:
@@ -172,12 +194,17 @@ services:
 volumes:
   dbdata:
 `)
-		depl, _ := app.NewDeployment(1, meta, domain.Production, opts, "uid")
-		testutil.IsNil(t, src.Fetch(context.Background(), depl))
 
-		dockerBackend, composeMock, cliMock := backend(opts)
+		depl, _ := app.NewDeployment(1, meta, domain.Production, "uid")
+		dir, logger, err := artifactManager.PrepareBuild(ctx, depl)
 
-		services, err := dockerBackend.Run(context.Background(), depl)
+		testutil.IsNil(t, err)
+
+		defer logger.Close()
+
+		testutil.IsNil(t, src.Fetch(ctx, dir, logger, depl))
+
+		services, err := dockerBackend.Run(ctx, dir, logger, depl)
 
 		testutil.IsNil(t, err)
 		testutil.HasLength(t, services, 3)
@@ -304,12 +331,15 @@ volumes:
 	}
 
 	t.Run("should correctly expose services from a compose file without SSL", func(t *testing.T) {
-		opts := options{domain: "http://docker.localhost"}
+		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
 		testServices(t, opts)
 	})
 
 	t.Run("should correctly expose services from a compose file with SSL", func(t *testing.T) {
-		opts := options{domain: "https://docker.localhost", email: "someone@example.com"}
+		opts := cmd.DefaultConfiguration(
+			cmd.WithTestDefaults(),
+			cmd.WithBalancer("https://docker.localhost", "someone@example.com"),
+		)
 		testServices(t, opts)
 	})
 }
@@ -356,27 +386,3 @@ func (d *dockerCliMockService) ImagesPrune(ctx context.Context, pruneFilter filt
 	d.pruneFilter = pruneFilter
 	return dockertypes.ImagesPruneReport{}, nil
 }
-
-const dataDir = "test_data"
-
-type options struct {
-	domain string
-	email  string
-}
-
-func (options) DataDir() string   { return dataDir }
-func (o options) AppsDir() string { return filepath.Join(o.DataDir(), "apps") }
-func (o options) LogsDir() string { return filepath.Join(o.DataDir(), "logs") }
-func (o options) Domain() domain.Url {
-	d, _ := domain.UrlFrom(o.domain)
-	return d
-}
-func (o options) AcmeEmail() string { return o.email }
-func (o options) Execute(d domain.DeploymentTemplateData) string {
-	return filepath.Join(strconv.Itoa(int(d.Number)), string(d.Environment))
-}
-
-type meta struct{}
-
-func (meta) Discriminator() string { return "test" }
-func (meta) NeedVCS() bool         { return false }

@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-	"path/filepath"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
@@ -221,12 +220,6 @@ func (a *App) Delete(deployments RunningOrPendingAppDeploymentsCount) error {
 
 func (a App) ID() AppID                   { return a.id }
 func (a App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
-
-// Retrieve the application directory relative to the given path.
-func (a App) Path(relativeTo ...string) string {
-	relativeTo = append(relativeTo, string(a.id))
-	return filepath.Join(relativeTo...)
-}
 
 // Retrieve environments variables per service for the given deployment environment
 func (a App) envFor(e Environment) (m monad.Maybe[ServicesEnv]) {

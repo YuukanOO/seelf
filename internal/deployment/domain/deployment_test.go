@@ -2,9 +2,6 @@ package domain_test
 
 import (
 	"errors"
-	"fmt"
-	"path/filepath"
-	"strconv"
 	"testing"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
@@ -14,17 +11,16 @@ import (
 
 func Test_Deployment(t *testing.T) {
 	var (
-		uid        auth.UserID                  = "uid"
-		tmpl       domain.DeploymentDirTemplate = dirTemplate{}
-		number     domain.DeploymentNumber      = 1
-		vcsMeta                                 = meta{true}
-		nonVcsMeta                              = meta{false}
+		uid        auth.UserID             = "uid"
+		number     domain.DeploymentNumber = 1
+		vcsMeta                            = meta{true}
+		nonVcsMeta                         = meta{false}
 	)
 
 	t.Run("should require a version control config to be defined on the app for vcs managed source", func(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
 
-		_, err := app.NewDeployment(number, vcsMeta, domain.Production, tmpl, uid)
+		_, err := app.NewDeployment(number, vcsMeta, domain.Production, uid)
 
 		testutil.ErrorIs(t, domain.ErrVCSNotConfigured, err)
 	})
@@ -33,14 +29,14 @@ func Test_Deployment(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
 		app.RequestCleanup("uid")
 
-		_, err := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		_, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 
 		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, err)
 	})
 
 	t.Run("should be created from a valid app", func(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
-		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		conf := dpl.Config()
 
 		testutil.IsNil(t, err)
@@ -54,37 +50,16 @@ func Test_Deployment(t *testing.T) {
 
 		testutil.Equals(t, dpl.ID(), evt.ID)
 		testutil.Equals(t, dpl.Source(), evt.Source)
-		testutil.Equals(t, fmt.Sprintf("%d-%s-1.deployment.log", evt.Requested.At().Unix(), app.ID()), evt.State.LogFile())
 		testutil.Equals(t, domain.DeploymentStatusPending, evt.State.Status())
 		testutil.IsFalse(t, evt.Requested.At().IsZero())
 		testutil.Equals(t, uid, evt.Requested.By())
-	})
-
-	t.Run("could returns its path relative to the given directories", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
-
-		testutil.IsNil(t, err)
-		testutil.Equals(t, filepath.Join(string(dpl.ID().AppID()), "1", "production"), dpl.Path())
-		testutil.Equals(t, filepath.Join("apps", string(dpl.ID().AppID()), "1", "production"), dpl.Path("apps"))
-	})
-
-	t.Run("could returns its log path relative to the given directories", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
-
-		created := testutil.EventIs[domain.DeploymentCreated](t, &dpl, 0)
-
-		testutil.IsNil(t, err)
-		testutil.Equals(t, created.State.LogFile(), dpl.LogPath())
-		testutil.Equals(t, filepath.Join("one", "two", created.State.LogFile()), dpl.LogPath("one", "two"))
 	})
 
 	t.Run("could be marked has started", func(t *testing.T) {
 		var err error
 
 		app := domain.NewApp("my-app", uid)
-		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 
 		testutil.IsNil(t, err)
 
@@ -105,7 +80,7 @@ func Test_Deployment(t *testing.T) {
 		)
 
 		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		services, _ = services.Internal(dpl.Config(), "aservice", "an/image")
 		dpl.HasStarted()
 
@@ -124,7 +99,7 @@ func Test_Deployment(t *testing.T) {
 		var err error
 
 		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		dpl.HasStarted()
 
 		err = dpl.HasEnded(nil, nil)
@@ -145,7 +120,7 @@ func Test_Deployment(t *testing.T) {
 		)
 
 		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		dpl.HasStarted()
 
 		err = dpl.HasEnded(nil, reason)
@@ -162,9 +137,9 @@ func Test_Deployment(t *testing.T) {
 
 	t.Run("could be redeployed", func(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 
-		redpl, err := app.Redeploy(dpl, 2, tmpl, "another-user")
+		redpl, err := app.Redeploy(dpl, 2, "another-user")
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, dpl.Config().Environment(), redpl.Config().Environment())
@@ -172,46 +147,40 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("should err if trying to redeploy a deployment on the wrong app", func(t *testing.T) {
-		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, nonVcsMeta, domain.Production, tmpl, uid)
+		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, nonVcsMeta, domain.Production, uid)
 
-		_, err := domain.NewApp("my-app", uid).Redeploy(source, 2, tmpl, "uid")
+		_, err := domain.NewApp("my-app", uid).Redeploy(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
 
 	t.Run("could not promote an already in production deployment", func(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, tmpl, uid)
+		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 
-		_, err := app.Promote(dpl, 2, tmpl, "another-user")
+		_, err := app.Promote(dpl, 2, "another-user")
 
 		testutil.ErrorIs(t, domain.ErrCouldNotPromoteProductionDeployment, err)
 	})
 
 	t.Run("should err if trying to promote a deployment on the wrong app", func(t *testing.T) {
-		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, nonVcsMeta, domain.Staging, tmpl, uid)
+		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, nonVcsMeta, domain.Staging, uid)
 
-		_, err := domain.NewApp("my-app", uid).Promote(source, 2, tmpl, "uid")
+		_, err := domain.NewApp("my-app", uid).Promote(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
 
 	t.Run("could promote a staging deployment", func(t *testing.T) {
 		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Staging, tmpl, uid)
+		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Staging, uid)
 
-		promoted, err := app.Promote(dpl, 2, tmpl, "another-user")
+		promoted, err := app.Promote(dpl, 2, "another-user")
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.Production, promoted.Config().Environment())
 		testutil.Equals(t, dpl.Source(), promoted.Source())
 	})
-}
-
-type dirTemplate struct{}
-
-func (dirTemplate) Execute(d domain.DeploymentTemplateData) string {
-	return filepath.Join(strconv.Itoa(int(d.Number)), string(d.Environment))
 }
 
 type meta struct {

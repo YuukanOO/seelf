@@ -1,6 +1,6 @@
 module github.com/YuukanOO/seelf
 
-go 1.20
+go 1.21
 
 require (
 	github.com/compose-spec/compose-go v1.13.4

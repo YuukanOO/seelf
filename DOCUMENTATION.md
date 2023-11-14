@@ -72,7 +72,7 @@ _Note: If you want to build the image yourself (because your platform is not sup
 
 ### From sources
 
-You'll need **Go** installed on your machine (at least 1.20) and **Node** for the frontend stuff (at least 1.18).
+You'll need **Go** installed on your machine (at least 1.21) and **Node** for the frontend stuff (at least 1.18).
 
 _Note: on **Windows**, you will need a gcc compiler such as [tdm gcc](https://jmeubank.github.io/tdm-gcc/) to build the sqlite3 driver correctly._
 

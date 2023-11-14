@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/pkg/log"
-	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/compose-spec/compose-go/cli"
 	"github.com/compose-spec/compose-go/loader"
 	"github.com/compose-spec/compose-go/types"
@@ -45,8 +43,6 @@ const (
 
 type (
 	Options interface {
-		AppsDir() string
-		LogsDir() string
 		Domain() domain.Url
 		AcmeEmail() string
 	}
@@ -59,8 +55,8 @@ type (
 	DockerOptions func(*docker)
 
 	docker struct {
-		cli     command.Cli
-		compose api.Service
+		cli     command.Cli // Docker cli to use, if nil, a new one will be created per deployment task
+		compose api.Service // Docker compose service to use, if nil, a new one will be created per deployment task
 		options Options
 		logger  log.Logger
 	}
@@ -90,7 +86,9 @@ func WithDockerAndCompose(cli command.Cli, composeService api.Service) DockerOpt
 }
 
 func (d *docker) Setup() error {
-	if err := d.setupComposeIfNeeded(); err != nil {
+	_, compose, err := d.instantiateClientAndCompose(nil)
+
+	if err != nil {
 		return err
 	}
 
@@ -114,7 +112,7 @@ func (d *docker) Setup() error {
 				Volumes: []types.ServiceVolumeConfig{
 					{Type: types.VolumeTypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
 				},
-				CustomLabels: getProjectCustomLabels(balancerProjectName, balancerServiceName, d.options.AppsDir()),
+				CustomLabels: getProjectCustomLabels(balancerProjectName, balancerServiceName, ""),
 			},
 		},
 		Networks: types.Networks{
@@ -150,7 +148,7 @@ func (d *docker) Setup() error {
 
 	loader.Normalize(project, false)
 
-	return d.compose.Up(context.Background(), project, api.UpOptions{
+	return compose.Up(context.Background(), project, api.UpOptions{
 		Create: api.CreateOptions{
 			RemoveOrphans: true,
 			QuietPull:     true,
@@ -161,34 +159,24 @@ func (d *docker) Setup() error {
 	})
 }
 
-func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Services, error) {
-	logfile, err := ostools.OpenAppend(depl.LogPath(d.options.LogsDir()))
+func (d *docker) Run(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) (domain.Services, error) {
+	cli, compose, err := d.instantiateClientAndCompose(logger)
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer logfile.Close()
-
-	logger := infra.NewStepLogger(logfile)
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
-	project, services, err := d.generateProject(depl, logger)
+	project, services, err := d.generateProject(depl, dir, logger)
 
 	if err != nil {
 		return nil, err
 	}
-
-	// Redirect docker cli output to the logfile
-	d.cli.Apply(command.WithCombinedStreams(logfile))
-
-	defer func() {
-		d.cli.Apply(command.WithStandardStreams())
-	}()
 
 	logger.Stepf("launching docker compose project (pulling, building and running)")
 
-	if err = d.compose.Up(ctx, project, api.UpOptions{
+	if err = compose.Up(ctx, project, api.UpOptions{
 		Create: api.CreateOptions{
 			RemoveOrphans: true,
 			QuietPull:     true,
@@ -206,7 +194,7 @@ func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Servic
 	}
 
 	// Remove dangling images
-	pruneResult, err := d.cli.Client().ImagesPrune(ctx, filters.NewArgs(
+	pruneResult, err := cli.Client().ImagesPrune(ctx, filters.NewArgs(
 		filters.Arg("dangling", "true"),
 		filters.Arg("label", fmt.Sprintf("%s=%s", AppLabel, depl.ID().AppID())),
 		filters.Arg("label", fmt.Sprintf("%s=%s", EnvironmentLabel, depl.Config().Environment())),
@@ -227,7 +215,14 @@ func (d *docker) Run(ctx context.Context, depl domain.Deployment) (domain.Servic
 }
 
 func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
-	client := d.cli.Client()
+	cli, _, err := d.instantiateClientAndCompose(nil)
+
+	if err != nil {
+		return err
+	}
+
+	client := cli.Client()
+
 	appFilters := filters.NewArgs(
 		filters.Arg("label", fmt.Sprintf("%s=%s", AppLabel, app.ID())),
 	)
@@ -307,54 +302,43 @@ func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
 		}
 	}
 
-	// Remove all app directory
-	appDir := app.Path(d.options.AppsDir())
-	d.logger.Debugw("removing app directory", "path", appDir)
-	if err := os.RemoveAll(appDir); err != nil {
-		return err
-	}
-
-	// Remove all logs for this app
-	logsPattern := filepath.Join(d.options.LogsDir(), fmt.Sprintf("*%s*", app.ID()))
-	d.logger.Debugw("removing app logs", "pattern", logsPattern)
-	if err := ostools.RemovePattern(logsPattern); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func (d *docker) setupComposeIfNeeded() error {
+func (d *docker) instantiateClientAndCompose(logger domain.DeploymentLogger) (command.Cli, api.Service, error) {
 	if d.compose != nil && d.cli != nil {
-		d.logger.Info("skipping docker client/compose initialization since a client is already available")
-		return nil
+		return d.cli, d.compose, nil
 	}
 
-	d.logger.Info("checking docker status")
+	var cliOpts []command.DockerCliOption
 
-	dockerCli, err := command.NewDockerCli()
+	if logger != nil {
+		cliOpts = append(cliOpts, command.WithCombinedStreams(logger))
+	}
+
+	dockerCli, err := command.NewDockerCli(cliOpts...)
+
+	// FIXME: should the dockerCli.Client() be closed by the caller?
 
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	if err = dockerCli.Initialize(flags.NewClientOptions()); err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	ping, err := dockerCli.Client().Ping(context.Background())
 
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	d.logger.Infow("docker api is reachable",
-		"version", ping.APIVersion)
+	if logger != nil {
+		logger.Stepf("connected to docker with version %s", ping.APIVersion)
+	}
 
-	d.cli = dockerCli
-	d.compose = compose.NewComposeService(d.cli)
-
-	return nil
+	return dockerCli, compose.NewComposeService(dockerCli), nil
 }
 
 // Generate a compose project for a specific app and transform it to make it usable
@@ -365,10 +349,9 @@ func (d *docker) setupComposeIfNeeded() error {
 //
 // The goal is really for the user to provide a docker-compose file which runs fine locally
 // and we should do our best to expose it accordingly without the user providing anything.
-func (d *docker) generateProject(depl domain.Deployment, logger domain.StepLogger) (*types.Project, domain.Services, error) {
+func (d *docker) generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger) (*types.Project, domain.Services, error) {
 	var (
 		services    domain.Services
-		buildDir    = depl.Path(d.options.AppsDir())
 		config      = depl.Config()
 		seelfLabels = types.Labels{
 			AppLabel:         string(depl.ID().AppID()),
@@ -376,7 +359,7 @@ func (d *docker) generateProject(depl domain.Deployment, logger domain.StepLogge
 		}
 	)
 
-	composeFilepath, err := findServiceFile(buildDir, config.Environment())
+	composeFilepath, err := findServiceFile(dir, config.Environment())
 
 	if err != nil {
 		logger.Error(err)
@@ -414,7 +397,7 @@ func (d *docker) generateProject(depl domain.Deployment, logger domain.StepLogge
 		namesToIndex[service.Name] = i
 	}
 
-	sort.Strings(orderedNames)
+	slices.Sort(orderedNames)
 
 	// Let's transform the project to expose needed services
 	for _, name := range orderedNames {
@@ -616,12 +599,17 @@ func findServiceFile(dir string, env domain.Environment) (string, error) {
 
 // Apply common compose labels as per https://github.com/docker/compose/blob/126cb988c6f0c00a2a9887b8a39dc0907daec289/cmd/compose/compose.go#L200
 func getProjectCustomLabels(project, service, workingDir string, composeFiles ...string) map[string]string {
-	return map[string]string{
+	labels := map[string]string{
 		api.ProjectLabel:     project,
 		api.ServiceLabel:     service,
 		api.VersionLabel:     api.ComposeVersion,
-		api.WorkingDirLabel:  workingDir,
 		api.ConfigFilesLabel: strings.Join(composeFiles, ","),
 		api.OneoffLabel:      "False",
 	}
+
+	if workingDir != "" {
+		labels[api.WorkingDirLabel] = workingDir
+	}
+
+	return labels
 }

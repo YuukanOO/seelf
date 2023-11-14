@@ -5,13 +5,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"text/template"
 	"time"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/crypto"
+	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/validation"
@@ -33,8 +33,6 @@ const (
 	defaultRunnersDeploymentCount = 4
 	defaultBalancerDomain         = "http://docker.localhost"
 	defaultDeploymentDirTemplate  = "{{ .Environment }}"
-	logsDir                       = "logs"
-	appsDir                       = "apps"
 )
 
 type (
@@ -54,6 +52,9 @@ type (
 		deploymentDirTemplate *template.Template
 		path                  string // Holds from where the config was loaded / saved
 	}
+
+	// Configuration builder function used to initialize the configuration object (mostly used in tests).
+	ConfigurationBuilder func(*configuration)
 
 	httpConfiguration struct {
 		Host   string            `env:"HTTP_HOST" yaml:",omitempty"`
@@ -91,7 +92,8 @@ type (
 	}
 )
 
-func defaultConfiguration() *configuration {
+// Returns the default cmd configuration and apply optional builders to it.
+func DefaultConfiguration(builders ...ConfigurationBuilder) *configuration {
 	conf := &configuration{
 		path:           filepath.Join(defaultDataDirectory, defaultConfigFilename),
 		currentVersion: currentVersion(),
@@ -114,6 +116,10 @@ func defaultConfiguration() *configuration {
 		},
 	}
 
+	for _, builder := range builders {
+		builder(conf)
+	}
+
 	if err := conf.PostLoad(); err != nil {
 		panic(err) // Should never happen since the default config is managed by us
 	}
@@ -121,20 +127,18 @@ func defaultConfiguration() *configuration {
 	return conf
 }
 
-func (c configuration) DataDir() string                                     { return c.Data.Path }
-func (c configuration) DeploymentDirTemplate() domain.DeploymentDirTemplate { return c }
-func (c configuration) AppsDir() string                                     { return filepath.Join(c.DataDir(), appsDir) }
-func (c configuration) LogsDir() string                                     { return filepath.Join(c.DataDir(), logsDir) }
-func (c configuration) Domain() domain.Url                                  { return c.domain }
-func (c configuration) DefaultEmail() string                                { return c.Private.Email }
-func (c configuration) DefaultPassword() string                             { return c.Private.Password }
-func (c configuration) Secret() []byte                                      { return []byte(c.Http.Secret) }
-func (c configuration) IsUsingGeneratedSecret() bool                        { return c.Http.Secret == generatedSecretKey }
-func (c configuration) IsVerbose() bool                                     { return c.Verbose }
-func (c configuration) ConfigPath() string                                  { return c.path }
-func (c configuration) CurrentVersion() string                              { return c.currentVersion }
-func (c configuration) RunnersPollInterval() time.Duration                  { return c.pollInterval }
-func (c configuration) RunnersDeploymentCount() int                         { return c.Runners.Deployment }
+func (c configuration) DataDir() string                           { return c.Data.Path }
+func (c configuration) DeploymentDirTemplate() *template.Template { return c.deploymentDirTemplate }
+func (c configuration) Domain() domain.Url                        { return c.domain }
+func (c configuration) DefaultEmail() string                      { return c.Private.Email }
+func (c configuration) DefaultPassword() string                   { return c.Private.Password }
+func (c configuration) Secret() []byte                            { return []byte(c.Http.Secret) }
+func (c configuration) IsUsingGeneratedSecret() bool              { return c.Http.Secret == generatedSecretKey }
+func (c configuration) IsVerbose() bool                           { return c.Verbose }
+func (c configuration) ConfigPath() string                        { return c.path }
+func (c configuration) CurrentVersion() string                    { return c.currentVersion }
+func (c configuration) RunnersPollInterval() time.Duration        { return c.pollInterval }
+func (c configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 
 func (c configuration) IsSecure() bool {
 	// If secure has been explicitly set, returns it
@@ -181,12 +185,17 @@ func (c *configuration) PostLoad() error {
 	})
 }
 
-func (c configuration) Execute(data domain.DeploymentTemplateData) string {
-	var w strings.Builder
-
-	if err := c.deploymentDirTemplate.Execute(&w, data); err != nil {
-		panic(err)
+// Configuration builder used to set some tests sensible defaults.
+func WithTestDefaults() ConfigurationBuilder {
+	return func(c *configuration) {
+		c.Data.Path = fmt.Sprintf("__testdata_%s", id.New[string]())
 	}
+}
 
-	return w.String()
+// Configure the balancer for the given domain and acme email.
+func WithBalancer(domain, acmeEmail string) ConfigurationBuilder {
+	return func(c *configuration) {
+		c.Balancer.Domain = domain
+		c.Balancer.Acme.Email = acmeEmail
+	}
 }

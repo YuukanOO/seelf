@@ -2,11 +2,11 @@ package serve
 
 import (
 	"mime/multipart"
-	"path/filepath"
 	"strconv"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app/command"
 	"github.com/YuukanOO/seelf/internal/deployment/app/query"
+	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/git"
 	"github.com/YuukanOO/seelf/pkg/http"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -111,14 +111,19 @@ func (s *server) getDeploymentByIDHandler() gin.HandlerFunc {
 
 func (s *server) getDeploymentLogsHandler() gin.HandlerFunc {
 	return http.Send(s, func(ctx *gin.Context) error {
+		appid := ctx.Param("id")
 		number, _ := strconv.Atoi(ctx.Param("number"))
-		logfile, err := s.deploymentGateway.GetDeploymentLogfileByID(ctx.Request.Context(), ctx.Param("id"), number)
+		c := ctx.Request.Context()
+
+		// FIXME: in the future, query will be refactored to use message too and this could be refactored
+
+		depl, err := s.deploymentsReader.GetByID(c, domain.DeploymentIDFrom(domain.AppID(appid), domain.DeploymentNumber(number)))
 
 		if err != nil {
 			return err
 		}
 
-		return http.File(ctx, filepath.Join(s.options.LogsDir(), logfile))
+		return http.File(ctx, s.artifactManager.LogPath(c, depl))
 	})
 }
 

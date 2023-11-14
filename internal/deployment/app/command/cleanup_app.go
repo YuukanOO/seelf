@@ -15,6 +15,7 @@ func CleanupApp(
 	deploymentsReader domain.DeploymentsReader,
 	reader domain.AppsReader,
 	writer domain.AppsWriter,
+	artifactManager domain.ArtifactManager,
 	backend domain.Backend,
 ) func(context.Context, CleanupAppCommand) error {
 	return func(ctx context.Context, cmd CleanupAppCommand) error {
@@ -36,6 +37,10 @@ func CleanupApp(
 		}
 
 		if err = backend.Cleanup(ctx, app); err != nil {
+			return err
+		}
+
+		if err = artifactManager.Cleanup(ctx, app); err != nil {
 			return err
 		}
 

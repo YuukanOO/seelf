@@ -2,8 +2,6 @@ package domain
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
@@ -23,26 +21,12 @@ type (
 
 	RunningOrPendingAppDeploymentsCount uint
 
-	// Template data used to build a deployment path.
-	DeploymentTemplateData struct {
-		Number      DeploymentNumber
-		Environment Environment
-	}
-
-	// Since the build directory is a template, materialize it with this tiny interface.
-	// Making it a template enables the user to configure how the deployment directory
-	// should be built.
-	DeploymentDirTemplate interface {
-		Execute(DeploymentTemplateData) string
-	}
-
 	// ENTITY
 
 	Deployment struct {
 		event.Emitter
 
 		id        DeploymentID
-		path      string // Relative path where deployment data will be stored
 		config    Config
 		state     State
 		source    SourceData
@@ -66,7 +50,6 @@ type (
 
 	DeploymentCreated struct {
 		ID        DeploymentID
-		Path      string
 		Config    Config
 		State     State
 		Source    SourceData
@@ -85,7 +68,6 @@ func (a App) NewDeployment(
 	deployNumber DeploymentNumber,
 	meta SourceData,
 	env Environment,
-	tmpl DeploymentDirTemplate,
 	requestedBy domain.UserID,
 ) (d Deployment, err error) {
 	if a.cleanupRequested.HasValue() {
@@ -96,19 +78,11 @@ func (a App) NewDeployment(
 		return d, ErrVCSNotConfigured
 	}
 
-	now := time.Now().UTC()
-	// Use the deployment requested time as a prefix for the deployment logfile
-	logfilename := fmt.Sprintf("%d-%s-%d.deployment.log", now.Unix(), a.id, deployNumber)
-	// Build the final deployment path, this is where sources will be put under
-	path := filepath.Join(a.Path(), tmpl.Execute(DeploymentTemplateData{deployNumber, env}))
-
 	d.apply(DeploymentCreated{
 		ID:        DeploymentIDFrom(a.id, deployNumber),
-		Path:      path,
 		Config:    NewConfig(a, env),
-		State:     NewState(logfilename),
 		Source:    meta,
-		Requested: shared.ActionFrom(requestedBy, now),
+		Requested: shared.NewAction(requestedBy),
 	})
 
 	return d, nil
@@ -118,21 +92,19 @@ func (a App) NewDeployment(
 func (a App) Redeploy(
 	source Deployment,
 	deployNumber DeploymentNumber,
-	tmpl DeploymentDirTemplate,
 	requestedBy domain.UserID,
 ) (d Deployment, err error) {
 	if source.id.appID != a.id {
 		return d, ErrInvalidSourceDeployment
 	}
 
-	return a.NewDeployment(deployNumber, source.source, source.config.environment, tmpl, requestedBy)
+	return a.NewDeployment(deployNumber, source.source, source.config.environment, requestedBy)
 }
 
 // Promote the given deployment to the production environment
 func (a App) Promote(
 	source Deployment,
 	deployNumber DeploymentNumber,
-	tmpl DeploymentDirTemplate,
 	requestedBy domain.UserID,
 ) (d Deployment, err error) {
 	if source.config.environment.IsProduction() {
@@ -143,7 +115,7 @@ func (a App) Promote(
 		return d, ErrInvalidSourceDeployment
 	}
 
-	return a.NewDeployment(deployNumber, source.source, Production, tmpl, requestedBy)
+	return a.NewDeployment(deployNumber, source.source, Production, requestedBy)
 }
 
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
@@ -157,12 +129,10 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	err = scanner.Scan(
 		&d.id.appID,
 		&d.id.deploymentNumber,
-		&d.path,
 		&d.config.appname,
 		&d.config.environment,
 		&d.config.env,
 		&d.state.status,
-		&d.state.logfile,
 		&d.state.errcode,
 		&d.state.services,
 		&d.state.startedAt,
@@ -183,22 +153,10 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	return d, err
 }
 
-func (d Deployment) ID() DeploymentID   { return d.id }
-func (d Deployment) Config() Config     { return d.config }
-func (d Deployment) Source() SourceData { return d.source }
-
-// Retrieve the deployment path relative to the given directories.
-func (d Deployment) Path(relativeTo ...string) string {
-	relativeTo = append(relativeTo, d.path)
-	return filepath.Join(relativeTo...)
-}
-
-// Retrieve the path where the log for this deployment is stored relative to the
-// given directories.
-func (d Deployment) LogPath(relativeTo ...string) string {
-	relativeTo = append(relativeTo, d.state.LogFile())
-	return filepath.Join(relativeTo...)
-}
+func (d Deployment) ID() DeploymentID                        { return d.id }
+func (d Deployment) Config() Config                          { return d.config }
+func (d Deployment) Source() SourceData                      { return d.source }
+func (d Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
 
 // Mark a deployment has started.
 func (d *Deployment) HasStarted() error {
@@ -252,7 +210,6 @@ func (d *Deployment) apply(e event.Event) {
 	switch evt := e.(type) {
 	case DeploymentCreated:
 		d.id = evt.ID
-		d.path = evt.Path
 		d.config = evt.Config
 		d.state = evt.State
 		d.source = evt.Source

@@ -1,7 +1,6 @@
 package domain_test
 
 import (
-	"path/filepath"
 	"testing"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
@@ -26,8 +25,6 @@ func Test_App(t *testing.T) {
 		testutil.Equals(t, app.ID(), evt.ID)
 		testutil.Equals(t, uid, evt.Created.By())
 		testutil.IsFalse(t, evt.Created.At().IsZero())
-		testutil.Equals(t, string(evt.ID), app.Path())
-		testutil.Equals(t, filepath.Join("apps", string(evt.ID)), app.Path("apps"))
 		testutil.Equals(t, name, evt.Name)
 	})
 

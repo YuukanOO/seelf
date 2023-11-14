@@ -3,16 +3,13 @@ package git
 import (
 	"context"
 	"errors"
-	"os"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/go-git/go-git/v5/config"
 
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/types"
 	"github.com/YuukanOO/seelf/pkg/validation"
 	"github.com/YuukanOO/seelf/pkg/validation/strings"
@@ -25,6 +22,7 @@ import (
 var (
 	ErrGitRemoteNotReachable = apperr.New("git_remote_not_reachable")
 	ErrGitBranchNotFound     = apperr.New("git_branch_not_found")
+	ErrAppRetrievedFailed    = errors.New("app_retrieved_failed")
 	ErrGitCloneFailed        = errors.New("git_clone_failed")
 	ErrGitResolveFailed      = errors.New("git_resolve_failed")
 	ErrGitCheckoutFailed     = errors.New("git_checkout_failed")
@@ -33,11 +31,6 @@ var (
 const basicAuthUser = "seelf"
 
 type (
-	Options interface {
-		AppsDir() string
-		LogsDir() string
-	}
-
 	// Public request to trigger a git deployment
 	Request struct {
 		Branch string              `json:"branch"`
@@ -45,17 +38,13 @@ type (
 	}
 
 	service struct {
-		reader  domain.AppsReader
-		options Options
+		reader domain.AppsReader
 	}
 )
 
 // Builds a new trigger to process git deployments
-func New(options Options, reader domain.AppsReader) source.Source {
-	return &service{
-		options: options,
-		reader:  reader,
-	}
+func New(reader domain.AppsReader) source.Source {
+	return &service{reader}
 }
 
 func (*service) CanPrepare(payload any) bool          { return types.Is[Request](payload) }
@@ -91,35 +80,18 @@ func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 	return Data{req.Branch, req.Hash.Get(latestCommit)}, nil
 }
 
-func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
-	logfile, err := ostools.OpenAppend(depl.LogPath(s.options.LogsDir()))
-
-	if err != nil {
-		return err
-	}
-
-	defer logfile.Close()
-
-	logger := infra.NewStepLogger(logfile)
-
+func (s *service) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
 	// Retrieve git url and token from the app
 	app, err := s.reader.GetByID(ctx, depl.ID().AppID())
 
 	if err != nil {
 		logger.Error(err)
-		return domain.ErrSourceFetchFailed
+		return ErrAppRetrievedFailed
 	}
 
 	// Could happen if the app vcs config has been removed since the deployment has been queued
 	if !app.VCS().HasValue() {
 		return domain.ErrVCSNotConfigured
-	}
-
-	buildDir := depl.Path(s.options.AppsDir())
-
-	if err := os.RemoveAll(buildDir); err != nil {
-		logger.Error(err)
-		return domain.ErrSourceFetchFailed
 	}
 
 	config := app.VCS().MustGet()
@@ -132,12 +104,12 @@ func (s *service) Fetch(ctx context.Context, depl domain.Deployment) error {
 
 	logger.Stepf("cloning branch %s at %s from %s using token: %t", data.Branch, data.Hash, config.Url(), config.Token().HasValue())
 
-	r, err := git.PlainCloneContext(ctx, buildDir, false, &git.CloneOptions{
+	r, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 		Auth:          getAuthMethod(config),
 		SingleBranch:  true,
 		ReferenceName: plumbing.NewBranchReferenceName(data.Branch),
 		URL:           config.Url().String(),
-		Progress:      logfile,
+		Progress:      logger,
 	})
 
 	if err != nil {

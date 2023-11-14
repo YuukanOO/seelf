@@ -30,6 +30,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	deplsqlite "github.com/YuukanOO/seelf/internal/deployment/infra/sqlite"
 	workercmd "github.com/YuukanOO/seelf/internal/worker/app/command"
+	workerdomain "github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs/cleanup"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs/deploy"
@@ -92,7 +93,7 @@ type (
 		usersReader       authdomain.UsersReader
 		deploymentsReader domain.DeploymentsReader
 		artifactManager   domain.ArtifactManager
-		worker            async.Worker
+		pool              async.Pool
 
 		// Commands & Queries
 		// FIXME: maybe there is a way to introduce a mediator or something like that in the future
@@ -129,7 +130,7 @@ func newHttpServer(options Options) (*server, error) {
 func (s *server) Cleanup() {
 	s.logger.Debug("cleaning server services")
 
-	s.worker.Stop()
+	s.pool.Stop()
 
 	if err := s.db.Close(); err != nil {
 		panic(err)
@@ -213,15 +214,16 @@ func (s *server) configureServices() error {
 		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, s.artifactManager, sourceFacade, s.docker)),
 		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.artifactManager, s.docker)),
 	)
-	processNextJob := workercmd.ProcessNext(jobsStore, jobsStore, handler)
 
-	s.worker = async.NewPool(
+	s.pool = async.NewPool(
 		s.logger,
 		s.options.RunnersPollInterval(),
-		func(ctx context.Context, tags []string) error {
-			return processNextJob(ctx, workercmd.ProcessNextCommand{Names: tags})
-		},
-		async.Group(s.options.RunnersDeploymentCount(), deploy.Data{}.Discriminator(), cleanup.Data("").Discriminator()),
+		jobsStore.GetNextPendingJobs,
+		func(job workerdomain.Job) string { return job.Data().Discriminator() },
+		async.Group(
+			s.options.RunnersDeploymentCount(),
+			workercmd.Process(jobsStore, handler),
+			deploy.Data{}.Discriminator(), cleanup.Data("").Discriminator()),
 	)
 	s.usersReader = usersStore
 	s.deploymentsReader = deploymentsStore
@@ -297,7 +299,7 @@ func (s *server) startCheckup() error {
 		return err
 	}
 
-	go s.worker.Start()
+	go s.pool.Start()
 
 	return nil
 }

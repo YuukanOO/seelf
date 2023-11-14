@@ -43,7 +43,7 @@ type (
 
 	JobsReader interface {
 		GetRunningJobs(context.Context) ([]Job, error)
-		GetNextPendingJob(context.Context, []string) (Job, error)
+		GetNextPendingJobs(context.Context, []string) ([]Job, error)
 	}
 
 	JobsWriter interface {
@@ -96,7 +96,7 @@ func NewJob(data JobData, dedupeName monad.Maybe[string]) (j Job) {
 func JobFrom(scanner storage.Scanner) (j Job, err error) {
 	var (
 		dataDiscriminator string
-		dataPayload       string
+		dataPayload       monad.Maybe[string]
 	)
 
 	err = scanner.Scan(
@@ -112,7 +112,7 @@ func JobFrom(scanner storage.Scanner) (j Job, err error) {
 		return j, err
 	}
 
-	j.data, err = JobDataTypes.From(dataDiscriminator, dataPayload)
+	j.data, err = JobDataTypes.From(dataDiscriminator, dataPayload.Get(""))
 
 	return j, err
 }

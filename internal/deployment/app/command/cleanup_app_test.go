@@ -2,12 +2,17 @@ package command_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
+	"github.com/YuukanOO/seelf/cmd"
 	"github.com/YuukanOO/seelf/internal/deployment/app/command"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
@@ -18,10 +23,19 @@ type initialData struct {
 
 func Test_CleanupApp(t *testing.T) {
 	ctx := context.Background()
+	logger := log.NewLogger(false)
+
 	cleanup := func(initialData initialData) func(context.Context, command.CleanupAppCommand) error {
+		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
 		store := memory.NewAppsStore(initialData.existingApps...)
 		deploymentsStore := memory.NewDeploymentsStore(initialData.existingDeployments...)
-		return command.CleanupApp(deploymentsStore, store, store, &dummyBackend{})
+		artifactManager := infra.NewLocalArtifactManager(opts, logger)
+
+		t.Cleanup(func() {
+			os.RemoveAll(opts.DataDir())
+		})
+
+		return command.CleanupApp(deploymentsStore, store, store, artifactManager, &dummyBackend{})
 	}
 
 	t.Run("should fail if the application does not exist", func(t *testing.T) {
@@ -49,7 +63,7 @@ func Test_CleanupApp(t *testing.T) {
 
 	t.Run("should fail if there are still pending or running deployments", func(t *testing.T) {
 		app := domain.NewApp("my-app", "uid")
-		depl, _ := app.NewDeployment(1, meta{}, domain.Production, options{}, "uid")
+		depl, _ := app.NewDeployment(1, raw.Data(""), domain.Production, "uid")
 		app.RequestCleanup("uid")
 
 		uc := cleanup(initialData{

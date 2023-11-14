@@ -24,22 +24,15 @@ type (
 
 	// Holds together information related to the current deployment state. With a value
 	// object, it is easier to validate consistency between all those related properties.
+	// The default value represents a pending state.
 	State struct {
 		status     DeploymentStatus
-		logfile    string
 		errcode    monad.Maybe[string]
 		services   monad.Maybe[Services]
 		startedAt  monad.Maybe[time.Time]
 		finishedAt monad.Maybe[time.Time]
 	}
 )
-
-// Builds up a new pending state with the config filename.
-func NewState(logfile string) State {
-	return State{
-		logfile: logfile,
-	}
-}
 
 func (s State) Started() (State, error) {
 	if s.status != DeploymentStatusPending {
@@ -81,4 +74,3 @@ func (s State) ErrCode() monad.Maybe[string]       { return s.errcode }
 func (s State) Services() monad.Maybe[Services]    { return s.services }
 func (s State) StartedAt() monad.Maybe[time.Time]  { return s.startedAt }
 func (s State) FinishedAt() monad.Maybe[time.Time] { return s.finishedAt }
-func (s State) LogFile() string                    { return s.logfile }

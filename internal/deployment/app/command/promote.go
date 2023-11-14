@@ -17,7 +17,6 @@ func Promote(
 	appsReader domain.AppsReader,
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
-	deploymentDirTemplate domain.DeploymentDirTemplate,
 ) func(context.Context, PromoteCommand) (int, error) {
 	return func(ctx context.Context, cmd PromoteCommand) (int, error) {
 		app, err := appsReader.GetByID(ctx, domain.AppID(cmd.AppID))
@@ -38,7 +37,7 @@ func Promote(
 			return 0, err
 		}
 
-		newDeployment, err := app.Promote(sourceDeployment, number, deploymentDirTemplate, auth.CurrentUser(ctx).MustGet())
+		newDeployment, err := app.Promote(sourceDeployment, number, auth.CurrentUser(ctx).MustGet())
 
 		if err != nil {
 			return 0, err

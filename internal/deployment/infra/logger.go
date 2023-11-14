@@ -8,11 +8,11 @@ import (
 )
 
 type stepLogger struct {
-	writer io.Writer
+	writer io.WriteCloser
 }
 
 // Instantiates a new step logger to provide a simple way to build a deployment logfile.
-func NewStepLogger(writer io.Writer) domain.StepLogger {
+func NewStepLogger(writer io.WriteCloser) domain.DeploymentLogger {
 	return &stepLogger{writer}
 }
 
@@ -32,6 +32,14 @@ func (l *stepLogger) Error(err error) {
 	l.print("[ERROR]", err.Error(), nil)
 }
 
+func (l *stepLogger) Write(p []byte) (n int, err error) {
+	return l.writer.Write(p)
+}
+
+func (l *stepLogger) Close() error {
+	return l.writer.Close()
+}
+
 func (l *stepLogger) print(prefix string, format string, args []any) {
-	l.writer.Write([]byte(fmt.Sprintf("%s %s\n", prefix, fmt.Sprintf(format, args...))))
+	l.Write([]byte(fmt.Sprintf("%s %s\n", prefix, fmt.Sprintf(format, args...))))
 }

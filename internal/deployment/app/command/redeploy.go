@@ -17,7 +17,6 @@ func Redeploy(
 	appsReader domain.AppsReader,
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
-	deploymentDirTemplate domain.DeploymentDirTemplate,
 ) func(context.Context, RedeployCommand) (int, error) {
 	return func(ctx context.Context, cmd RedeployCommand) (int, error) {
 		app, err := appsReader.GetByID(ctx, domain.AppID(cmd.AppID))
@@ -38,7 +37,7 @@ func Redeploy(
 			return 0, err
 		}
 
-		newDeployment, err := app.Redeploy(sourceDeployment, number, deploymentDirTemplate, auth.CurrentUser(ctx).MustGet())
+		newDeployment, err := app.Redeploy(sourceDeployment, number, auth.CurrentUser(ctx).MustGet())
 
 		if err != nil {
 			return 0, err

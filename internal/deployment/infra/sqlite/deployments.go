@@ -30,12 +30,10 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 			SELECT
 				app_id
 				,deployment_number
-				,path
 				,config_appname
 				,config_environment
 				,config_env
 				,state_status
-				,state_logfile
 				,state_errcode
 				,state_services
 				,state_started_at
@@ -69,12 +67,10 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 		SELECT
 			app_id
 			,deployment_number
-			,path
 			,config_appname
 			,config_environment
 			,config_env
 			,state_status
-			,state_logfile
 			,state_errcode
 			,state_services
 			,state_started_at
@@ -106,12 +102,10 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 				Insert("deployments", builder.Values{
 					"app_id":               evt.ID.AppID(),
 					"deployment_number":    evt.ID.DeploymentNumber(),
-					"path":                 evt.Path,
 					"config_appname":       evt.Config.AppName(),
 					"config_environment":   evt.Config.Environment(),
 					"config_env":           evt.Config.Env(),
 					"state_status":         evt.State.Status(),
-					"state_logfile":        evt.State.LogFile(),
 					"state_errcode":        evt.State.ErrCode(),
 					"state_services":       evt.State.Services(),
 					"state_started_at":     evt.State.StartedAt(),
@@ -126,7 +120,6 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 			return builder.
 				Update("deployments", builder.Values{
 					"state_status":      evt.State.Status(),
-					"state_logfile":     evt.State.LogFile(),
 					"state_errcode":     evt.State.ErrCode(),
 					"state_services":    evt.State.Services(),
 					"state_started_at":  evt.State.StartedAt(),

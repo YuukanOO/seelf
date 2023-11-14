@@ -10,10 +10,9 @@ import (
 
 func Test_State(t *testing.T) {
 	t.Run("should be created in pending state", func(t *testing.T) {
-		state := domain.NewState("app.log")
+		var state domain.State
 
 		testutil.Equals(t, domain.DeploymentStatusPending, state.Status())
-		testutil.Equals(t, "app.log", state.LogFile())
 		testutil.IsFalse(t, state.ErrCode().HasValue())
 		testutil.IsFalse(t, state.Services().HasValue())
 		testutil.IsFalse(t, state.StartedAt().HasValue())

@@ -22,6 +22,7 @@ import (
 	deplcmd "github.com/YuukanOO/seelf/internal/deployment/app/command"
 	deplquery "github.com/YuukanOO/seelf/internal/deployment/app/query"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/archive"
@@ -64,9 +65,7 @@ type (
 	// Configuration options needed by the server to handle request correctly.
 	Options interface {
 		docker.Options
-		raw.Options
-		git.Options
-		archive.Options
+		infra.LocalArtifactOptions
 
 		RunnersPollInterval() time.Duration
 		RunnersDeploymentCount() int
@@ -78,23 +77,22 @@ type (
 		DefaultEmail() string
 		DefaultPassword() string
 		IsUsingGeneratedSecret() bool
-		DataDir() string
-		LogsDir() string
 		ConfigPath() string
 		CurrentVersion() string
-		DeploymentDirTemplate() domain.DeploymentDirTemplate
 	}
 
 	server struct {
 		// Services
 
-		options     Options
-		router      *gin.Engine
-		logger      log.Logger
-		db          sqlite.Database
-		docker      docker.Backend
-		usersReader authdomain.UsersReader
-		worker      async.Worker
+		options           Options
+		router            *gin.Engine
+		logger            log.Logger
+		db                sqlite.Database
+		docker            docker.Backend
+		usersReader       authdomain.UsersReader
+		deploymentsReader domain.DeploymentsReader
+		artifactManager   domain.ArtifactManager
+		worker            async.Worker
 
 		// Commands & Queries
 		// FIXME: maybe there is a way to introduce a mediator or something like that in the future
@@ -197,21 +195,23 @@ func (s *server) configureServices() error {
 
 	// Prepare needed services
 
+	s.artifactManager = infra.NewLocalArtifactManager(s.options, s.logger)
+
 	usersStore := authsqlite.NewUsersStore(s.db)
 	appsStore := deplsqlite.NewAppsStore(s.db)
 	deploymentsStore := deplsqlite.NewDeploymentsStore(s.db)
 	jobsStore := workersqlite.NewJobsStore(s.db)
 
 	sourceFacade := source.NewFacade(
-		raw.New(s.options),
-		archive.New(s.options),
-		git.New(s.options, appsStore),
+		raw.New(),
+		archive.New(),
+		git.New(appsStore),
 	)
 
 	s.docker = docker.New(s.options, s.logger)
 	handler := jobs.NewFacade(
-		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, sourceFacade, s.docker)),
-		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.docker)),
+		deploy.New(s.logger, deplcmd.Deploy(deploymentsStore, deploymentsStore, s.artifactManager, sourceFacade, s.docker)),
+		cleanup.New(s.logger, deplcmd.CleanupApp(deploymentsStore, appsStore, appsStore, s.artifactManager, s.docker)),
 	)
 	processNextJob := workercmd.ProcessNext(jobsStore, jobsStore, handler)
 
@@ -224,6 +224,7 @@ func (s *server) configureServices() error {
 		async.Group(s.options.RunnersDeploymentCount(), deploy.Data{}.Discriminator(), cleanup.Data("").Discriminator()),
 	)
 	s.usersReader = usersStore
+	s.deploymentsReader = deploymentsStore
 
 	// Queries
 
@@ -241,9 +242,9 @@ func (s *server) configureServices() error {
 	s.createApp = deplcmd.CreateApp(appsStore, appsStore)
 	s.updateApp = deplcmd.UpdateApp(appsStore, appsStore)
 	s.requestAppCleanup = deplcmd.RequestAppCleanup(appsStore, appsStore)
-	s.queueDeployment = deplcmd.QueueDeployment(appsStore, deploymentsStore, deploymentsStore, sourceFacade, s.options.DeploymentDirTemplate())
-	s.redeploy = deplcmd.Redeploy(appsStore, deploymentsStore, deploymentsStore, s.options.DeploymentDirTemplate())
-	s.promote = deplcmd.Promote(appsStore, deploymentsStore, deploymentsStore, s.options.DeploymentDirTemplate())
+	s.queueDeployment = deplcmd.QueueDeployment(appsStore, deploymentsStore, deploymentsStore, sourceFacade)
+	s.redeploy = deplcmd.Redeploy(appsStore, deploymentsStore, deploymentsStore)
+	s.promote = deplcmd.Promote(appsStore, deploymentsStore, deploymentsStore)
 	s.failRunningDeployments = deplcmd.FailRunningDeployments(deploymentsStore, deploymentsStore)
 
 	s.failRunningJobs = workercmd.FailRunningJobs(jobsStore, jobsStore)

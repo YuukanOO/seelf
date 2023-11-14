@@ -15,6 +15,7 @@ type DeployCommand struct {
 func Deploy(
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
+	artifactManager domain.ArtifactManager,
 	source domain.Source,
 	backend domain.Backend,
 ) func(context.Context, DeployCommand) error {
@@ -38,7 +39,11 @@ func Deploy(
 			return err
 		}
 
-		var services domain.Services
+		var (
+			buildDirectory string
+			logger         domain.DeploymentLogger
+			services       domain.Services
+		)
 
 		// This one is a special case to avoid to avoid many branches
 		// checking for errors when writing the domain.
@@ -64,13 +69,20 @@ func Deploy(
 			}
 		}()
 
+		// Prepare the build directory
+		if buildDirectory, logger, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
+			return
+		}
+
+		defer logger.Close()
+
 		// Fetch deployment files
-		if finalErr = source.Fetch(ctx, depl); finalErr != nil {
+		if finalErr = source.Fetch(ctx, buildDirectory, logger, depl); finalErr != nil {
 			return
 		}
 
 		// Ask the backend to actually deploy the app
-		if services, finalErr = backend.Run(ctx, depl); finalErr != nil {
+		if services, finalErr = backend.Run(ctx, buildDirectory, logger, depl); finalErr != nil {
 			return
 		}
 

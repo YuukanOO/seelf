@@ -23,6 +23,7 @@ import (
 	dockertypes "github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/volume"
 )
 
 var (
@@ -86,11 +87,13 @@ func WithDockerAndCompose(cli command.Cli, composeService api.Service) DockerOpt
 }
 
 func (d *docker) Setup() error {
-	_, compose, err := d.instantiateClientAndCompose(nil)
+	cli, compose, err := d.instantiateClientAndCompose(nil)
 
 	if err != nil {
 		return err
 	}
+
+	defer cli.Client().Close()
 
 	d.logger.Info("deploying traefik balancer service, it could take a while if it's the first time...")
 
@@ -146,7 +149,7 @@ func (d *docker) Setup() error {
 		}
 	}
 
-	loader.Normalize(project, false)
+	loader.Normalize(project)
 
 	return compose.Up(context.Background(), project, api.UpOptions{
 		Create: api.CreateOptions{
@@ -166,6 +169,8 @@ func (d *docker) Run(ctx context.Context, dir string, logger domain.DeploymentLo
 		return nil, err
 	}
 
+	defer cli.Client().Close()
+
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
 	project, services, err := d.generateProject(depl, dir, logger)
@@ -178,8 +183,8 @@ func (d *docker) Run(ctx context.Context, dir string, logger domain.DeploymentLo
 
 	if err = compose.Up(ctx, project, api.UpOptions{
 		Create: api.CreateOptions{
+			Build:         &api.BuildOptions{},
 			RemoveOrphans: true,
-			QuietPull:     true,
 		},
 		Start: api.StartOptions{
 			Wait: true,
@@ -223,6 +228,8 @@ func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
 
 	client := cli.Client()
 
+	defer client.Close()
+
 	appFilters := filters.NewArgs(
 		filters.Arg("label", fmt.Sprintf("%s=%s", AppLabel, app.ID())),
 	)
@@ -253,7 +260,9 @@ func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
 	}
 
 	// List and remove all volumes
-	volumes, err := client.VolumeList(ctx, appFilters)
+	volumes, err := client.VolumeList(ctx, volume.ListOptions{
+		Filters: appFilters,
+	})
 
 	if err != nil {
 		return err
@@ -305,6 +314,7 @@ func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
 	return nil
 }
 
+// Initialize a new docker client and compose service. You MUST close the command.Cli once done.
 func (d *docker) instantiateClientAndCompose(logger domain.DeploymentLogger) (command.Cli, api.Service, error) {
 	if d.compose != nil && d.cli != nil {
 		return d.cli, d.compose, nil

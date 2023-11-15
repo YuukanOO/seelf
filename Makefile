@@ -12,6 +12,9 @@ test: # Launch every tests
 ts: # Print the current timestamp, useful for migrations
 	@date +%s
 
+outdated: # Print direct dependencies and their latest version
+	go list -v -u -m -f '{{if not .Indirect}}{{.}}{{end}}' all
+
 build: # Build the final binary for the current platform
 	cd cmd/serve/front && npm i && npm run build && cd ../../..
 	go build -ldflags="-s -w" -o seelf

@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var ErrUnexpected = apperr.New("unexpected_error")
+var ErrUnexpected = apperr.New("unexpected_error") // Error returned when an infrastructure error occurs
 
 // Tiny interface to represents needed contrat in order to use helpers provided by this package.
 type Server interface {

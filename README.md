@@ -47,7 +47,10 @@ The `Makefile` contains some target such as:
 - `make serve-back`: serve the backend API
 - `make test`: launch all tests
 - `make ts`: print the current timestamp (mostly used when creating migrations)
+- `make outdated`: print outdated direct dependencies
 - `make build`: build seelf for the current platform
+- `SEELF_VERSION=x.x.x make prepare-release`: update the version sets in the `cmd/version.go`
+- `SEELF_VERSION=x.x.x make release-docker`: cross-build seelf for the given version number and push generated images
 
 _Note: on **Windows**, you will need a gcc compiler such as [tdm gcc](https://jmeubank.github.io/tdm-gcc/) to build the sqlite3 driver correctly._
 

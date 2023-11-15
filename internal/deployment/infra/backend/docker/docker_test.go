@@ -382,6 +382,8 @@ func (d *dockerMockService) Apply(ops ...command.DockerCliOption) error {
 	return nil
 }
 
+func (d *dockerCliMockService) Close() error { return nil }
+
 func (d *dockerCliMockService) ImagesPrune(ctx context.Context, pruneFilter filters.Args) (dockertypes.ImagesPruneReport, error) {
 	d.pruneFilter = pruneFilter
 	return dockertypes.ImagesPruneReport{}, nil

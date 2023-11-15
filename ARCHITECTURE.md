@@ -10,7 +10,7 @@ The backend code is written in **Go** for its simplicity and small footprint. Th
 
 - `cmd/`: contains application commands such as the http backend server
 - `internal/`: contains internal package representing the core features of this application organized by bounded contexts and `app`, `domain` and `infra` folders (see [The Domain](#the-domain))
-- `pkg/`: contains reusable stuff
+- `pkg/`: contains reusable stuff not tied to seelf which can be reused
 
 ## The Domain
 
@@ -43,6 +43,8 @@ This make it easy to execute surgical SQL updates as needed.
 Every entities should be read from the persistent store as a whole (= it should be populated with all their fields set). In this project, every entity expose a method which takes a `storage.Scanner` and returns an entity of the given type. This method, since it needs access to unexposed fields, is defined next to the public _constructor_ of an entity in the `domain` sub-package.
 
 Some value objects implements the `Scanner`, `Valuer`, `Marshaler` and `Unmarshaler` interfaces when they must be persisted in a single column. I may eventualy found another cleaner way to do this but this is sufficient for now.
+
+Some types are represented as discriminated union to express dynamic types. For example, `SourceData` (archive, git or raw file) could be anything supported by a `Source` and should be persisted and rehydrated as such. To enable those kind of use cases, they implement the `storage.Discriminated` interface and should returns a discriminator, use to call the appropriate loader when rehydrating.
 
 Retrieving related data is easy thanks to something inspired by graphql dataloaders. When querying the database, you can provide an optional array of `Dataloader[T]` which will execute additional requests based on key extracted from the parent result set. This approach enables efficient querying of the database by avoiding N+1 queries.
 

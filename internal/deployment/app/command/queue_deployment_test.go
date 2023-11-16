@@ -17,7 +17,7 @@ import (
 func Test_QueueDeployment(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	app := domain.NewApp("my-app", "some-uid")
-	appsStore := memory.NewAppsStore(app)
+	appsStore := memory.NewAppsStore(&app)
 
 	queue := func() func(ctx context.Context, cmd command.QueueDeploymentCommand) (int, error) {
 		deploymentsStore := memory.NewDeploymentsStore()

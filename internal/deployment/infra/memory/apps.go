@@ -5,7 +5,6 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/collections"
 	"github.com/YuukanOO/seelf/pkg/event"
 )
 
@@ -26,11 +25,10 @@ type (
 	}
 )
 
-func NewAppsStore(existingApps ...domain.App) AppsStore {
+func NewAppsStore(existingApps ...*domain.App) AppsStore {
 	s := &appsStore{}
-	ctx := context.Background()
 
-	s.Write(ctx, collections.ToPointers(existingApps)...)
+	s.Write(context.Background(), existingApps...)
 
 	return s
 }
@@ -81,6 +79,7 @@ func (s *appsStore) Write(ctx context.Context, apps ...*domain.App) error {
 			case domain.AppDeleted:
 				for i, a := range s.apps {
 					if a.id == app.ID() {
+						*a.value = *app
 						s.apps = append(s.apps[:i], s.apps[i+1:]...)
 						break
 					}
@@ -88,7 +87,7 @@ func (s *appsStore) Write(ctx context.Context, apps ...*domain.App) error {
 			default:
 				for _, a := range s.apps {
 					if a.id == app.ID() {
-						a.value = app
+						*a.value = *app
 						break
 					}
 				}

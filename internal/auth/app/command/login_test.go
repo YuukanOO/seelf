@@ -16,7 +16,7 @@ import (
 func Test_Login(t *testing.T) {
 	hasher := infra.NewBCryptHasher()
 	password, _ := hasher.Hash("password") // Sample password hash for the string "password" for tests
-	login := func(existingUsers ...domain.User) func(context.Context, command.LoginCommand) (string, error) {
+	login := func(existingUsers ...*domain.User) func(context.Context, command.LoginCommand) (string, error) {
 		store := memory.NewUsersStore(existingUsers...)
 		return command.Login(store, hasher)
 	}
@@ -42,7 +42,8 @@ func Test_Login(t *testing.T) {
 	})
 
 	t.Run("should complains if password does not match", func(t *testing.T) {
-		uc := login(domain.NewUser("existing@example.com", password, "apikey"))
+		usr := domain.NewUser("existing@example.com", password, "apikey")
+		uc := login(&usr)
 		_, err := uc(context.Background(), command.LoginCommand{
 			Email:    "existing@example.com",
 			Password: "nobodycares",
@@ -56,7 +57,7 @@ func Test_Login(t *testing.T) {
 
 	t.Run("should returns a valid user id if it succeeds", func(t *testing.T) {
 		existingUser := domain.NewUser("existing@example.com", password, "apikey")
-		uc := login(existingUser)
+		uc := login(&existingUser)
 		uid, err := uc(context.Background(), command.LoginCommand{
 			Email:    "existing@example.com",
 			Password: "password",

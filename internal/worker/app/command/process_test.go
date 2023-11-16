@@ -7,30 +7,26 @@ import (
 	"github.com/YuukanOO/seelf/internal/worker/app/command"
 	"github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/internal/worker/infra/memory"
-	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Process(t *testing.T) {
-	process := func(existingJobs ...domain.Job) (func(context.Context, domain.Job) error, memory.JobsStore, *dummyHandler) {
+	process := func(existingJobs ...*domain.Job) (func(context.Context, domain.Job) error, *dummyHandler) {
 		store := memory.NewJobsStore(existingJobs...)
 		worker := &dummyHandler{}
-		return command.Process(store, worker), store, worker
+		return command.Process(store, worker), worker
 	}
 
 	t.Run("should process the given job", func(t *testing.T) {
 		job := domain.NewJob(payload{}, monad.Value("dedupe"))
 
-		uc, store, worker := process(job)
+		uc, worker := process(&job)
 
 		err := uc(context.Background(), job)
 
 		testutil.IsNil(t, err)
-
-		_, err = store.GetByID(context.Background(), job.ID())
-
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		testutil.EventIs[domain.JobDone](t, &job, 1)
 		testutil.IsTrue(t, worker.processedJob.HasValue())
 		testutil.Equals(t, job.ID(), worker.processedJob.MustGet().ID())
 	})

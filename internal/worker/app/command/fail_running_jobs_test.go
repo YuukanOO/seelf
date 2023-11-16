@@ -13,9 +13,9 @@ import (
 )
 
 func Test_FailRunningJobs(t *testing.T) {
-	sut := func(existingJobs ...domain.Job) (func(context.Context, error) error, memory.JobsStore) {
+	sut := func(existingJobs ...*domain.Job) func(context.Context, error) error {
 		store := memory.NewJobsStore(existingJobs...)
-		return command.FailRunningJobs(store, store), store
+		return command.FailRunningJobs(store, store)
 	}
 
 	t.Run("should reset running jobs", func(t *testing.T) {
@@ -24,14 +24,10 @@ func Test_FailRunningJobs(t *testing.T) {
 		job1 := domain.NewJob(payload{}, monad.None[string]())
 		job2 := domain.NewJob(payload{}, monad.None[string]())
 
-		fail, store := sut(job1, job2)
+		fail := sut(&job1, &job2)
 
 		err := fail(ctx, reason)
 
-		testutil.IsNil(t, err)
-		job1, err = store.GetByID(ctx, job1.ID())
-		testutil.IsNil(t, err)
-		job2, err = store.GetByID(ctx, job2.ID())
 		testutil.IsNil(t, err)
 
 		evt := testutil.EventIs[domain.JobFailed](t, &job1, 1)

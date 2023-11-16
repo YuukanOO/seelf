@@ -14,7 +14,7 @@ import (
 
 func Test_RequestAppCleanup(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	delete := func(existingApps ...domain.App) func(context.Context, command.RequestAppCleanupCommand) error {
+	delete := func(existingApps ...*domain.App) func(context.Context, command.RequestAppCleanupCommand) error {
 		store := memory.NewAppsStore(existingApps...)
 		return command.RequestAppCleanup(store, store)
 	}
@@ -31,12 +31,13 @@ func Test_RequestAppCleanup(t *testing.T) {
 
 	t.Run("should mark an application has ready for deletion", func(t *testing.T) {
 		app := domain.NewApp("my-app", "uid")
-		uc := delete(app)
+		uc := delete(&app)
 
 		err := uc(ctx, command.RequestAppCleanupCommand{
 			ID: string(app.ID()),
 		})
 
 		testutil.IsNil(t, err)
+		testutil.EventIs[domain.AppCleanupRequested](t, &app, 1)
 	})
 }

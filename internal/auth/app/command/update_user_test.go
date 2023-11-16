@@ -15,13 +15,13 @@ import (
 
 func Test_UpdateUser(t *testing.T) {
 	hasher := infra.NewBCryptHasher()
-	update := func(existingUsers ...domain.User) (func(context.Context, command.UpdateUserCommand) error, memory.UsersStore) {
+	update := func(existingUsers ...*domain.User) func(context.Context, command.UpdateUserCommand) error {
 		store := memory.NewUsersStore(existingUsers...)
-		return command.UpdateUser(store, store, hasher), store
+		return command.UpdateUser(store, store, hasher)
 	}
 
 	t.Run("should require valid inputs", func(t *testing.T) {
-		uc, _ := update()
+		uc := update()
 		err := uc(context.Background(), command.UpdateUserCommand{})
 
 		testutil.ErrorIs(t, apperr.ErrNotFound, err)
@@ -30,7 +30,7 @@ func Test_UpdateUser(t *testing.T) {
 	t.Run("should succeed if values are the same", func(t *testing.T) {
 		passwordHash, _ := hasher.Hash("apassword")
 		user := domain.NewUser("john@doe.com", passwordHash, "anapikey")
-		uc, store := update(user)
+		uc := update(&user)
 
 		err := uc(context.Background(), command.UpdateUserCommand{
 			ID:       string(user.ID()),
@@ -39,14 +39,13 @@ func Test_UpdateUser(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-
-		user, _ = store.GetByID(context.Background(), user.ID())
 		testutil.HasNEvents(t, &user, 2) // 2 since bcrypt will produce different hashes
+		testutil.EventIs[domain.UserPasswordChanged](t, &user, 1)
 	})
 
 	t.Run("should update user if everything is good", func(t *testing.T) {
 		user := domain.NewUser("john@doe.com", "apassword", "anapikey")
-		uc, store := update(user)
+		uc := update(&user)
 
 		err := uc(context.Background(), command.UpdateUserCommand{
 			ID:       string(user.ID()),
@@ -55,8 +54,9 @@ func Test_UpdateUser(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-
-		user, _ = store.GetByID(context.Background(), user.ID())
 		testutil.HasNEvents(t, &user, 3)
+		evt := testutil.EventIs[domain.UserEmailChanged](t, &user, 1)
+		testutil.Equals(t, "another@email.com", string(evt.Email))
+		testutil.EventIs[domain.UserPasswordChanged](t, &user, 2)
 	})
 }

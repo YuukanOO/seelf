@@ -26,8 +26,8 @@ func Test_Deploy(t *testing.T) {
 	deploy := func(
 		source domain.Source,
 		backend domain.Backend,
-		existingDeployments ...domain.Deployment,
-	) (func(context.Context, command.DeployCommand) error, domain.DeploymentsReader) {
+		existingDeployments ...*domain.Deployment,
+	) func(context.Context, command.DeployCommand) error {
 		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
 		store := memory.NewDeploymentsStore(existingDeployments...)
 		artifactManager := infra.NewLocalArtifactManager(opts, logger)
@@ -36,11 +36,11 @@ func Test_Deploy(t *testing.T) {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return command.Deploy(store, store, artifactManager, source, backend), store
+		return command.Deploy(store, store, artifactManager, source, backend)
 	}
 
 	t.Run("should fail if the deployment does not exists", func(t *testing.T) {
-		uc, _ := deploy(source(nil), backend(nil))
+		uc := deploy(source(nil), backend(nil))
 		err := uc(ctx, command.DeployCommand{})
 
 		testutil.ErrorIs(t, apperr.ErrNotFound, err)
@@ -51,19 +51,16 @@ func Test_Deploy(t *testing.T) {
 		src := source(srcErr)
 		meta, _ := src.Prepare(app, 42)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, "some-uid")
-		uc, reader := deploy(src, backend(nil), depl)
+		uc := deploy(src, backend(nil), &depl)
 
 		err := uc(ctx, command.DeployCommand{
 			AppID:            string(app.ID()),
 			DeploymentNumber: 1,
 		})
 
-		depl, _ = reader.GetByID(ctx, domain.DeploymentIDFrom(app.ID(), 1))
-
 		testutil.ErrorIs(t, srcErr, err)
 
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
-
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
 		testutil.Equals(t, srcErr.Error(), evt.State.ErrCode().MustGet())
@@ -76,20 +73,18 @@ func Test_Deploy(t *testing.T) {
 		src := source(nil)
 		meta, _ := src.Prepare(app, 42)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, "some-uid")
-		uc, reader := deploy(src, be, depl)
+		uc := deploy(src, be, &depl)
 
 		err := uc(ctx, command.DeployCommand{
 			AppID:            string(app.ID()),
 			DeploymentNumber: 1,
 		})
-		depl, _ = reader.GetByID(ctx, domain.DeploymentIDFrom(app.ID(), 1))
 
 		testutil.ErrorIs(t, backendErr, err)
-
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
-
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
+		testutil.Equals(t, backendErr.Error(), evt.State.ErrCode().MustGet())
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 	})
 
@@ -97,16 +92,14 @@ func Test_Deploy(t *testing.T) {
 		src := source(nil)
 		meta, _ := src.Prepare(app, 42)
 		depl, _ := app.NewDeployment(1, meta, domain.Production, "some-uid")
-		uc, reader := deploy(src, backend(nil), depl)
+		uc := deploy(src, backend(nil), &depl)
 
 		err := uc(ctx, command.DeployCommand{
 			AppID:            string(app.ID()),
 			DeploymentNumber: 1,
 		})
 
-		depl, _ = reader.GetByID(ctx, domain.DeploymentIDFrom(app.ID(), 1))
 		testutil.IsNil(t, err)
-
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())

@@ -17,9 +17,9 @@ func Test_FailRunningDeployments(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	app := domain.NewApp("my-app", "some-uid")
 
-	fail := func(existingDeployments ...domain.Deployment) (func(context.Context, error) error, domain.DeploymentsReader) {
+	fail := func(existingDeployments ...*domain.Deployment) func(context.Context, error) error {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)
-		return command.FailRunningDeployments(deploymentsStore, deploymentsStore), deploymentsStore
+		return command.FailRunningDeployments(deploymentsStore, deploymentsStore)
 	}
 
 	t.Run("should reset running deployments", func(t *testing.T) {
@@ -36,18 +36,16 @@ func Test_FailRunningDeployments(t *testing.T) {
 
 		testutil.IsNil(t, err)
 
-		uc, store := fail(started, succeeded)
+		uc := fail(&started, &succeeded)
 
 		err = uc(ctx, errReset)
 
 		testutil.IsNil(t, err)
 
-		started, _ = store.GetByID(ctx, started.ID())
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &started, 2)
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 		testutil.Equals(t, errReset.Error(), evt.State.ErrCode().MustGet())
 
-		succeeded, _ = store.GetByID(ctx, succeeded.ID())
 		evt = testutil.EventIs[domain.DeploymentStateChanged](t, &succeeded, 2)
 		testutil.Equals(t, domain.DeploymentStatusSucceeded, evt.State.Status())
 	})

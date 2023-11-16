@@ -17,8 +17,8 @@ import (
 )
 
 type initialData struct {
-	existingApps        []domain.App
-	existingDeployments []domain.Deployment
+	existingApps        []*domain.App
+	existingDeployments []*domain.Deployment
 }
 
 func Test_CleanupApp(t *testing.T) {
@@ -51,7 +51,7 @@ func Test_CleanupApp(t *testing.T) {
 	t.Run("should fail if the application cleanup as not been requested", func(t *testing.T) {
 		app := domain.NewApp("my-app", "uid")
 		uc := cleanup(initialData{
-			existingApps: []domain.App{app},
+			existingApps: []*domain.App{&app},
 		})
 
 		err := uc(ctx, command.CleanupAppCommand{
@@ -67,8 +67,8 @@ func Test_CleanupApp(t *testing.T) {
 		app.RequestCleanup("uid")
 
 		uc := cleanup(initialData{
-			existingApps:        []domain.App{app},
-			existingDeployments: []domain.Deployment{depl},
+			existingApps:        []*domain.App{&app},
+			existingDeployments: []*domain.Deployment{&depl},
 		})
 
 		err := uc(ctx, command.CleanupAppCommand{
@@ -83,7 +83,7 @@ func Test_CleanupApp(t *testing.T) {
 		app.RequestCleanup("uid")
 
 		uc := cleanup(initialData{
-			existingApps: []domain.App{app},
+			existingApps: []*domain.App{&app},
 		})
 
 		err := uc(ctx, command.CleanupAppCommand{
@@ -91,5 +91,6 @@ func Test_CleanupApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
+		testutil.EventIs[domain.AppDeleted](t, &app, 2)
 	})
 }

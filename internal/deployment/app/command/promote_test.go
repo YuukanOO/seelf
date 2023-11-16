@@ -16,9 +16,9 @@ import (
 func Test_Promote(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	app := domain.NewApp("my-app", "some-uid")
-	appsStore := memory.NewAppsStore(app)
+	appsStore := memory.NewAppsStore(&app)
 
-	promote := func(existingDeployments ...domain.Deployment) func(ctx context.Context, cmd command.PromoteCommand) (int, error) {
+	promote := func(existingDeployments ...*domain.Deployment) func(ctx context.Context, cmd command.PromoteCommand) (int, error) {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)
 		return command.Promote(appsStore, deploymentsStore, deploymentsStore)
 	}
@@ -44,7 +44,7 @@ func Test_Promote(t *testing.T) {
 
 	t.Run("should correctly creates a new deployment based on the provided one", func(t *testing.T) {
 		dpl, _ := app.NewDeployment(1, raw.Data(""), domain.Staging, "some-uid")
-		uc := promote(dpl)
+		uc := promote(&dpl)
 
 		number, err := uc(ctx, command.PromoteCommand{
 			AppID:            string(dpl.ID().AppID()),

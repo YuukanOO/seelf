@@ -15,7 +15,7 @@ import (
 
 func Test_CreateApp(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	create := func(existingApps ...domain.App) func(context.Context, command.CreateAppCommand) (string, error) {
+	create := func(existingApps ...*domain.App) func(context.Context, command.CreateAppCommand) (string, error) {
 		store := memory.NewAppsStore(existingApps...)
 		return command.CreateApp(store, store)
 	}
@@ -28,7 +28,9 @@ func Test_CreateApp(t *testing.T) {
 	})
 
 	t.Run("should fail if the name is already taken", func(t *testing.T) {
-		uc := create(domain.NewApp("my-app", "uid"))
+		app := domain.NewApp("my-app", "uid")
+		uc := create(&app)
+
 		_, err := uc(ctx, command.CreateAppCommand{
 			Name: "my-app",
 		})

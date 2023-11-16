@@ -6,7 +6,6 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/collections"
 	"github.com/YuukanOO/seelf/pkg/event"
 )
 
@@ -28,11 +27,10 @@ type (
 	}
 )
 
-func NewUsersStore(existingUsers ...domain.User) UsersStore {
+func NewUsersStore(existingUsers ...*domain.User) UsersStore {
 	s := &usersStore{}
-	ctx := context.Background()
 
-	s.Write(ctx, collections.ToPointers(existingUsers)...)
+	s.Write(context.Background(), existingUsers...)
 
 	return s
 }
@@ -131,7 +129,7 @@ func (s *usersStore) Write(ctx context.Context, users ...*domain.User) error {
 			default:
 				for _, u := range s.users {
 					if u.id == user.ID() {
-						u.value = user
+						*u.value = *user
 						break
 					}
 				}

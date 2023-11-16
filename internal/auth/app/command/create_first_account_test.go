@@ -17,13 +17,14 @@ func Test_CreateFirstAccount(t *testing.T) {
 	hasher := infra.NewBCryptHasher()
 	keygen := infra.NewKeyGenerator()
 
-	createFirstAccount := func(existingUsers ...domain.User) (func(context.Context, command.CreateFirstAccountCommand) error, memory.UsersStore) {
+	createFirstAccount := func(existingUsers ...*domain.User) (func(context.Context, command.CreateFirstAccountCommand) error, memory.UsersStore) {
 		store := memory.NewUsersStore(existingUsers...)
 		return command.CreateFirstAccount(store, store, hasher, keygen), store
 	}
 
 	t.Run("should do nothing if a user already exists", func(t *testing.T) {
-		uc, store := createFirstAccount(domain.NewUser("existing@example.com", "password", "apikey"))
+		usr := domain.NewUser("existing@example.com", "password", "apikey")
+		uc, store := createFirstAccount(&usr)
 
 		err := uc(ctx, command.CreateFirstAccountCommand{})
 

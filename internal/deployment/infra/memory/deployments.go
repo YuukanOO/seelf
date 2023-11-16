@@ -5,7 +5,6 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/collections"
 	"github.com/YuukanOO/seelf/pkg/event"
 )
 
@@ -26,11 +25,10 @@ type (
 	}
 )
 
-func NewDeploymentsStore(existingDeployments ...domain.Deployment) DeploymentsStore {
+func NewDeploymentsStore(existingDeployments ...*domain.Deployment) DeploymentsStore {
 	s := &deploymentsStore{}
-	ctx := context.Background()
 
-	s.Write(ctx, collections.ToPointers(existingDeployments)...)
+	s.Write(context.Background(), existingDeployments...)
 
 	return s
 }
@@ -55,6 +53,30 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appid do
 	}
 
 	return domain.DeploymentNumber(count + 1), nil
+}
+
+func (s *deploymentsStore) GetRunningDeployments(context.Context) ([]domain.Deployment, error) {
+	var result []domain.Deployment
+
+	for _, d := range s.deployments {
+		if d.state.Status() == domain.DeploymentStatusRunning {
+			result = append(result, *d.value)
+		}
+	}
+
+	return result, nil
+}
+
+func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appid domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
+	var count domain.RunningOrPendingAppDeploymentsCount
+
+	for _, d := range s.deployments {
+		if d.id.AppID() == appid && (d.state.Status() == domain.DeploymentStatusRunning || d.state.Status() == domain.DeploymentStatusPending) {
+			count += 1
+		}
+	}
+
+	return count, nil
 }
 
 func (s *deploymentsStore) Write(ctx context.Context, deployments ...*domain.Deployment) error {
@@ -82,7 +104,7 @@ func (s *deploymentsStore) Write(ctx context.Context, deployments ...*domain.Dep
 			case domain.DeploymentStateChanged:
 				for _, d := range s.deployments {
 					if d.id == depl.ID() {
-						d.value = depl
+						*d.value = *depl
 						d.state = evt.State
 						break
 					}
@@ -90,7 +112,7 @@ func (s *deploymentsStore) Write(ctx context.Context, deployments ...*domain.Dep
 			default:
 				for _, d := range s.deployments {
 					if d.id == depl.ID() {
-						d.value = depl
+						*d.value = *depl
 						break
 					}
 				}
@@ -99,28 +121,4 @@ func (s *deploymentsStore) Write(ctx context.Context, deployments ...*domain.Dep
 	}
 
 	return nil
-}
-
-func (s *deploymentsStore) GetRunningDeployments(context.Context) ([]domain.Deployment, error) {
-	var result []domain.Deployment
-
-	for _, d := range s.deployments {
-		if d.state.Status() == domain.DeploymentStatusRunning {
-			result = append(result, *d.value)
-		}
-	}
-
-	return result, nil
-}
-
-func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appid domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
-	var count domain.RunningOrPendingAppDeploymentsCount
-
-	for _, d := range s.deployments {
-		if d.id.AppID() == appid && (d.state.Status() == domain.DeploymentStatusRunning || d.state.Status() == domain.DeploymentStatusPending) {
-			count += 1
-		}
-	}
-
-	return count, nil
 }

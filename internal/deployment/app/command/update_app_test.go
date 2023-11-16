@@ -16,13 +16,13 @@ import (
 
 func Test_UpdateApp(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	update := func(existingApps ...domain.App) (func(context.Context, command.UpdateAppCommand) error, domain.AppsReader) {
+	update := func(existingApps ...*domain.App) func(context.Context, command.UpdateAppCommand) error {
 		store := memory.NewAppsStore(existingApps...)
-		return command.UpdateApp(store, store), store
+		return command.UpdateApp(store, store)
 	}
 
 	t.Run("should require a valid application id", func(t *testing.T) {
-		uc, _ := update()
+		uc := update()
 		err := uc(ctx, command.UpdateAppCommand{})
 
 		testutil.ErrorIs(t, apperr.ErrNotFound, err)
@@ -30,19 +30,18 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should update nothing if no fields are provided", func(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: string(app.ID()),
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 1)
 	})
 
 	t.Run("should require valid application env variables", func(t *testing.T) {
-		uc, _ := update()
+		uc := update()
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: "an-app",
 			Env: monad.PatchValue(map[string]map[string]map[string]string{
@@ -56,7 +55,7 @@ func Test_UpdateApp(t *testing.T) {
 	t.Run("should remove an application env variables", func(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		app.HasEnvironmentVariables(domain.EnvironmentsEnv{"production": {"app": {"DEBUG": "false"}}})
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID:  string(app.ID()),
@@ -64,7 +63,6 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 3)
 		testutil.EventIs[domain.AppEnvRemoved](t, &app, 2)
 	})
@@ -72,7 +70,7 @@ func Test_UpdateApp(t *testing.T) {
 	t.Run("should update an application env variables", func(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		app.HasEnvironmentVariables(domain.EnvironmentsEnv{"production": {"app": {"DEBUG": "false"}}})
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: string(app.ID()),
@@ -82,13 +80,12 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 3)
 		testutil.EventIs[domain.AppEnvChanged](t, &app, 2)
 	})
 
 	t.Run("should require valid vcs inputs", func(t *testing.T) {
-		uc, _ := update()
+		uc := update()
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: "an-app",
 			VCS: monad.PatchValue(command.VCSConfigUpdate{
@@ -101,7 +98,7 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should fail if trying to add a vcs config without an url defined", func(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
-		uc, _ := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID:  string(app.ID()),
@@ -115,7 +112,7 @@ func Test_UpdateApp(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		url, _ := domain.UrlFrom("https://some.url")
 		app.UseVersionControl(domain.NewVCSConfig(url))
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID:  string(app.ID()),
@@ -123,7 +120,6 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 3)
 		testutil.EventIs[domain.AppVCSRemoved](t, &app, 2)
 	})
@@ -132,7 +128,7 @@ func Test_UpdateApp(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		url, _ := domain.UrlFrom("https://some.url")
 		app.UseVersionControl(domain.NewVCSConfig(url))
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: string(app.ID()),
@@ -142,7 +138,6 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 2)
 	})
 
@@ -150,7 +145,7 @@ func Test_UpdateApp(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		url, _ := domain.UrlFrom("https://some.url")
 		app.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: string(app.ID()),
@@ -160,7 +155,6 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 3)
 		evt := testutil.EventIs[domain.AppVCSConfigured](t, &app, 2)
 		testutil.Equals(t, "https://some.other.url", evt.Config.Url().String())
@@ -171,7 +165,7 @@ func Test_UpdateApp(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		url, _ := domain.UrlFrom("https://some.url")
 		app.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: string(app.ID()),
@@ -181,7 +175,6 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 3)
 		evt := testutil.EventIs[domain.AppVCSConfigured](t, &app, 2)
 		testutil.Equals(t, "https://some.url", evt.Config.Url().String())
@@ -192,7 +185,7 @@ func Test_UpdateApp(t *testing.T) {
 		app := domain.NewApp("an-app", "uid")
 		url, _ := domain.UrlFrom("https://some.url")
 		app.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
-		uc, reader := update(app)
+		uc := update(&app)
 
 		err := uc(ctx, command.UpdateAppCommand{
 			ID: string(app.ID()),
@@ -202,7 +195,6 @@ func Test_UpdateApp(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		app, _ = reader.GetByID(ctx, app.ID())
 		testutil.HasNEvents(t, &app, 3)
 		evt := testutil.EventIs[domain.AppVCSConfigured](t, &app, 2)
 		testutil.Equals(t, "https://some.url", evt.Config.Url().String())

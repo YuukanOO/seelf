@@ -5,7 +5,6 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/collections"
 	"github.com/YuukanOO/seelf/pkg/event"
 )
 
@@ -13,7 +12,6 @@ type (
 	JobsStore interface {
 		domain.JobsReader
 		domain.JobsWriter
-		GetByID(context.Context, domain.JobID) (domain.Job, error) // Defined here because not used in the domain
 	}
 
 	jobsStore struct {
@@ -26,11 +24,10 @@ type (
 	}
 )
 
-func NewJobsStore(existingJobs ...domain.Job) JobsStore {
+func NewJobsStore(existingJobs ...*domain.Job) JobsStore {
 	s := &jobsStore{}
-	ctx := context.Background()
 
-	s.Write(ctx, collections.ToPointers(existingJobs)...)
+	s.Write(context.Background(), existingJobs...)
 
 	return s
 }
@@ -92,8 +89,9 @@ func (s *jobsStore) Write(ctx context.Context, jobs ...*domain.Job) error {
 					value: job,
 				})
 			case domain.JobDone:
-				for idx, a := range s.jobs {
-					if a.id == evt.ID {
+				for idx, d := range s.jobs {
+					if d.id == evt.ID {
+						*d.value = *job
 						s.jobs = append(s.jobs[:idx], s.jobs[idx+1:]...)
 						break
 					}
@@ -101,7 +99,7 @@ func (s *jobsStore) Write(ctx context.Context, jobs ...*domain.Job) error {
 			default:
 				for _, d := range s.jobs {
 					if d.id == job.ID() {
-						d.value = job
+						*d.value = *job
 						break
 					}
 				}

@@ -305,11 +305,9 @@ func (s *server) startCheckup() error {
 }
 
 func (s *server) configureRouter() {
-	if !s.options.IsVerbose() {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	gin.SetMode(gin.ReleaseMode)
 
-	s.router = gin.Default()
+	s.router = gin.New()
 	s.router.SetTrustedProxies(nil)
 
 	// Configure the session store
@@ -319,7 +317,18 @@ func (s *server) configureRouter() {
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	})
-	s.router.Use(sessions.Sessions(sessionName, store), s.transactional)
+
+	middlewares := []gin.HandlerFunc{
+		s.recoverer,
+		sessions.Sessions(sessionName, store),
+		s.transactional,
+	}
+
+	if s.options.IsVerbose() {
+		middlewares = append([]gin.HandlerFunc{s.requestLogger}, middlewares...)
+	}
+
+	s.router.Use(middlewares...)
 
 	// Let's register every routes now!
 	v1 := s.router.Group("/api/v1")

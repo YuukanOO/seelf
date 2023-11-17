@@ -30,7 +30,7 @@ func Bind[TIn any](s Server, handler func(*gin.Context, TIn) error) gin.HandlerF
 		}
 
 		if err := handler(ctx, cmd); err != nil {
-			handleError(s, ctx, err)
+			HandleError(s, ctx, err)
 		}
 	}
 }
@@ -39,7 +39,7 @@ func Bind[TIn any](s Server, handler func(*gin.Context, TIn) error) gin.HandlerF
 func Send(s Server, handler func(*gin.Context) error) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if err := handler(ctx); err != nil {
-			handleError(s, ctx, err)
+			HandleError(s, ctx, err)
 		}
 	}
 }
@@ -79,7 +79,7 @@ func Ok[TOut any](ctx *gin.Context, data TOut) error {
 }
 
 // Handle the given non-nil error and sets the status code based on error type.
-func handleError(s Server, ctx *gin.Context, err error) {
+func HandleError(s Server, ctx *gin.Context, err error) {
 	var (
 		status int = http.StatusInternalServerError
 		data   any = ErrUnexpected

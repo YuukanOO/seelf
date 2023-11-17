@@ -8,6 +8,8 @@ import (
 var ErrNotFound = New("not_found") // Common error used when a resource could not be found.
 
 // Represents an application error with an optional detail.
+// Application errors represent an expected error from the domain perspective.
+// Infrastructure errors should use the standard errors package.
 type Error struct {
 	Code   string `json:"code"`
 	Detail error  `json:"detail,omitempty"`

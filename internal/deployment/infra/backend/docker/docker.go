@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -320,15 +321,13 @@ func (d *docker) instantiateClientAndCompose(logger domain.DeploymentLogger) (co
 		return d.cli, d.compose, nil
 	}
 
-	var cliOpts []command.DockerCliOption
+	stream := io.Discard
 
 	if logger != nil {
-		cliOpts = append(cliOpts, command.WithCombinedStreams(logger))
+		stream = logger
 	}
 
-	dockerCli, err := command.NewDockerCli(cliOpts...)
-
-	// FIXME: should the dockerCli.Client() be closed by the caller?
+	dockerCli, err := command.NewDockerCli(command.WithCombinedStreams(stream))
 
 	if err != nil {
 		return nil, nil, err

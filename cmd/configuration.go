@@ -177,7 +177,7 @@ func (c *configuration) PostLoad() error {
 	return validation.Check(validation.Of{
 		"data.deployment_dir_template": validation.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
 		"runners.poll_interval":        validation.Value(c.Runners.PollInterval, &c.pollInterval, time.ParseDuration),
-		"runners.deployment":           validation.Is(c.Runners.Deployment, numbers.Min(0)),
+		"runners.deployment":           validation.Is(c.Runners.Deployment, numbers.Min(1)),
 		"balancer.domain":              domainUrlErr,
 		"balancer.acme.email": validation.If(domainUrlErr == nil && c.domain.UseSSL(), func() error {
 			return validation.Value(c.AcmeEmail(), &acmeEmail, auth.EmailFrom)

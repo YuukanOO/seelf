@@ -2,10 +2,13 @@ package serve
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
+	httputils "github.com/YuukanOO/seelf/pkg/http"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
@@ -93,6 +96,40 @@ func (s *server) transactional(ctx *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 	}
+}
+
+func (s *server) requestLogger(ctx *gin.Context) {
+	start := time.Now()
+
+	path := ctx.Request.URL.Path
+	raw := ctx.Request.URL.RawQuery
+
+	if raw != "" {
+		path = path + "?" + raw
+	}
+
+	ctx.Next()
+
+	s.logger.Debugw(path,
+		"status", ctx.Writer.Status(),
+		"method", ctx.Request.Method,
+		"elapsed", time.Since(start))
+}
+
+func (s *server) recoverer(ctx *gin.Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			asErr, ok := err.(error)
+
+			if !ok {
+				asErr = fmt.Errorf("%v", err)
+			}
+
+			httputils.HandleError(s, ctx, asErr)
+		}
+	}()
+
+	ctx.Next()
 }
 
 func needsTransaction(ctx *gin.Context) bool {

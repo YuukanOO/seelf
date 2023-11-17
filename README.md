@@ -1,6 +1,6 @@
 # seelf : Painless self-hosted deployment platform
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/YuukanOO/seelf/ci.yml) ![Docker Image Size (latest semver)](https://img.shields.io/docker/image-size/yuukanoo/seelf) ![Docker Image Version (latest semver)](https://img.shields.io/docker/v/yuukanoo/seelf) ![GitHub](https://img.shields.io/github/license/YuukanOO/seelf)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/YuukanOO/seelf/ci.yml) [![Docker Image Size (latest semver)](https://img.shields.io/docker/image-size/yuukanoo/seelf)](https://hub.docker.com/r/yuukanoo/seelf) [![Docker Image Version (latest semver)](https://img.shields.io/docker/v/yuukanoo/seelf)](https://hub.docker.com/r/yuukanoo/seelf) ![GitHub](https://img.shields.io/github/license/YuukanOO/seelf)
 
 I mean, for real!
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from '$components/button.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import Form from '$components/form.svelte';
 	import PageTitle from '$components/page-title.svelte';
 	import Stack from '$components/stack.svelte';
@@ -24,19 +25,22 @@
 					<h1 class="title">Sign in</h1>
 					<p>Please fill the form below to access your dashboard.</p>
 				</div>
+
+				<FormErrors {errors} />
+
 				<TextInput
 					label="Email"
 					type="email"
 					bind:value={email}
 					required
-					remoteError={errors.email}
+					remoteError={errors?.email}
 				/>
 				<TextInput
 					label="Password"
 					type="password"
 					bind:value={password}
 					required
-					remoteError={errors.password}
+					remoteError={errors?.password}
 				/>
 				<Stack justify="flex-end">
 					<Button type="submit" loading={submitting}>Sign in</Button>

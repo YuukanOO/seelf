@@ -4,6 +4,7 @@
 	import Button from '$components/button.svelte';
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import Dropdown, { type DropdownOption } from '$components/dropdown.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import FormSection from '$components/form-section.svelte';
 	import Form from '$components/form.svelte';
 	import InputFile from '$components/input-file.svelte';
@@ -66,23 +67,23 @@
 	}
 
 	function copyCurlCommand() {
-		let payload: string = ` `;
+		const payload = select(kind, {
+			git: `-H "Content-Type: application/json" -d "{ \\"environment\\":\\"${environment}\\",\\"git\\":{ \\"branch\\": \\"${branch}\\"${
+				hash ? `, \\"hash\\":\\"${hash}\\"` : ''
+			} } }" `,
+			raw: `-H "Content-Type: application/json" -d "{ \\"environment\\":\\"${environment}\\", \\"raw\\":\\"${JSON.stringify(
+				raw
+			)
+				.replaceAll('\\"', '"')
+				.substring(1)
+				.slice(0, -1)}\\"}"`,
+			archive: `-F environment=${environment} -F archive=@${
+				archive?.[0]?.name ?? '<path_to_a_tar_gz_archive>'
+			}`
+		});
 
-		switch (kind) {
-			case 'git':
-				payload = `-H "Content-Type: application/json" -d "{ \\"environment\\":\\"${environment}\\",\\"git\\":{ \\"branch\\": \\"${branch}\\"${
-					hash ? `, \\"hash\\":\\"${hash}\\"` : ''
-				} } }" `;
-				break;
-			case 'raw':
-				const rawAsStr = JSON.stringify(raw).replaceAll('\\"', '"').substring(1).slice(0, -1);
-				payload = `-H "Content-Type: application/json" -d "{ \\"environment\\":\\"${environment}\\", \\"raw\\":\\"${rawAsStr}\\"}"`;
-				break;
-			case 'archive':
-				payload = `-F environment=${environment} -F archive=@${
-					archive?.[0]?.name ?? '<path_to_a_tar_gz_archive>'
-				}`;
-				break;
+		if (!payload) {
+			return;
 		}
 
 		navigator.clipboard.writeText(
@@ -106,40 +107,49 @@
 		{/if}
 	</Breadcrumb>
 
-	<FormSection title="Environment">
-		<Dropdown label="Target" {options} bind:value={environment} />
-	</FormSection>
+	<Stack direction="column">
+		<FormErrors {errors} />
 
-	<FormSection title="Payload">
-		<svelte:fragment slot="actions">
-			<Button variant="outlined" on:click={copyCurlCommand}>Copy cURL command</Button>
-		</svelte:fragment>
+		<div>
+			<FormSection title="Environment">
+				<Dropdown label="Target" {options} bind:value={environment} />
+			</FormSection>
 
-		<Stack direction="column">
-			<Dropdown label="Kind" options={kindOptions} bind:value={kind} />
-			{#if kind === 'raw'}
-				<TextArea
-					code
-					rows={20}
-					required
-					label="Content"
-					bind:value={raw}
-					remoteError={errors.content}
-				>
-					<p>
-						Content of the service file (compose.yml if you're using Docker Compose for example).
-					</p>
-				</TextArea>
-			{:else if kind === 'git'}
-				<TextInput label="Branch" bind:value={branch} required remoteError={errors.branch} />
-				<TextInput label="Commit" bind:value={hash} remoteError={errors.hash}>
-					<p>Optional specific commit to deploy. Leave empty to deploy the latest branch commit.</p>
-				</TextInput>
-			{:else if kind === 'archive'}
-				<InputFile accept="application/gzip" label="File" required bind:files={archive} />
-			{/if}
-		</Stack>
-	</FormSection>
+			<FormSection title="Payload">
+				<svelte:fragment slot="actions">
+					<Button variant="outlined" on:click={copyCurlCommand}>Copy cURL command</Button>
+				</svelte:fragment>
+
+				<Stack direction="column">
+					<Dropdown label="Kind" options={kindOptions} bind:value={kind} />
+					{#if kind === 'raw'}
+						<TextArea
+							code
+							rows={20}
+							required
+							label="Content"
+							bind:value={raw}
+							remoteError={errors?.content}
+						>
+							<p>
+								Content of the service file (compose.yml if you're using Docker Compose for
+								example).
+							</p>
+						</TextArea>
+					{:else if kind === 'git'}
+						<TextInput label="Branch" bind:value={branch} required remoteError={errors?.branch} />
+						<TextInput label="Commit" bind:value={hash} remoteError={errors?.hash}>
+							<p>
+								Optional specific commit to deploy. Leave empty to deploy the latest branch commit.
+							</p>
+						</TextInput>
+					{:else if kind === 'archive'}
+						<InputFile accept="application/gzip" label="File" required bind:files={archive} />
+					{/if}
+				</Stack>
+			</FormSection>
+		</div>
+	</Stack>
 </Form>
 
 <style module>

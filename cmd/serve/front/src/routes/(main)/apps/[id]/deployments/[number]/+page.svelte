@@ -6,6 +6,7 @@
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import Console from '$components/console.svelte';
 	import DeploymentCard from '$components/deployment-card.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import Stack from '$components/stack.svelte';
 	import { submitter } from '$lib/form';
 	import routes from '$lib/path';
@@ -42,7 +43,11 @@
 		}
 	}
 
-	$: ({ loading: redeploying, submit: redeploy } = submitter(
+	$: ({
+		loading: redeploying,
+		errors: redeployErr,
+		submit: redeploy
+	} = submitter(
 		() =>
 			service
 				.redeploy(data.app.id, data.deployment.deployment_number)
@@ -52,7 +57,11 @@
 		}
 	));
 
-	$: ({ loading: promoting, submit: promote } = submitter(
+	$: ({
+		loading: promoting,
+		errors: promoteErr,
+		submit: promote
+	} = submitter(
 		() =>
 			service
 				.promote(data.app.id, data.deployment.deployment_number)
@@ -81,6 +90,9 @@
 </Breadcrumb>
 
 <Stack direction="column">
+	<FormErrors errors={$redeployErr} title="Redeploy failed" />
+	<FormErrors errors={$promoteErr} title="Promote failed" />
+
 	{#if $deployment}
 		<DeploymentCard {isStale} data={$deployment} />
 	{/if}

@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { ValidationError } from '$lib/error';
+	import { submitter } from '$lib/form';
 
-	let submitting = false;
-	let errors: Record<string, Maybe<string>> = {};
 	let className: string = '';
 
 	/** Async handler of the form, will be called upon submit. */
@@ -14,24 +12,11 @@
 	/** Additional css classes */
 	export { className as class };
 
-	async function onSubmit() {
-		try {
-			submitting = true;
-			await handler();
-		} catch (ex) {
-			if (ex instanceof ValidationError) {
-				errors = ex.fields;
-			} else {
-				console.error(ex);
-			}
-		} finally {
-			submitting = false;
-		}
-	}
+	const { submit, loading, errors } = submitter(handler);
 </script>
 
-<form on:submit|preventDefault={onSubmit} {autocomplete}>
-	<fieldset class={className} disabled={submitting || disabled}>
-		<slot {submitting} {errors} />
+<form on:submit|preventDefault={submit} {autocomplete}>
+	<fieldset class={className} disabled={$loading || disabled}>
+		<slot submitting={$loading} errors={$errors} />
 	</fieldset>
 </form>

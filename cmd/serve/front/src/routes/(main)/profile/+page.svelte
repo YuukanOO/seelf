@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Breadcrumb from '$components/breadcrumb.svelte';
 	import Button from '$components/button.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import FormSection from '$components/form-section.svelte';
 	import Form from '$components/form.svelte';
 	import Panel from '$components/panel.svelte';
@@ -26,36 +27,42 @@
 		<Button type="submit" loading={submitting}>Save</Button>
 	</Breadcrumb>
 
-	<FormSection title="User information">
-		<Stack direction="column">
-			<TextInput label="Email" type="email" bind:value={email} remoteError={errors.email} />
-			<TextInput
-				label="New password"
-				type="password"
-				autocomplete="new-password"
-				bind:value={password}
-				remoteError={errors.password}
-			>
-				<p>Leave empty if you don't want to change your password.</p>
-			</TextInput>
-		</Stack>
-	</FormSection>
+	<Stack direction="column">
+		<FormErrors {errors} />
 
-	<FormSection title="Integration">
-		<Stack direction="column">
-			<Panel title="Integration with CI" variant="help">
-				<p>
-					If you want to trigger a deployment for an application, you'll need this token. You can
-					also click the <strong>Copy cURL command</strong> from the deployment page and use it in your
-					pipeline since it includes the token in the appropriate header.
-				</p>
-			</Panel>
-			<TextArea label="API Key" rows={1} code value={data.user.api_key} readonly>
-				<p>
-					Pass this token as an <code>Authorization: Bearer</code> header to communicate with the
-					seelf API. <strong>You MUST keep it secret!</strong>
-				</p>
-			</TextArea>
-		</Stack>
-	</FormSection>
+		<div>
+			<FormSection title="User information">
+				<Stack direction="column">
+					<TextInput label="Email" type="email" bind:value={email} remoteError={errors?.email} />
+					<TextInput
+						label="New password"
+						type="password"
+						autocomplete="new-password"
+						bind:value={password}
+						remoteError={errors?.password}
+					>
+						<p>Leave empty if you don't want to change your password.</p>
+					</TextInput>
+				</Stack>
+			</FormSection>
+
+			<FormSection title="Integration">
+				<Stack direction="column">
+					<Panel title="Integration with CI" variant="help">
+						<p>
+							If you want to trigger a deployment for an application, you'll need this token. You
+							can also click the <strong>Copy cURL command</strong> from the deployment page and use
+							it in your pipeline since it includes the token in the appropriate header.
+						</p>
+					</Panel>
+					<TextArea label="API Key" rows={1} code value={data.user.api_key} readonly>
+						<p>
+							Pass this token as an <code>Authorization: Bearer</code> header to communicate with
+							the seelf API. <strong>You MUST keep it secret!</strong>
+						</p>
+					</TextArea>
+				</Stack>
+			</FormSection>
+		</div>
+	</Stack>
 </Form>

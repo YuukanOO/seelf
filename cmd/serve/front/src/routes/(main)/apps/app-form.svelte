@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Checkbox from '$components/checkbox.svelte';
 	import FormEnvVars from '$components/form-env-vars.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import FormSection from '$components/form-section.svelte';
 	import Form from '$components/form.svelte';
 	import Link from '$components/link.svelte';
@@ -84,107 +85,115 @@
 <Form {disabled} handler={submit} let:submitting let:errors>
 	<slot {submitting} />
 
-	{#if !initialData}
-		<FormSection title="General settings">
-			<Stack direction="column">
-				<TextInput
-					autofocus={!initialData}
-					label="Name"
-					bind:value={name}
-					required
-					remoteError={errors.name}
-				>
-					<p>
-						The application name will determine the subdomain from which deployments will be
-						available. That's why you should <strong>only</strong> use
-						<strong>alphanumeric characters</strong> and a <strong>unique</strong> name accross seelf.
-					</p>
-				</TextInput>
-				<Panel title="How does seelf expose services?" variant="help" format="collapsable">
-					<p>
-						Services with <strong>port mappings defined</strong> will be exposed with the following convention:
-					</p>
-					<table>
-						<thead>
-							<tr>
-								<th>Environnment</th>
-								<th>Default service (first one in alphabetical order)</th>
-								<th>Other exposed services (example: <code>dashboard</code>)</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td data-label="Environment"><strong>production</strong></td>
-								<td data-label="Default service (first one in alphabetical order)">
-									{domainUrl.protocol}//{appName}.{domainUrl.host}
-								</td>
-								<td data-label="Other exposed services (example: dashboard)">
-									{domainUrl.protocol}//dashboard.{appName}.{domainUrl.host}
-								</td>
-							</tr>
-							<tr>
-								<td data-label="Environment"><strong>staging</strong></td>
-								<td data-label="Default service (first one in alphabetical order)">
-									{domainUrl.protocol}//{appName}-staging.{domainUrl.host}
-								</td>
-								<td data-label="Other exposed services (example: dashboard)">
-									{domainUrl.protocol}//dashboard.{appName}-staging.{domainUrl.host}
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</Panel>
-			</Stack>
-		</FormSection>
-	{/if}
+	<Stack direction="column">
+		<FormErrors {errors} />
 
-	<FormSection title="Version control">
-		<Stack direction="column">
-			<Checkbox label="Use version control system?" bind:checked={useVCS}>
-				<p>
-					If not under version control, you will still be able to manually deploy your application.
-				</p>
-			</Checkbox>
-			{#if useVCS}
-				<TextInput label="Url" required type="url" bind:value={url} />
-				<TextInput
-					label="Access token"
-					autocomplete="new-password"
-					type="password"
-					bind:value={token}
-				>
-					<p>
-						Token used to fetch the provided repository. Generally known as <strong
-							>Personal Access Token</strong
-						>, you can find some instructions for <Link
-							external
-							newWindow
-							href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
-							>GitHub</Link
-						> and <Link
-							external
-							newWindow
-							href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
-							>GitLab</Link
-						>, leave empty if the repository is public.
-					</p>
-				</TextInput>
+		<div>
+			{#if !initialData}
+				<FormSection title="General settings">
+					<Stack direction="column">
+						<TextInput
+							autofocus={!initialData}
+							label="Name"
+							bind:value={name}
+							required
+							remoteError={errors?.name}
+						>
+							<p>
+								The application name will determine the subdomain from which deployments will be
+								available. That's why you should <strong>only</strong> use
+								<strong>alphanumeric characters</strong> and a <strong>unique</strong> name accross seelf.
+							</p>
+						</TextInput>
+						<Panel title="How does seelf expose services?" variant="help" format="collapsable">
+							<p>
+								Services with <strong>port mappings defined</strong> will be exposed with the following
+								convention:
+							</p>
+							<table>
+								<thead>
+									<tr>
+										<th>Environnment</th>
+										<th>Default service (first one in alphabetical order)</th>
+										<th>Other exposed services (example: <code>dashboard</code>)</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td data-label="Environment"><strong>production</strong></td>
+										<td data-label="Default service (first one in alphabetical order)">
+											{domainUrl.protocol}//{appName}.{domainUrl.host}
+										</td>
+										<td data-label="Other exposed services (example: dashboard)">
+											{domainUrl.protocol}//dashboard.{appName}.{domainUrl.host}
+										</td>
+									</tr>
+									<tr>
+										<td data-label="Environment"><strong>staging</strong></td>
+										<td data-label="Default service (first one in alphabetical order)">
+											{domainUrl.protocol}//{appName}-staging.{domainUrl.host}
+										</td>
+										<td data-label="Other exposed services (example: dashboard)">
+											{domainUrl.protocol}//dashboard.{appName}-staging.{domainUrl.host}
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</Panel>
+					</Stack>
+				</FormSection>
 			{/if}
-		</Stack>
-	</FormSection>
 
-	<FormSection title="Environment variables" transparent>
-		<Stack direction="column">
-			{#if initialData}
-				<Panel variant="help" title="Note about variables" format="inline">
-					<p>
-						Updates to your application environment variables will be effective on the next
-						deployment.
-					</p>
-				</Panel>
-			{/if}
-			<FormEnvVars title="production" bind:values={production} />
-			<FormEnvVars title="staging" bind:values={staging} />
-		</Stack>
-	</FormSection>
+			<FormSection title="Version control">
+				<Stack direction="column">
+					<Checkbox label="Use version control system?" bind:checked={useVCS}>
+						<p>
+							If not under version control, you will still be able to manually deploy your
+							application.
+						</p>
+					</Checkbox>
+					{#if useVCS}
+						<TextInput label="Url" required type="url" bind:value={url} />
+						<TextInput
+							label="Access token"
+							autocomplete="new-password"
+							type="password"
+							bind:value={token}
+						>
+							<p>
+								Token used to fetch the provided repository. Generally known as <strong
+									>Personal Access Token</strong
+								>, you can find some instructions for <Link
+									external
+									newWindow
+									href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+									>GitHub</Link
+								> and <Link
+									external
+									newWindow
+									href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
+									>GitLab</Link
+								>, leave empty if the repository is public.
+							</p>
+						</TextInput>
+					{/if}
+				</Stack>
+			</FormSection>
+
+			<FormSection title="Environment variables" transparent>
+				<Stack direction="column">
+					{#if initialData}
+						<Panel variant="help" title="Note about variables" format="inline">
+							<p>
+								Updates to your application environment variables will be effective on the next
+								deployment.
+							</p>
+						</Panel>
+					{/if}
+					<FormEnvVars title="production" bind:values={production} />
+					<FormEnvVars title="staging" bind:values={staging} />
+				</Stack>
+			</FormSection>
+		</div>
+	</Stack>
 </Form>

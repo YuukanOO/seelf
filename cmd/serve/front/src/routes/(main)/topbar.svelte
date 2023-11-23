@@ -6,6 +6,7 @@
 	import Stack from '$components/stack.svelte';
 	import Menu from '$assets/icons/menu.svelte';
 	import routes from '$lib/path';
+	import l from '$lib/localization';
 
 	export let user: Profile;
 	export let version: string;
@@ -19,7 +20,7 @@
 		<label class="menu-toggle" aria-label="Show menu" for="menu"><Menu /></label>
 		<div class="menu-content">
 			<nav class="nav">
-				<Link href={routes.apps} class="link">Applications</Link>
+				<Link href={routes.apps} class="link">{l.translate('breadcrumb.applications')}</Link>
 			</nav>
 			<Account {user} />
 		</div>

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Stack from '$components/stack.svelte';
+	import l, { type AppTranslationsString } from '$lib/localization';
 
-	export let title: string;
+	export let title: AppTranslationsString;
 
 	/** Render the section title but does not wrap the inner slot in a specific container style */
 	export let transparent: boolean = false;
@@ -9,7 +10,7 @@
 
 <fieldset class="section">
 	<Stack justify="space-between">
-		<legend class="title">{title}</legend>
+		<legend class="title">{l.translate(title)}</legend>
 		{#if $$slots.actions}
 			<Stack>
 				<slot name="actions" />

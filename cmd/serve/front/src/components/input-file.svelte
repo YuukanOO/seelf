@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { messageFromAttributes } from '$lib/form';
 	import InputAdorner from '$components/input-adorner.svelte';
+	import type { AppTranslationsString } from '$lib/localization';
 
 	let touched = false;
 
-	export let label: string;
+	export let label: AppTranslationsString;
 	export let accept: Maybe<string> = undefined;
 	export let required = false;
 	export let files: Maybe<FileList> = undefined;

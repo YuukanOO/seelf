@@ -1,5 +1,6 @@
 import { writable, type Readable } from 'svelte/store';
 import { BadRequestError } from '$lib/error';
+import l, { type AppTranslationsString } from '$lib/localization';
 
 /**
  * Keys inside SubmitterErrors representing an error not tied to a specific field.
@@ -16,14 +17,14 @@ export function messageFromAttributes(attributes: {
 	const validations: string[] = [];
 
 	if (attributes.required) {
-		validations.push('required');
+		validations.push(l.translate('required'));
 	}
 
 	if (attributes.type && !['text', 'password'].includes(attributes.type)) {
-		validations.push(attributes.type);
+		validations.push(l.translate(attributes.type as AppTranslationsString));
 	}
 
-	return validations.join(', ');
+	return validations.join(', ').toLowerCase();
 }
 
 /**

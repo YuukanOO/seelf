@@ -6,6 +6,7 @@
 	import Stack from '$components/stack.svelte';
 	import select from '$lib/select';
 	import routes from '$lib/path';
+	import l from '$lib/localization';
 
 	export let data: DeploymentData;
 </script>
@@ -13,7 +14,7 @@
 <Stack
 	as="a"
 	href={routes.deployment(data.app_id, data.deployment_number)}
-	title={`View deployment #${data.deployment_number} details and logs`}
+	title={l.translate('deployment.details_tooltip', [data.deployment_number])}
 	class="pill"
 	gap={1}
 >

@@ -9,6 +9,7 @@
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import { submitter } from '$lib/form';
 	import FormErrors from '$components/form-errors.svelte';
+	import l from '$lib/localization';
 
 	export let data;
 
@@ -20,31 +21,28 @@
 		errors,
 		submit: deleteApp
 	} = submitter(() => service.delete(data.app.id).then(() => goto(routes.apps)), {
-		confirmation: `Are you sure you want to delete the application ${data.app.name}?
-
-This action is IRREVERSIBLE and will DELETE ALL DATA associated with this application: containers, images, volumes, logs and networks.`
+		confirmation: l.translate('app.delete.confirm', [data.app.name])
 	});
 </script>
 
 <AppForm disabled={$deleting} handler={submit} initialData={data.app} domain={data.health.domain}>
 	<svelte:fragment slot="default" let:submitting>
 		<Breadcrumb
-			title={`${data.app.name} settings`}
+			title={l.translate('breadcrumb.application.settings', [data.app.name])}
 			segments={[
-				{ path: routes.apps, title: 'Applications' },
+				{ path: routes.apps, title: l.translate('breadcrumb.applications') },
 				{ path: routes.app(data.app.id), title: data.app.name },
-				'Settings'
+				l.translate('breadcrumb.settings')
 			]}
 		>
 			{#if data.app.cleanup_requested_at}
 				<CleanupNotice data={data.app} />
 			{:else}
-				<Button loading={$deleting} on:click={deleteApp} variant="danger">Delete application</Button
-				>
-				<Button type="submit" loading={submitting}>Save</Button>
+				<Button loading={$deleting} on:click={deleteApp} variant="danger" text="app.delete" />
+				<Button type="submit" loading={submitting} text="save" />
 			{/if}
 		</Breadcrumb>
-		<FormErrors title="Deletion failed" class="delete-form-errors" errors={$errors} />
+		<FormErrors title="app.delete.failed" class="delete-form-errors" errors={$errors} />
 	</svelte:fragment>
 </AppForm>
 

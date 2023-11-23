@@ -10,12 +10,13 @@
 <script lang="ts">
 	import ArrowDown from '$assets/icons/arrow-down.svelte';
 	import InputAdorner from '$components/input-adorner.svelte';
+	import type { AppTranslationsString } from '$lib/localization';
 
 	type T = $$Generic<string>;
 
 	let touched = false;
 
-	export let label: string;
+	export let label: AppTranslationsString;
 	export let options: DropdownOption<T>[] = [];
 	export let value: Maybe<string> = undefined;
 </script>

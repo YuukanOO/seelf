@@ -15,6 +15,7 @@
 		fromServiceVariablesRecord,
 		type UpdateAppData
 	} from '$lib/resources/apps';
+	import l from '$lib/localization';
 
 	export let handler: (data: any) => Promise<unknown>;
 	export let initialData: Maybe<AppDetailData> = undefined;
@@ -30,7 +31,12 @@
 	let url = initialData?.vcs?.url ?? '';
 	let token = initialData?.vcs?.token;
 
-	$: appName = name || '<app-name>';
+	$: appName = name || l.translate('app.how.placeholder');
+
+	const environmentText = l.translate('app.how.env');
+	const defaultServiceText = l.translate('app.how.default');
+	const otherServicesText = l.translate('app.how.others');
+	const otherServicesTitleText = l.translate('app.how.others.title');
 
 	// Type $$Props to narrow the handler function based on wether this is an update or a new app
 	type $$Props = {
@@ -90,50 +96,43 @@
 
 		<div>
 			{#if !initialData}
-				<FormSection title="General settings">
+				<FormSection title="app.general">
 					<Stack direction="column">
 						<TextInput
 							autofocus={!initialData}
-							label="Name"
+							label="name"
 							bind:value={name}
 							required
 							remoteError={errors?.name}
 						>
-							<p>
-								The application name will determine the subdomain from which deployments will be
-								available. That's why you should <strong>only</strong> use
-								<strong>alphanumeric characters</strong> and a <strong>unique</strong> name accross seelf.
-							</p>
+							<p>{@html l.translate('app.name.help')}</p>
 						</TextInput>
-						<Panel title="How does seelf expose services?" variant="help" format="collapsable">
-							<p>
-								Services with <strong>port mappings defined</strong> will be exposed with the following
-								convention:
-							</p>
+						<Panel title="app.how" variant="help" format="collapsable">
+							<p>{@html l.translate('app.how.description')}</p>
 							<table>
 								<thead>
 									<tr>
-										<th>Environnment</th>
-										<th>Default service (first one in alphabetical order)</th>
-										<th>Other exposed services (example: <code>dashboard</code>)</th>
+										<th>{environmentText}</th>
+										<th>{defaultServiceText}</th>
+										<th>{@html otherServicesText}</th>
 									</tr>
 								</thead>
 								<tbody>
 									<tr>
-										<td data-label="Environment"><strong>production</strong></td>
-										<td data-label="Default service (first one in alphabetical order)">
+										<td data-label={environmentText}><strong>production</strong></td>
+										<td data-label={defaultServiceText}>
 											{domainUrl.protocol}//{appName}.{domainUrl.host}
 										</td>
-										<td data-label="Other exposed services (example: dashboard)">
+										<td data-label={otherServicesTitleText}>
 											{domainUrl.protocol}//dashboard.{appName}.{domainUrl.host}
 										</td>
 									</tr>
 									<tr>
-										<td data-label="Environment"><strong>staging</strong></td>
-										<td data-label="Default service (first one in alphabetical order)">
+										<td data-label={environmentText}><strong>staging</strong></td>
+										<td data-label={defaultServiceText}>
 											{domainUrl.protocol}//{appName}-staging.{domainUrl.host}
 										</td>
-										<td data-label="Other exposed services (example: dashboard)">
+										<td data-label={otherServicesTitleText}>
 											{domainUrl.protocol}//dashboard.{appName}-staging.{domainUrl.host}
 										</td>
 									</tr>
@@ -144,50 +143,45 @@
 				</FormSection>
 			{/if}
 
-			<FormSection title="Version control">
+			<FormSection title="app.vcs">
 				<Stack direction="column">
-					<Checkbox label="Use version control system?" bind:checked={useVCS}>
-						<p>
-							If not under version control, you will still be able to manually deploy your
-							application.
-						</p>
+					<Checkbox label="app.vcs.enabled" bind:checked={useVCS}>
+						<p>{@html l.translate('app.vcs.help')}</p>
 					</Checkbox>
 					{#if useVCS}
-						<TextInput label="Url" required type="url" bind:value={url} />
+						<TextInput label="url" required type="url" bind:value={url} />
 						<TextInput
-							label="Access token"
+							label="app.vcs.token"
 							autocomplete="new-password"
 							type="password"
 							bind:value={token}
 						>
 							<p>
-								Token used to fetch the provided repository. Generally known as <strong
-									>Personal Access Token</strong
-								>, you can find some instructions for <Link
+								{@html l.translate('app.vcs.token.help.instructions')}
+								<Link
 									external
 									newWindow
 									href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
 									>GitHub</Link
-								> and <Link
+								>
+								{l.translate('and')}
+								<Link
 									external
 									newWindow
 									href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
 									>GitLab</Link
-								>, leave empty if the repository is public.
+								>{l.translate('app.vcs.token.help.leave_empty')}
 							</p>
 						</TextInput>
 					{/if}
 				</Stack>
 			</FormSection>
 
-			<FormSection title="Environment variables" transparent>
+			<FormSection title="app.environments" transparent>
 				<Stack direction="column">
 					{#if initialData}
-						<Panel variant="help" title="Note about variables" format="inline">
-							<p>
-								Updates to your application environment variables will be effective on the next
-								deployment.
-							</p>
+						<Panel variant="help" title="app.environments.help" format="inline">
+							<p>{l.translate('app.environments.help.description')}</p>
 						</Panel>
 					{/if}
 					<FormEnvVars title="production" bind:values={production} />

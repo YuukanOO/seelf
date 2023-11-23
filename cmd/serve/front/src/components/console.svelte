@@ -1,7 +1,8 @@
 <script lang="ts">
+	import l, { type AppTranslationsString } from '$lib/localization';
 	import { afterUpdate } from 'svelte';
 
-	export let title: string;
+	export let title: AppTranslationsString;
 	export let data: Maybe<string>;
 
 	let container: HTMLDivElement;
@@ -32,7 +33,7 @@
 </script>
 
 <div class="console">
-	<h2 class="title">{title}</h2>
+	<h2 class="title">{l.translate(title)}</h2>
 	<div class="scrollarea" bind:this={container} on:scroll={onScroll}>
 		<pre>{data}</pre>
 	</div>

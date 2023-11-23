@@ -19,6 +19,7 @@
 		type QueueDeploymentData
 	} from '$lib/resources/deployments';
 	import select from '$lib/select.js';
+	import l from '$lib/localization';
 
 	export let data;
 
@@ -32,9 +33,9 @@
 	const options: Environment[] = ['production', 'staging'];
 	const kindOptions = (
 		[
-			{ label: 'compose file', value: 'raw' },
-			{ label: 'project archive (tar.gz)', value: 'archive' },
-			{ label: 'git', value: 'git' }
+			{ label: l.translate('deployment.payload.raw'), value: 'raw' },
+			{ label: l.translate('deployment.payload.archive'), value: 'archive' },
+			{ label: l.translate('deployment.payload.vcs'), value: 'git' }
 		] satisfies DropdownOption<SourceDataDiscriminator>[]
 	).filter((k) => (!data.app.vcs ? k.value !== 'git' : true));
 
@@ -95,15 +96,15 @@
 <Form handler={submit} let:submitting let:errors>
 	<Breadcrumb
 		segments={[
-			{ path: routes.apps, title: 'Applications' },
+			{ path: routes.apps, title: l.translate('breadcrumb.applications') },
 			{ path: routes.app(data.app.id), title: data.app.name },
-			'New deployment'
+			l.translate('breadcrumb.deployment.new')
 		]}
 	>
 		{#if data.app.cleanup_requested_at}
 			<CleanupNotice data={data.app} />
 		{:else}
-			<Button type="submit" loading={submitting}>Deploy</Button>
+			<Button type="submit" loading={submitting} text="deployment.deploy" />
 		{/if}
 	</Breadcrumb>
 
@@ -111,40 +112,48 @@
 		<FormErrors {errors} />
 
 		<div>
-			<FormSection title="Environment">
-				<Dropdown label="Target" {options} bind:value={environment} />
+			<FormSection title="deployment.environment">
+				<Dropdown label="deployment.environment" {options} bind:value={environment} />
 			</FormSection>
 
-			<FormSection title="Payload">
+			<FormSection title="deployment.payload">
 				<svelte:fragment slot="actions">
-					<Button variant="outlined" on:click={copyCurlCommand}>Copy cURL command</Button>
+					<Button
+						variant="outlined"
+						on:click={copyCurlCommand}
+						text="deployment.payload.copy_curl"
+					/>
 				</svelte:fragment>
 
 				<Stack direction="column">
-					<Dropdown label="Kind" options={kindOptions} bind:value={kind} />
+					<Dropdown label="deployment.payload.kind" options={kindOptions} bind:value={kind} />
 					{#if kind === 'raw'}
 						<TextArea
 							code
 							rows={20}
 							required
-							label="Content"
+							label="deployment.payload.raw.content"
 							bind:value={raw}
 							remoteError={errors?.content}
 						>
-							<p>
-								Content of the service file (compose.yml if you're using Docker Compose for
-								example).
-							</p>
+							<p>{l.translate('deployment.payload.raw.content.help')}</p>
 						</TextArea>
 					{:else if kind === 'git'}
-						<TextInput label="Branch" bind:value={branch} required remoteError={errors?.branch} />
-						<TextInput label="Commit" bind:value={hash} remoteError={errors?.hash}>
-							<p>
-								Optional specific commit to deploy. Leave empty to deploy the latest branch commit.
-							</p>
+						<TextInput
+							label="deployment.payload.vcs.branch"
+							bind:value={branch}
+							required
+							remoteError={errors?.branch}
+						/>
+						<TextInput
+							label="deployment.payload.vcs.commit"
+							bind:value={hash}
+							remoteError={errors?.hash}
+						>
+							<p>{l.translate('deployment.payload.vcs.commit.help')}</p>
 						</TextInput>
 					{:else if kind === 'archive'}
-						<InputFile accept="application/gzip" label="File" required bind:files={archive} />
+						<InputFile accept="application/gzip" label="file" required bind:files={archive} />
 					{/if}
 				</Stack>
 			</FormSection>

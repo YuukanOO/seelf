@@ -1,8 +1,9 @@
 <script lang="ts">
 	import Prose from '$components/prose.svelte';
 	import Stack from '$components/stack.svelte';
+	import l, { type AppTranslationsString } from '$lib/localization';
 
-	export let title: string;
+	export let title: AppTranslationsString;
 	export let variant: 'help' | 'danger' | 'warning' = 'help';
 	export let format: 'default' | 'collapsable' | 'inline' = 'default';
 	let className: string = '';
@@ -16,7 +17,7 @@
 		class="container {className}"
 		style="--panel-border-color: var(--co-{variant}-3);--panel-background-color: var(--co-{variant}-1);--panel-title-color: var(--co-{variant}-4);"
 	>
-		<summary class="title">{title}</summary>
+		<summary class="title">{l.translate(title)}</summary>
 		<Prose class="content">
 			<slot />
 		</Prose>
@@ -29,7 +30,7 @@
 		direction={format === 'inline' ? 'row' : 'column'}
 		gap={2}
 	>
-		<div class="title">{title}</div>
+		<div class="title">{l.translate(title)}</div>
 		<Prose>
 			<slot />
 		</Prose>

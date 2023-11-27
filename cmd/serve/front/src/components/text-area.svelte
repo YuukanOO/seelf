@@ -1,10 +1,11 @@
 <script lang="ts">
 	import InputAdorner from '$components/input-adorner.svelte';
 	import { messageFromAttributes } from '$lib/form';
+	import type { AppTranslationsString } from '$lib/localization';
 
 	let touched = false;
 
-	export let label: string;
+	export let label: AppTranslationsString;
 	export let rows: Maybe<number> = undefined;
 	export let placeholder: Maybe<string> = undefined;
 	export let value: Maybe<string> = undefined;

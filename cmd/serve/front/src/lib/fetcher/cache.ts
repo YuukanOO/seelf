@@ -127,10 +127,10 @@ export default class CacheFetchService implements FetchService {
 	private async mutate<TOut, TIn>(
 		method: HttpMethod,
 		url: string,
-		data?: TIn,
+		body?: TIn,
 		options?: MutateOptions
 	): Promise<TOut> {
-		const result = await api<TOut, TIn>(method, url, data, options);
+		const result = await api<TOut, TIn>(method, url, body, options);
 
 		// Invalidate all the cache entries that matches the base key
 		const keys = [url, ...(options?.invalidate ?? [])];
@@ -148,13 +148,13 @@ type HttpMethod = 'POST' | 'PUT' | 'PATCH' | 'GET' | 'DELETE';
 async function api<TOut = unknown, TIn = unknown>(
 	method: HttpMethod,
 	url: string,
-	data?: TIn,
+	body?: TIn,
 	options?: Omit<FetchOptions, 'params' | 'depends'>
 ): Promise<TOut> {
 	const additionalHeaders: HeadersInit = {};
-	const isFormData = data instanceof FormData;
+	const isFormData = body instanceof FormData;
 
-	if (data && !isFormData) {
+	if (body && !isFormData) {
 		additionalHeaders['Content-Type'] = 'application/json';
 	}
 
@@ -165,7 +165,7 @@ async function api<TOut = unknown, TIn = unknown>(
 			...additionalHeaders
 		},
 		cache: options?.cache,
-		body: data ? (isFormData ? data : JSON.stringify(data)) : undefined
+		body: body ? (isFormData ? body : JSON.stringify(body)) : undefined
 	});
 
 	if (!response.ok) {

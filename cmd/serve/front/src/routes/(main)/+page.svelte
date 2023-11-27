@@ -6,12 +6,13 @@
 	import Link from '$components/link.svelte';
 	import routes from '$lib/path';
 	import service from '$lib/resources/apps';
+	import l from '$lib/localization';
 
 	const { data } = service.queryAll();
 </script>
 
-<Breadcrumb segments={['Applications']}>
-	<Button href={routes.createApp}>New application</Button>
+<Breadcrumb segments={[l.translate('breadcrumb.applications')]}>
+	<Button href={routes.createApp} text="app.new" />
 </Breadcrumb>
 
 {#if $data && $data.length > 0}
@@ -23,9 +24,8 @@
 {:else}
 	<BlankSlate>
 		<p>
-			Looks like you have no application yet. Start by <Link href={routes.createApp}
-				>creating one</Link
-			>!
+			{l.translate('app.blankslate.title')}
+			<Link href={routes.createApp}>{l.translate('app.blankslate.cta')}</Link>
 		</p>
 	</BlankSlate>
 {/if}

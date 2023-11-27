@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Breadcrumb from '$components/breadcrumb.svelte';
 	import Button from '$components/button.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import FormSection from '$components/form-section.svelte';
 	import Form from '$components/form.svelte';
 	import Panel from '$components/panel.svelte';
@@ -8,54 +9,72 @@
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
 	import service from '$lib/resources/users.js';
+	import l from '$lib/localization';
+	import Dropdown from '$components/dropdown.svelte';
 
 	export let data;
 
 	let email = data.user.email;
 	let password: Maybe<string>;
+	let locale = l.locale();
+
+	const locales = l.locales().map((l) => ({ label: l.displayName, value: l.code }));
 
 	const submit = () =>
-		service.update({
-			email,
-			password: password ? password : undefined
-		});
+		service
+			.update({
+				email,
+				password: password ? password : undefined
+			})
+			.then(() => l.locale(locale));
 </script>
 
 <Form handler={submit} let:submitting let:errors>
-	<Breadcrumb segments={['Profile']}>
-		<Button type="submit" loading={submitting}>Save</Button>
+	<Breadcrumb segments={[l.translate('breadcrumb.profile')]}>
+		<Button type="submit" loading={submitting} text="save" />
 	</Breadcrumb>
 
-	<FormSection title="User information">
-		<Stack direction="column">
-			<TextInput label="Email" type="email" bind:value={email} remoteError={errors.email} />
-			<TextInput
-				label="New password"
-				type="password"
-				autocomplete="new-password"
-				bind:value={password}
-				remoteError={errors.password}
-			>
-				<p>Leave empty if you don't want to change your password.</p>
-			</TextInput>
-		</Stack>
-	</FormSection>
+	<Stack direction="column">
+		<FormErrors {errors} />
 
-	<FormSection title="Integration">
-		<Stack direction="column">
-			<Panel title="Integration with CI" variant="help">
-				<p>
-					If you want to trigger a deployment for an application, you'll need this token. You can
-					also click the <strong>Copy cURL command</strong> from the deployment page and use it in your
-					pipeline since it includes the token in the appropriate header.
-				</p>
-			</Panel>
-			<TextArea label="API Key" rows={1} code value={data.user.api_key} readonly>
-				<p>
-					Pass this token as an <code>Authorization: Bearer</code> header to communicate with the
-					seelf API. <strong>You MUST keep it secret!</strong>
-				</p>
-			</TextArea>
-		</Stack>
-	</FormSection>
+		<div>
+			<FormSection title="profile.informations">
+				<Stack direction="column">
+					<TextInput
+						label="email"
+						type="email"
+						required
+						bind:value={email}
+						remoteError={errors?.email}
+					/>
+					<TextInput
+						label="profile.password"
+						type="password"
+						autocomplete="new-password"
+						bind:value={password}
+						remoteError={errors?.password}
+					>
+						<p>{l.translate('profile.password.help')}</p>
+					</TextInput>
+				</Stack>
+			</FormSection>
+
+			<FormSection title="profile.interface">
+				<Dropdown label="profile.locale" options={locales} bind:value={locale} />
+			</FormSection>
+
+			<FormSection title="profile.integration">
+				<Stack direction="column">
+					<Panel title="profile.integration.title" variant="help">
+						<p>{@html l.translate('profile.integration.description')}</p>
+					</Panel>
+					<TextArea label="profile.key" rows={1} code value={data.user.api_key} readonly>
+						<p>
+							{@html l.translate('profile.key.help')}
+						</p>
+					</TextArea>
+				</Stack>
+			</FormSection>
+		</div>
+	</Stack>
 </Form>

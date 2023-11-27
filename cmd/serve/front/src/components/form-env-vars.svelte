@@ -5,6 +5,7 @@
 	import TextInput from '$components/text-input.svelte';
 	import type { ServiceVariables } from '$lib/resources/apps';
 	import TextArea from '$components/text-area.svelte';
+	import l from '$lib/localization';
 
 	export let title: string;
 	export let values: ServiceVariables[] = [];
@@ -21,28 +22,32 @@
 <Stack direction="column">
 	<Stack justify="space-between">
 		<h3 class="title">{title}</h3>
-		<Button on:click={add}>Add service variables</Button>
+		<Button on:click={add} text="app.environments.service.add" />
 	</Stack>
 	{#if values.length === 0}
 		<BlankSlate>
-			<p>No environment variables set for environment <strong>{title}</strong>.</p>
+			<p>{@html l.translate('app.environments.blankslate', [title])}</p>
 		</BlankSlate>
 	{:else}
 		{#each values as value, i}
 			<Stack class="container" direction="column">
 				<Stack class="service" wrap="wrap" align="flex-start">
-					<TextInput label="Service name" bind:value={value.name} required />
+					<TextInput label="app.environments.service.name" bind:value={value.name} required />
 					<TextArea
 						rows={5}
 						code
-						label="Environment values"
+						label="app.environments.service.env"
 						placeholder="KEY=value
 SOME=value"
 						bind:value={value.values}
 					/>
 				</Stack>
 				<Stack justify="flex-end">
-					<Button variant="outlined" on:click={() => remove(i)}>Remove service variables</Button>
+					<Button
+						variant="outlined"
+						on:click={() => remove(i)}
+						text="app.environments.service.delete"
+					/>
 				</Stack>
 			</Stack>
 		{/each}

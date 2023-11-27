@@ -1,10 +1,12 @@
 <script lang="ts">
 	import Button from '$components/button.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import Form from '$components/form.svelte';
 	import PageTitle from '$components/page-title.svelte';
 	import Stack from '$components/stack.svelte';
 	import TextInput from '$components/text-input.svelte';
 	import auth from '$lib/auth';
+	import l from '$lib/localization';
 
 	let email = '';
 	let password = '';
@@ -14,32 +16,35 @@
 	}
 </script>
 
-<PageTitle title="Sign in" />
+<PageTitle title={l.translate('auth.signin.title')} />
 
 <div class="signin">
 	<div class="signin-card">
 		<Form class="signin-form" handler={submit} let:submitting let:errors>
 			<Stack direction="column">
 				<div>
-					<h1 class="title">Sign in</h1>
-					<p>Please fill the form below to access your dashboard.</p>
+					<h1 class="title">{l.translate('auth.signin.title')}</h1>
+					<p>{l.translate('auth.signin.description')}</p>
 				</div>
+
+				<FormErrors {errors} />
+
 				<TextInput
-					label="Email"
+					label="email"
 					type="email"
 					bind:value={email}
 					required
-					remoteError={errors.email}
+					remoteError={errors?.email}
 				/>
 				<TextInput
-					label="Password"
+					label="password"
 					type="password"
 					bind:value={password}
 					required
-					remoteError={errors.password}
+					remoteError={errors?.password}
 				/>
 				<Stack justify="flex-end">
-					<Button type="submit" loading={submitting}>Sign in</Button>
+					<Button type="submit" text="auth.signin.title" loading={submitting} />
 				</Stack>
 			</Stack>
 		</Form>

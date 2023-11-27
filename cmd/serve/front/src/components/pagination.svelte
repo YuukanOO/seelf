@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import Stack from '$components/stack.svelte';
-	import Button from '$components/button.svelte';
+	import ButtonBase from '$components/button-base.svelte';
 	import type { Paginated } from '$lib/pagination';
 	import ArrowRight from '$assets/icons/arrow-right.svelte';
 	import ArrowLeft from '$assets/icons/arrow-left.svelte';
+	import l from '$lib/localization';
 
 	const dispatcher = createEventDispatcher();
 
@@ -15,24 +16,24 @@
 
 {#if data && numberOfPages > 1}
 	<Stack justify="space-between">
-		<div class="page">Page {data.page} of {numberOfPages}</div>
+		<div class="page">{l.translate('page_n_of_m', [data.page, numberOfPages])}</div>
 		<Stack class="pagination" gap={0}>
-			<Button
-				title="Previous"
+			<ButtonBase
+				title="previous"
 				disabled={data.first_page}
 				variant="outlined"
 				on:click={() => dispatcher('previous')}
 			>
 				<ArrowLeft />
-			</Button>
-			<Button
-				title="Next"
+			</ButtonBase>
+			<ButtonBase
+				title="next"
 				disabled={data.last_page}
 				variant="outlined"
 				on:click={() => dispatcher('next')}
 			>
 				<ArrowRight />
-			</Button>
+			</ButtonBase>
 		</Stack>
 	</Stack>
 {/if}

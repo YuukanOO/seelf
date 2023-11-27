@@ -3,14 +3,19 @@
 	import Breadcrumb from '$components/breadcrumb.svelte';
 	import Link from '$components/link.svelte';
 	import routes from '$lib/path';
+	import l from '$lib/localization';
 </script>
 
-<Breadcrumb segments={[{ path: routes.apps, title: 'Applications' }, 'Not found']} />
+<Breadcrumb
+	segments={[
+		{ path: routes.apps, title: l.translate('breadcrumb.applications') },
+		l.translate('breadcrumb.not_found')
+	]}
+/>
 
 <BlankSlate>
 	<p>
-		Looks like the application you're looking for does not exist. Head back to the <Link
-			href={routes.apps}>homepage</Link
-		>.
+		{l.translate('app.not_found')}
+		<Link href={routes.apps}>{l.translate('app.not_found.cta')}</Link>.
 	</p>
 </BlankSlate>

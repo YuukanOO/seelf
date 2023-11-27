@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { messageFromAttributes } from '$lib/form';
 	import InputAdorner from '$components/input-adorner.svelte';
+	import type { AppTranslationsString } from '$lib/localization';
 
-	export let label: string;
+	export let label: AppTranslationsString;
 	export let type: HtmlInputType = 'text';
 	export let value: Maybe<string> = undefined;
 	export let autofocus: Maybe<boolean> = false;

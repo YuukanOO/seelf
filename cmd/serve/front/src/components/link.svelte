@@ -1,4 +1,7 @@
 <script lang="ts">
+	import type { AppTranslationsString } from '$lib/localization';
+	import l from '$lib/localization';
+
 	let className: string = '';
 
 	/** Additional css classes */
@@ -10,13 +13,13 @@
 	export let external: boolean = false;
 	/** Open the link in a new tab/window */
 	export let newWindow: boolean = false;
-	export let title: Maybe<string> = undefined;
+	export let title: Maybe<AppTranslationsString> = undefined;
 </script>
 
 <a
 	class="link {className}"
 	{href}
-	{title}
+	title={title && l.translate(title)}
 	rel={external ? 'noopener noreferrer' : undefined}
 	target={newWindow ? '_blank' : undefined}
 >

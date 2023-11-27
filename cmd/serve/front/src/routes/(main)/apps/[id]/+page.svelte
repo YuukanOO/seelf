@@ -7,6 +7,7 @@
 	import Link from '$components/link.svelte';
 	import routes from '$lib/path';
 	import service from '$lib/resources/apps';
+	import l from '$lib/localization';
 
 	export let data;
 
@@ -15,12 +16,14 @@
 	$: ({ production, staging } = $app?.environments ?? {});
 </script>
 
-<Breadcrumb segments={[{ path: routes.apps, title: 'Applications' }, data.app.name]}>
+<Breadcrumb
+	segments={[{ path: routes.apps, title: l.translate('breadcrumb.applications') }, data.app.name]}
+>
 	{#if $app?.cleanup_requested_at}
 		<CleanupNotice data={$app} />
 	{:else}
-		<Button href={routes.editApp(data.app.id)} variant="outlined">Edit application</Button>
-		<Button href={routes.createDeployment(data.app.id)}>New deployment</Button>
+		<Button href={routes.editApp(data.app.id)} variant="outlined" text="app.edit" />
+		<Button href={routes.createDeployment(data.app.id)} text="deployment.new" />
 	{/if}
 </Breadcrumb>
 
@@ -36,9 +39,10 @@
 {:else}
 	<BlankSlate>
 		<p>
-			No deployment to show. Go ahead and <Link href={routes.createDeployment(data.app.id)}
-				>create the first one</Link
-			>!
+			{l.translate('deployment.blankslate.title')}
+			<Link href={routes.createDeployment(data.app.id)}>
+				{l.translate('deployment.blankslate.cta')}
+			</Link>
 		</p>
 	</BlankSlate>
 {/if}

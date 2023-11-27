@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { formatDatetime, formatDuration } from '$lib/date';
 	import { DeploymentStatus, type DeploymentData } from '$lib/resources/deployments';
 	import Loader from '$components/loader.svelte';
 	import Stack from '$components/stack.svelte';
 	import DeploymentPill from '$components/deployment-pill.svelte';
+	import l from '$lib/localization';
 
 	export let data: Maybe<DeploymentData[]> = undefined;
 	export let variant: 'env' | 'detail';
@@ -12,22 +12,22 @@
 	function metadataFromStatus(depl: DeploymentData): string {
 		switch (depl.state.status) {
 			case DeploymentStatus.Succeeded:
-				return `${formatDatetime(depl.state.finished_at!)} (${formatDuration(
+				return `${l.datetime(depl.state.finished_at!)} (${l.duration(
 					depl.state.started_at!,
 					depl.state.finished_at!
 				)})`;
 			case DeploymentStatus.Failed:
-				return `${depl.state.error_code} (${formatDuration(
+				return `${depl.state.error_code} (${l.duration(
 					depl.state.started_at!,
 					depl.state.finished_at!
 				)})`;
 			case DeploymentStatus.Running:
-				return `${formatDatetime(depl.state.started_at!)} (${formatDuration(
+				return `${l.datetime(depl.state.started_at!)} (${l.duration(
 					depl.state.started_at!,
 					new Date()
 				)})`;
 			default:
-				return `${formatDatetime(depl.requested_at)}`;
+				return l.datetime(depl.requested_at);
 		}
 	}
 </script>
@@ -47,7 +47,7 @@
 							/>
 							<div>
 								<div class="title">
-									{variant === 'env' ? depl.environment : formatDatetime(depl.requested_at)}
+									{variant === 'env' ? depl.environment : l.datetime(depl.requested_at)}
 								</div>
 								<div class="metadata">
 									{metadataFromStatus(depl)}
@@ -59,7 +59,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="no-data">No deployment yet</p>
+			<p class="no-data">{l.translate('app.no_deployments')}</p>
 		{/if}
 	{:else}
 		<Loader />

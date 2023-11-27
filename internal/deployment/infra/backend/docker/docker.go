@@ -436,8 +436,7 @@ func (d *docker) generateProject(depl domain.Deployment, dir string, logger doma
 		// Attach environment variables if any
 		servicesEnv := config.EnvironmentVariablesFor(deployedService.Name())
 
-		if servicesEnv.HasValue() {
-			vars := servicesEnv.MustGet()
+		if vars, hasVars := servicesEnv.TryGet(); hasVars {
 			envNames := make([]string, 0, len(vars))
 
 			for name, value := range vars {

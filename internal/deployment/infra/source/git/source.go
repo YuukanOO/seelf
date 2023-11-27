@@ -66,12 +66,14 @@ func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 		return nil, err
 	}
 
-	if !app.VCS().HasValue() {
+	vcs, hasVCS := app.VCS().TryGet()
+
+	if !hasVCS {
 		return nil, domain.ErrVCSNotConfigured
 	}
 
 	// Retrieve the latest commit to make sure the branch exists
-	latestCommit, err := getLatestBranchCommit(app.VCS().MustGet(), req.Branch)
+	latestCommit, err := getLatestBranchCommit(vcs, req.Branch)
 
 	if err != nil {
 		return nil, validation.WrapIfAppErr(err, "branch")
@@ -89,12 +91,12 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 		return ErrAppRetrievedFailed
 	}
 
+	vcs, hasVCS := app.VCS().TryGet()
+
 	// Could happen if the app vcs config has been removed since the deployment has been queued
-	if !app.VCS().HasValue() {
+	if !hasVCS {
 		return domain.ErrVCSNotConfigured
 	}
-
-	config := app.VCS().MustGet()
 
 	data, ok := depl.Source().(Data)
 
@@ -102,13 +104,13 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 		return domain.ErrInvalidSourcePayload
 	}
 
-	logger.Stepf("cloning branch %s at %s from %s using token: %t", data.Branch, data.Hash, config.Url(), config.Token().HasValue())
+	logger.Stepf("cloning branch %s at %s from %s using token: %t", data.Branch, data.Hash, vcs.Url(), vcs.Token().HasValue())
 
 	r, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
-		Auth:          getAuthMethod(config),
+		Auth:          getAuthMethod(vcs),
 		SingleBranch:  true,
 		ReferenceName: plumbing.NewBranchReferenceName(data.Branch),
-		URL:           config.Url().String(),
+		URL:           vcs.Url().String(),
 		Progress:      logger,
 	})
 
@@ -143,10 +145,10 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 }
 
 func getAuthMethod(vcs domain.VCSConfig) transport.AuthMethod {
-	if vcs.Token().HasValue() {
+	if token, isSet := vcs.Token().TryGet(); isSet {
 		return &http.BasicAuth{
 			Username: basicAuthUser,
-			Password: vcs.Token().MustGet(),
+			Password: token,
 		}
 	}
 

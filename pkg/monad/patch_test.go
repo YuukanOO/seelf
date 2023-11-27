@@ -34,6 +34,28 @@ func Test_Patch(t *testing.T) {
 		testutil.IsFalse(t, p.HasValue())
 	})
 
+	t.Run("should return the inner monad and a boolean indicating if it has been set", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			value    monad.Patch[int]
+			isSet    bool
+			hasValue bool
+		}{
+			{"empty patch", monad.Patch[int]{}, false, false},
+			{"nil patch", monad.Nil[int](), true, false},
+			{"patch with a value", monad.PatchValue(42), true, true},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				m, isSet := test.value.TryGet()
+
+				testutil.Equals(t, test.isSet, isSet)
+				testutil.Equals(t, test.hasValue, m.HasValue())
+			})
+		}
+	})
+
 	t.Run("should correctly handle a JSON when unmarshalling", func(t *testing.T) {
 		tests := []struct {
 			json     string

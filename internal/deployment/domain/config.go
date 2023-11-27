@@ -31,11 +31,13 @@ func (c Config) Env() monad.Maybe[ServicesEnv] { return c.env } // FIXME: If I w
 // Retrieve environment variables associated with the given service name.
 // FIXME: If I want to follow my mantra, it should returns a readonly map
 func (c Config) EnvironmentVariablesFor(service string) (m monad.Maybe[EnvVars]) {
-	if !c.env.HasValue() {
+	env, isSet := c.env.TryGet()
+
+	if !isSet {
 		return m
 	}
 
-	vars, exists := c.env.MustGet()[service]
+	vars, exists := env[service]
 
 	if !exists {
 		return m

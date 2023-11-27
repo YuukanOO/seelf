@@ -54,6 +54,11 @@ func (m Maybe[T]) MustGet() T {
 	return m.value
 }
 
+// Get the inner value and a boolean indicating if it has been set.
+func (m Maybe[T]) TryGet() (T, bool) {
+	return m.value, m.hasValue
+}
+
 // Retrieve the inner value or the fallback if it doesn't have one.
 func (m Maybe[T]) Get(fallback T) T {
 	if !m.hasValue {

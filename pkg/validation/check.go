@@ -106,8 +106,8 @@ func If(expr bool, fn func() error) error {
 
 // Same as If but executes the fn if the monad has a value.
 func Maybe[T any](m monad.Maybe[T], fn func(T) error) error {
-	if m.HasValue() {
-		return fn(m.MustGet())
+	if value, isSet := m.TryGet(); isSet {
+		return fn(value)
 	}
 
 	return nil
@@ -119,8 +119,10 @@ func Maybe[T any](m monad.Maybe[T], fn func(T) error) error {
 // specific case.
 // FIXME: When go can infer correctly from an interface [T], merge Maybe and Patch.
 func Patch[T any](p monad.Patch[T], fn func(T) error) error {
-	if p.HasValue() {
-		return fn(p.MustGet())
+	if maybeValue, isSet := p.TryGet(); isSet {
+		if value, hasValue := maybeValue.TryGet(); hasValue {
+			return fn(value)
+		}
 	}
 
 	return nil

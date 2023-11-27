@@ -54,31 +54,30 @@ func UpdateApp(
 			return err
 		}
 
-		if cmd.VCS.IsSet() {
-			if cmd.VCS.IsNil() {
-				app.RemoveVersionControl()
-			} else {
-				vcsPatch := cmd.VCS.MustGet()
-
-				if !app.VCS().HasValue() && !vcsPatch.Url.HasValue() {
+		if vcsPatch, isSet := cmd.VCS.TryGet(); isSet {
+			if vcsUpdate, hasValue := vcsPatch.TryGet(); hasValue {
+				// No VCS configured on the app and no url given
+				if !app.VCS().HasValue() && !vcsUpdate.Url.HasValue() {
 					return domain.ErrVCSNotConfigured
 				}
 
 				vcs := app.VCS().Get(domain.NewVCSConfig(url))
 
-				if vcsPatch.Url.HasValue() {
+				if vcsUpdate.Url.HasValue() {
 					vcs = vcs.WithUrl(url)
 				}
 
-				if vcsPatch.Token.IsSet() {
-					if vcsPatch.Token.IsNil() {
-						vcs = vcs.Public()
+				if tokenPatch, isSet := vcsUpdate.Token.TryGet(); isSet {
+					if token, hasValue := tokenPatch.TryGet(); hasValue {
+						vcs = vcs.Authenticated(token)
 					} else {
-						vcs = vcs.Authenticated(vcsPatch.Token.MustGet())
+						vcs = vcs.Public()
 					}
 				}
 
 				app.UseVersionControl(vcs)
+			} else {
+				app.RemoveVersionControl()
 			}
 		}
 

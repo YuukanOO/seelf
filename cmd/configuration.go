@@ -141,9 +141,9 @@ func (c configuration) RunnersPollInterval() time.Duration        { return c.pol
 func (c configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 
 func (c configuration) IsSecure() bool {
-	// If secure has been explicitly set, returns it
-	if c.Http.Secure.HasValue() {
-		return c.Http.Secure.MustGet()
+	// If secure has been explicitly isSet, returns it
+	if secure, isSet := c.Http.Secure.TryGet(); isSet {
+		return secure
 	}
 
 	// Else, fallback to the domain SSL value

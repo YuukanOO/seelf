@@ -192,9 +192,9 @@ func appDetailDataMapper(s storage.Scanner) (a query.AppDetail, err error) {
 
 	a.Environments = make(map[string]query.Deployment)
 
-	if url.HasValue() {
+	if u, isSet := url.TryGet(); isSet {
 		a.VCS = a.VCS.WithValue(query.VCSConfig{
-			Url:   url.MustGet(),
+			Url:   u,
 			Token: token,
 		})
 	}

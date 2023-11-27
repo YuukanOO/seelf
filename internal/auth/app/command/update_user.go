@@ -51,8 +51,8 @@ func UpdateUser(
 			user.HasEmail(uniqueEmail)
 		}
 
-		if cmd.Password.HasValue() {
-			hash, err := hasher.Hash(cmd.Password.MustGet())
+		if newPassword, isSet := cmd.Password.TryGet(); isSet {
+			hash, err := hasher.Hash(newPassword)
 
 			if err != nil {
 				return err

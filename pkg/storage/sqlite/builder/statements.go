@@ -11,11 +11,13 @@ import (
 // if the monad value is set. This is useful for optional fields in a query.
 func Maybe[T any](value monad.Maybe[T], fn func(T) (string, []any)) Statement {
 	return func(builder sqlBuilder) {
-		if !value.HasValue() {
+		v, hasValue := value.TryGet()
+
+		if !hasValue {
 			return
 		}
 
-		sql, args := fn(value.MustGet())
+		sql, args := fn(v)
 
 		builder.apply(sql, args...)
 	}

@@ -28,6 +28,22 @@ func Test_Maybe(t *testing.T) {
 		testutil.IsTrue(t, m.HasValue())
 	})
 
+	t.Run("could returns its internal value and a boolean indicating if it has been set", func(t *testing.T) {
+		var m monad.Maybe[string]
+
+		value, hasValue := m.TryGet()
+
+		testutil.IsFalse(t, hasValue)
+		testutil.Equals(t, "", value)
+
+		m = m.WithValue("ok")
+
+		value, hasValue = m.TryGet()
+
+		testutil.IsTrue(t, hasValue)
+		testutil.Equals(t, "ok", value)
+	})
+
 	t.Run("could be assigned a value", func(t *testing.T) {
 		var (
 			m   monad.Maybe[time.Time]

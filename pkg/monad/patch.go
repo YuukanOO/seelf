@@ -22,6 +22,12 @@ func Nil[T any]() (p Patch[T]) {
 func (p Patch[T]) IsSet() bool { return p.isSet }
 func (p Patch[T]) IsNil() bool { return p.isSet && !p.hasValue }
 
+// Try to get the inner optional value for this Patch structure. The boolean returns
+// if the patch has been set so the returned value may represent a nil value.
+func (p Patch[T]) TryGet() (Maybe[T], bool) {
+	return p.Maybe, p.isSet
+}
+
 // Implements the UnmarshalJSON interface.
 func (p *Patch[T]) UnmarshalJSON(data []byte) error {
 	// If we're here, it means the value has been set

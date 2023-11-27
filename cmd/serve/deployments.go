@@ -31,10 +31,10 @@ func (s *server) queueDeploymentHandler() gin.HandlerFunc {
 		)
 
 		// Resolve the payload data.
-		if body.Git.HasValue() {
-			payload = body.Git.MustGet()
-		} else if body.Raw.HasValue() {
-			payload = body.Raw.MustGet()
+		if gitBody, isSet := body.Git.TryGet(); isSet {
+			payload = gitBody
+		} else if rawBody, isSet := body.Raw.TryGet(); isSet {
+			payload = rawBody
 		} else if body.Archive != nil {
 			payload = body.Archive
 		}

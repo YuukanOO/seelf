@@ -122,18 +122,18 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 
 	a.created = shared.ActionFrom(createdBy, createdAt)
 
-	if cleanupRequestedAt.HasValue() {
+	if requestedAt, isSet := cleanupRequestedAt.TryGet(); isSet {
 		a.cleanupRequested = a.cleanupRequested.WithValue(
-			shared.ActionFrom(domain.UserID(cleanupRequestedBy.MustGet()), cleanupRequestedAt.MustGet()),
+			shared.ActionFrom(domain.UserID(cleanupRequestedBy.MustGet()), requestedAt),
 		)
 	}
 
 	// vcs url has been set, reconstitute the vcs config
-	if url.HasValue() {
-		vcs := NewVCSConfig(url.MustGet())
+	if u, isSet := url.TryGet(); isSet {
+		vcs := NewVCSConfig(u)
 
-		if token.HasValue() {
-			vcs = vcs.Authenticated(token.MustGet())
+		if tok, isSet := token.TryGet(); isSet {
+			vcs = vcs.Authenticated(tok)
 		}
 
 		a.vcs = a.vcs.WithValue(vcs)
@@ -144,7 +144,7 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 
 // Sets an app version control configuration.
 func (a *App) UseVersionControl(config VCSConfig) {
-	if a.vcs.HasValue() && config.Equals(a.vcs.MustGet()) {
+	if existing, isSet := a.vcs.TryGet(); isSet && config.Equals(existing) {
 		return
 	}
 
@@ -167,7 +167,7 @@ func (a *App) RemoveVersionControl() {
 
 // Store environement variables per env and per services for this application.
 func (a *App) HasEnvironmentVariables(vars EnvironmentsEnv) {
-	if a.env.HasValue() && vars.Equals(a.env.MustGet()) {
+	if existing, isSet := a.env.TryGet(); isSet && vars.Equals(existing) {
 		return
 	}
 
@@ -223,11 +223,13 @@ func (a App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
 
 // Retrieve environments variables per service for the given deployment environment
 func (a App) envFor(e Environment) (m monad.Maybe[ServicesEnv]) {
-	if !a.env.HasValue() {
+	env, isSet := a.env.TryGet()
+
+	if !isSet {
 		return m
 	}
 
-	vars, exists := a.env.MustGet()[e]
+	vars, exists := env[e]
 
 	if !exists {
 		return m

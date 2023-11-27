@@ -60,12 +60,11 @@ func CreateApp(
 
 		app := domain.NewApp(uniqueName, auth.CurrentUser(ctx).MustGet())
 
-		if cmd.VCS.HasValue() {
+		if cmdVCS, isSet := cmd.VCS.TryGet(); isSet {
 			vcs := domain.NewVCSConfig(url)
-			cmdVCS := cmd.VCS.MustGet()
 
-			if cmdVCS.Token.HasValue() {
-				vcs = vcs.Authenticated(cmdVCS.Token.MustGet())
+			if token, isSet := cmdVCS.Token.TryGet(); isSet {
+				vcs = vcs.Authenticated(token)
 			}
 
 			app.UseVersionControl(vcs)

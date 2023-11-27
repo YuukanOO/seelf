@@ -11,6 +11,13 @@ declare namespace App {
 }
 
 type Maybe<T> = T | undefined;
+
+type DateValue = string | number | Date;
+
+type KeysOfType<O, T> = {
+	[K in keyof O]: O[K] extends T ? K : never;
+}[keyof O];
+
 type Patch<T> = Maybe<T> | null;
 
 type HtmlInputType =

@@ -6,10 +6,12 @@
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import Console from '$components/console.svelte';
 	import DeploymentCard from '$components/deployment-card.svelte';
+	import FormErrors from '$components/form-errors.svelte';
 	import Stack from '$components/stack.svelte';
 	import { submitter } from '$lib/form';
 	import routes from '$lib/path';
 	import service from '$lib/resources/deployments';
+	import l from '$lib/localization';
 
 	export let data;
 
@@ -42,51 +44,72 @@
 		}
 	}
 
-	$: ({ loading: redeploying, submit: redeploy } = submitter(
+	$: ({
+		loading: redeploying,
+		errors: redeployErr,
+		submit: redeploy
+	} = submitter(
 		() =>
 			service
 				.redeploy(data.app.id, data.deployment.deployment_number)
 				.then((d) => goto(routes.deployment(data.app.id, d.deployment_number))),
 		{
-			confirmation: `The deployment #${data.deployment.deployment_number} will be redeployed. Latest app environment variables will be used. Do you confirm this action?`
+			confirmation: l.translate('deployment.redeploy.confirm', [data.deployment.deployment_number])
 		}
 	));
 
-	$: ({ loading: promoting, submit: promote } = submitter(
+	$: ({
+		loading: promoting,
+		errors: promoteErr,
+		submit: promote
+	} = submitter(
 		() =>
 			service
 				.promote(data.app.id, data.deployment.deployment_number)
 				.then((d) => goto(routes.deployment(data.app.id, d.deployment_number))),
 		{
-			confirmation: `The deployment #${data.deployment.deployment_number} will be promoted to the production environment. Do you confirm this action?`
+			confirmation: l.translate('deployment.promote.confirm', [data.deployment.deployment_number])
 		}
 	));
 </script>
 
 <Breadcrumb
 	segments={[
-		{ path: routes.apps, title: 'Applications' },
+		{ path: routes.apps, title: l.translate('breadcrumb.applications') },
 		{ path: routes.app(data.app.id), title: data.app.name },
-		`Deployment #${data.deployment.deployment_number}`
+		l.translate('breadcrumb.deployment.name', [data.deployment.deployment_number])
 	]}
 >
 	{#if data.app.cleanup_requested_at}
 		<CleanupNotice data={data.app} />
 	{:else}
 		{#if data.deployment.environment !== 'production'}
-			<Button loading={$promoting} on:click={promote} variant="outlined">Promote</Button>
+			<Button
+				loading={$promoting}
+				on:click={promote}
+				variant="outlined"
+				text="deployment.promote"
+			/>
 		{/if}
-		<Button loading={$redeploying} on:click={redeploy} variant="outlined">Redeploy</Button>
+		<Button
+			loading={$redeploying}
+			on:click={redeploy}
+			variant="outlined"
+			text="deployment.redeploy"
+		/>
 	{/if}
 </Breadcrumb>
 
 <Stack direction="column">
+	<FormErrors errors={$redeployErr} title="deployment.redeploy.failed" />
+	<FormErrors errors={$promoteErr} title="deployment.promote.failed" />
+
 	{#if $deployment}
 		<DeploymentCard {isStale} data={$deployment} />
 	{/if}
 
 	{#if $logs}
-		<Console title="Deployment logs" data={$logs} />
+		<Console title="deployment.logs" data={$logs} />
 	{:else}
 		<BlankSlate>
 			<p>Waiting for logs...</p>

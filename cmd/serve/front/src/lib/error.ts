@@ -10,11 +10,13 @@ export type ValidationDetail = {
 };
 
 /** Validation error after a form submission */
-export class ValidationError extends Error {
+export class BadRequestError extends Error {
 	public readonly fields: Record<string, Maybe<string>>;
+	public readonly isValidationError: boolean;
 
 	public constructor(data: AppError<ValidationDetail>) {
 		super(data.code);
+		this.isValidationError = !!data.detail?.fields;
 		this.fields = Object.entries(data.detail?.fields ?? {}).reduce(
 			(result, [name, err]) => ({
 				...result,
@@ -41,7 +43,7 @@ export class UnauthorizedError extends Error {
 export class HttpError extends Error {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private static readonly status: Record<number, Maybe<{ new (data?: any): Error }>> = {
-		400: ValidationError,
+		400: BadRequestError,
 		401: UnauthorizedError,
 		500: UnexpectedError
 	};

@@ -15,22 +15,22 @@
 	"devDependencies": {
 		"@sveltejs/adapter-static": "2.0.2",
 		"@sveltejs/kit": "1.20.2",
-		"@typescript-eslint/eslint-plugin": "^5.59.11",
-		"@typescript-eslint/parser": "^5.59.11",
-		"eslint": "^8.42.0",
+		"@typescript-eslint/eslint-plugin": "^5.62.0",
+		"@typescript-eslint/parser": "^5.62.0",
+		"eslint": "^8.54.0",
 		"eslint-config-prettier": "^8.8.0",
 		"eslint-plugin-svelte3": "^4.0.0",
 		"prettier": "^2.8.8",
 		"prettier-plugin-svelte": "^2.10.1",
-		"svelte": "^3.59.1",
-		"svelte-check": "^3.4.3",
-		"svelte-preprocess": "^5.0.4",
+		"svelte": "^3.59.2",
+		"svelte-check": "^3.6.1",
+		"svelte-preprocess": "^5.1.1",
 		"svelte-preprocess-cssmodules": "^2.2.4",
-		"tslib": "^2.5.3",
+		"tslib": "^2.6.2",
 		"typescript": "^4.9.5",
 		"vite": "^4.3.9",
 		"vitest": "^0.29.8",
-		"the-new-css-reset": "^1.8.6"
+		"the-new-css-reset": "^1.11.2"
 	},
 	"type": "module"
 }

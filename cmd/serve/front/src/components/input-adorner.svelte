@@ -1,10 +1,15 @@
 <script lang="ts">
 	import InputHelp from '$components/input-help.svelte';
-	export let label: string;
+	import l, { type AppTranslationsString } from '$lib/localization';
+
+	export let label: AppTranslationsString;
 	export let error: Maybe<string> = undefined;
 	export let remoteError: Maybe<string> = undefined;
 	/** Determine wether or not there's a star next to the label */
 	export let required: boolean = false;
+
+	$: remoteErrorText =
+		remoteError && l.translate(remoteError as AppTranslationsString).toLowerCase();
 
 	/**
 	 *  Since there's no way to check for "emptiness", assume the caller gives us
@@ -17,9 +22,9 @@
 
 <div class="adorner">
 	<label class="container">
-		<span class="label" class:required>{label}</span>
+		<span class="label" class:required>{l.translate(label)}</span>
 		<slot />
-		{#if remoteError}<span class="remote-error">{remoteError}</span>{/if}
+		{#if remoteError}<span class="remote-error">{remoteErrorText}</span>{/if}
 		{#if error}<span class="error">{error}</span>{/if}
 	</label>
 

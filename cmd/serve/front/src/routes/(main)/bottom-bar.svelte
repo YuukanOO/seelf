@@ -2,19 +2,32 @@
 	import Link from '$components/link.svelte';
 	import Prose from '$components/prose.svelte';
 	import Stack from '$components/stack.svelte';
+	import l from '$lib/localization';
 </script>
 
 <Prose class="bottom-bar">
 	<Stack justify="space-between" wrap="wrap">
-		<p>seelf &mdash; Painless self-hosted deployment platform</p>
+		<p>{l.translate('footer.description')}</p>
 		<Stack as="ul">
-			<li><Link href="https://github.com/YuukanOO/seelf/" external newWindow>Source</Link></li>
 			<li>
-				<Link href="https://github.com/YuukanOO/seelf/blob/main/DOCUMENTATION.md" external newWindow
-					>Docs</Link
-				>
+				<Link href="https://github.com/YuukanOO/seelf/" external newWindow>
+					{l.translate('footer.source')}
+				</Link>
 			</li>
-			<li><Link href="https://liberapay.com/YuukanOO/" external newWindow>❤️ Donate</Link></li>
+			<li>
+				<Link
+					href="https://github.com/YuukanOO/seelf/blob/main/DOCUMENTATION.md"
+					external
+					newWindow
+				>
+					{l.translate('footer.documentation')}
+				</Link>
+			</li>
+			<li>
+				<Link href="https://liberapay.com/YuukanOO/" external newWindow>
+					{l.translate('footer.donate')}
+				</Link>
+			</li>
 		</Stack>
 	</Stack>
 </Prose>

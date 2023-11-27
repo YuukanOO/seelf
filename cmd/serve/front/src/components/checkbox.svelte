@@ -1,15 +1,16 @@
 <script lang="ts">
 	import Stack from '$components/stack.svelte';
 	import InputHelp from '$components/input-help.svelte';
+	import l, { type AppTranslationsString } from '$lib/localization';
 
-	export let label: string;
+	export let label: AppTranslationsString;
 	export let checked: boolean = false;
 </script>
 
 <Stack as="label" class="container" gap={2}>
 	<input type="checkbox" class="checkbox" bind:checked />
 	<Stack direction="column" gap={0}>
-		<span>{label}</span>
+		<span>{l.translate(label)}</span>
 		{#if $$slots.default}
 			<InputHelp>
 				<slot />

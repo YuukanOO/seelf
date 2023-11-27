@@ -5,6 +5,7 @@
 	import routes from '$lib/path';
 	import service, { type CreateAppData } from '$lib/resources/apps';
 	import AppForm from '../app-form.svelte';
+	import l from '$lib/localization';
 
 	export let data;
 
@@ -15,8 +16,11 @@
 	<Breadcrumb
 		slot="default"
 		let:submitting
-		segments={[{ path: routes.apps, title: 'Applications' }, 'New application']}
+		segments={[
+			{ path: routes.apps, title: l.translate('breadcrumb.applications') },
+			l.translate('breadcrumb.application.new')
+		]}
 	>
-		<Button type="submit" loading={submitting}>Create</Button>
+		<Button type="submit" loading={submitting} text="create" />
 	</Breadcrumb>
 </AppForm>

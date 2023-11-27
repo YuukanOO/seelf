@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Stack from '$components/stack.svelte';
+	import l from '$lib/localization';
 </script>
 
 <Stack class="container" direction="column" justify="center" align="center">
-	<h1 class="title">An unexpected error occured.</h1>
+	<h1 class="title">{l.translate('unexpected_error')}</h1>
 	<div>
-		<p>Looks like something went wrong. Try refreshing the page.</p>
-		<p>If the problem persists, please contact the administrator to investigate.</p>
+		{@html l.translate('unexpected_error.description')}
 	</div>
 </Stack>
 

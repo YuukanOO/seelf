@@ -4,6 +4,7 @@
 	import auth from '$lib/auth';
 	import routes from '$lib/path';
 	import type { Profile } from '$lib/resources/users';
+	import l from '$lib/localization';
 
 	export let user: Profile;
 </script>
@@ -11,8 +12,10 @@
 <Stack class="account" direction="column" gap={0}>
 	<span>{user.email}</span>
 	<div class="links">
-		<Link href={routes.profile}>my profile</Link> -
-		<button class="logout" type="button" on:click={() => auth.logout()}>log out</button>
+		<Link href={routes.profile}>{l.translate('profile.my')}</Link> -
+		<button class="logout" type="button" on:click={() => auth.logout()}>
+			{l.translate('profile.logout')}
+		</button>
 	</div>
 </Stack>
 

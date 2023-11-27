@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { type DeploymentData, DeploymentStatus } from '$lib/resources/deployments';
 	import type { ComponentProps } from 'svelte';
-	import { formatDatetime, formatDuration } from '$lib/date';
 	import routes from '$lib/path';
 	import Card from '$components/card.svelte';
 	import Link from '$components/link.svelte';
@@ -10,6 +9,7 @@
 	import DeploymentPill from '$components/deployment-pill.svelte';
 	import Display from '$components/display.svelte';
 	import ExternalLaunch from '$assets/icons/external-launch.svelte';
+	import l from '$lib/localization';
 
 	export let data: DeploymentData;
 	export let isStale = false;
@@ -35,45 +35,42 @@
 	</Stack>
 
 	<div class="grid">
-		<Display label="started at">
-			{data.state.started_at ? formatDatetime(data.state.started_at) : '-'}
+		<Display label="deployment.started_at">
+			{data.state.started_at ? l.datetime(data.state.started_at) : '-'}
 		</Display>
-		<Display label="finished at">
-			{data.state.finished_at ? formatDatetime(data.state.finished_at) : '-'}
+		<Display label="deployment.finished_at">
+			{data.state.finished_at ? l.datetime(data.state.finished_at) : '-'}
 		</Display>
-		<Display label="queued at">
-			{formatDatetime(data.requested_at)}
+		<Display label="deployment.queued_at">
+			{l.datetime(data.requested_at)}
 		</Display>
-		<Display label="duration">
+		<Display label="deployment.duration">
 			{data.state.started_at
-				? formatDuration(data.state.started_at, data.state.finished_at ?? new Date())
+				? l.duration(data.state.started_at, data.state.finished_at ?? new Date())
 				: '-'}
 		</Display>
 
 		{#if data.source.discriminator === 'git'}
-			<Display label="branch">
+			<Display label="deployment.branch">
 				{data.source.data.branch}
 			</Display>
-			<Display label="commit">
+			<Display label="deployment.commit">
 				<abbr title={data.source.data.hash}>{data.source.data.hash.substring(0, 10)}</abbr>
 			</Display>
 		{/if}
 
 		{#if data.state.error_code}
-			<Display class="large" label="error code">
+			<Display class="large" label="deployment.error_code">
 				<Link href={routes.deployment(data.app_id, data.deployment_number)}
 					>{data.state.error_code}</Link
 				>
 			</Display>
 		{/if}
 		{#if data.state.services && data.state.services?.length > 0}
-			<Display class="large" label="deployed services">
+			<Display class="large" label="deployment.services">
 				{#if isStale}
-					<Panel class="outdated" title="Outdated deployment" format="inline" variant="warning">
-						<p>
-							You're viewing an old deployment and exposed URLs may have changed and represent what
-							have been exposed at that time.
-						</p>
+					<Panel class="outdated" title="deployment.outdated" format="inline" variant="warning">
+						<p>{l.translate('deployment.outdated.description')}</p>
 					</Panel>
 				{/if}
 				<ul>

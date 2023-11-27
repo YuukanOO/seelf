@@ -6,8 +6,9 @@ import fr from '$lib/localization/fr';
  * Provides formatting methods for a specific locale.
  */
 export interface FormatProvider {
-	format(format: 'date' | 'datetime', value: DateValue): string;
-	format(format: 'duration', start: DateValue, end: DateValue): string;
+	date(value: DateValue): string;
+	datetime(value: DateValue): string;
+	duration(start: DateValue, end: DateValue): string;
 }
 
 export type TranslationsArgs<T> = T extends (...args: infer P) => string ? P : never;
@@ -77,39 +78,29 @@ export class LocalLocalizationService<T extends Translations, TLocales extends L
 		this.locale(_options.default ?? _options.fallback);
 	}
 
-	format(format: 'date' | 'datetime', value: DateValue): string;
-	format(format: 'duration', start: DateValue, end: DateValue): string;
-	format(
-		format: 'date' | 'datetime' | 'duration',
-		valueOrStart: DateValue,
-		end?: DateValue
-	): string {
-		switch (format) {
-			case 'date':
-				return new Date(valueOrStart).toLocaleString(this._currentLocaleCode, this._dateOptions);
-			case 'datetime':
-				return new Date(valueOrStart).toLocaleString(
-					this._currentLocaleCode,
-					this._dateTimeOptions
-				);
-			case 'duration':
-				const diffInSeconds = Math.max(
-					Math.floor((new Date(end!).getTime() - new Date(valueOrStart).getTime()) / 1000),
-					0
-				);
+	date(value: DateValue): string {
+		return new Date(value).toLocaleDateString(this._currentLocaleCode, this._dateOptions);
+	}
 
-				const numberOfMinutes = Math.floor(diffInSeconds / 60);
-				const numberOfSeconds = diffInSeconds - numberOfMinutes * 60;
+	datetime(value: DateValue): string {
+		return new Date(value).toLocaleString(this._currentLocaleCode, this._dateTimeOptions);
+	}
 
-				// FIXME: handle it better but since for now I only support french and english, this is not needed.
-				if (numberOfMinutes === 0) {
-					return `${numberOfSeconds}s`;
-				}
+	duration(start: DateValue, end: DateValue): string {
+		const diffInSeconds = Math.max(
+			Math.floor((new Date(end!).getTime() - new Date(start).getTime()) / 1000),
+			0
+		);
 
-				return `${numberOfMinutes}m ${numberOfSeconds}s`;
-			default:
-				throw new Error(`Unsupported format: ${format}`);
+		const numberOfMinutes = Math.floor(diffInSeconds / 60);
+		const numberOfSeconds = diffInSeconds - numberOfMinutes * 60;
+
+		// FIXME: handle it better but since for now I only support french and english, this is not needed.
+		if (numberOfMinutes === 0) {
+			return `${numberOfSeconds}s`;
 		}
+
+		return `${numberOfMinutes}m ${numberOfSeconds}s`;
 	}
 
 	translate<TKey extends keyof T>(key: TKey, args?: TranslationsArgs<T[TKey]> | undefined): string {

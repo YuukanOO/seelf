@@ -36,17 +36,17 @@
 
 	<div class="grid">
 		<Display label="deployment.started_at">
-			{data.state.started_at ? l.format('datetime', data.state.started_at) : '-'}
+			{data.state.started_at ? l.datetime(data.state.started_at) : '-'}
 		</Display>
 		<Display label="deployment.finished_at">
-			{data.state.finished_at ? l.format('datetime', data.state.finished_at) : '-'}
+			{data.state.finished_at ? l.datetime(data.state.finished_at) : '-'}
 		</Display>
 		<Display label="deployment.queued_at">
-			{l.format('datetime', data.requested_at)}
+			{l.datetime(data.requested_at)}
 		</Display>
 		<Display label="deployment.duration">
 			{data.state.started_at
-				? l.format('duration', data.state.started_at, data.state.finished_at ?? new Date())
+				? l.duration(data.state.started_at, data.state.finished_at ?? new Date())
 				: '-'}
 		</Display>
 

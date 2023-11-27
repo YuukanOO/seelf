@@ -12,25 +12,22 @@
 	function metadataFromStatus(depl: DeploymentData): string {
 		switch (depl.state.status) {
 			case DeploymentStatus.Succeeded:
-				return `${l.format('datetime', depl.state.finished_at!)} (${l.format(
-					'duration',
+				return `${l.datetime(depl.state.finished_at!)} (${l.duration(
 					depl.state.started_at!,
 					depl.state.finished_at!
 				)})`;
 			case DeploymentStatus.Failed:
-				return `${depl.state.error_code} (${l.format(
-					'duration',
+				return `${depl.state.error_code} (${l.duration(
 					depl.state.started_at!,
 					depl.state.finished_at!
 				)})`;
 			case DeploymentStatus.Running:
-				return `${l.format('datetime', depl.state.started_at!)} (${l.format(
-					'duration',
+				return `${l.datetime(depl.state.started_at!)} (${l.duration(
 					depl.state.started_at!,
 					new Date()
 				)})`;
 			default:
-				return `${l.format('datetime', depl.requested_at)}`;
+				return l.datetime(depl.requested_at);
 		}
 	}
 </script>
@@ -50,7 +47,7 @@
 							/>
 							<div>
 								<div class="title">
-									{variant === 'env' ? depl.environment : l.format('datetime', depl.requested_at)}
+									{variant === 'env' ? depl.environment : l.datetime(depl.requested_at)}
 								</div>
 								<div class="metadata">
 									{metadataFromStatus(depl)}

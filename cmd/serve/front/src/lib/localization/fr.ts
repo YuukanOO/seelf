@@ -53,8 +53,7 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées : co
 			`Aucune variable pour l'environnement <strong>${name}</strong>.`,
 		'app.cleanup_requested': 'Suppression demandée',
 		'app.cleanup_requested.description': function (date: DateValue) {
-			return `La suppression de l'application a été demandé le ${this.format(
-				'date',
+			return `La suppression de l'application a été demandé le ${this.date(
 				date
 			)} et sera traitée sous peu.`;
 		},

@@ -48,8 +48,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 		`No environment variables set for environment <strong>${name}</strong>.`,
 	'app.cleanup_requested': 'Marked for deletion',
 	'app.cleanup_requested.description': function (date: DateValue) {
-		return `The application removal has been requested at ${this.format(
-			'date',
+		return `The application removal has been requested at ${this.date(
 			date
 		)} and will be processed shortly.`;
 	},

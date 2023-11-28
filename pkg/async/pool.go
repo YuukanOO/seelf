@@ -15,20 +15,20 @@ type (
 		Stop()  // Wait for the current pool to complete and returns
 	}
 
-	PollingFunc[T any] func(context.Context, []string) ([]T, error)
-	NameFunc[T any]    func(T) string
-	HandlerFunc[T any] func(context.Context, T) error
+	PollingFunc[T any] func(context.Context, []string) ([]T, error) // Function used to retrieve jobs to process
+	NameFunc[T any]    func(T) string                               // Extract a job name
+	HandlerFunc[T any] func(context.Context, T) error               // Process a single job
 
 	pool[T any] struct {
 		started                bool
 		logger                 log.Logger
-		interval               time.Duration // Interval at which each group will look for the next job to do.
+		interval               time.Duration // Interval at which the PollingFunc will be called
 		pollingFunc            PollingFunc[T]
 		nameFunc               NameFunc[T]
 		done                   chan bool
-		exitGroup              sync.WaitGroup
-		tags                   []string // Supported tags (passed to the polling func)
-		jobs                   []chan T
+		exitGroup              sync.WaitGroup // Wait group used to wait for all workers to exit when stopping
+		tags                   []string       // Supported tags (passed to the polling func)
+		jobs                   []chan T       // Jobs channels (one per worker group)
 		tagsJobsChannelMapping map[string]int // Mapping between job name/tag and the appropriate channel index in the jobs array
 		workers                []*worker[T]
 	}
@@ -40,12 +40,12 @@ type (
 	}
 )
 
-// Builds a new pool which will call the given handler func at the specified interval.
-// The handler will be called for each group of jobs which have not reached their capacity
-// and it will received the group tags as argument so that you can filter the job
-// being returned.
+// Builds a new pool which will poll for jobs at specific intervals.
+// You must provide worker groups which will process specific job types retrieved
+// by the polling function. This polling function will fill a channel so worker can pick
+// jobs as soon as they are available.
 //
-// The idea behind pool groups is that some jobs need more time to complete and
+// The idea behind worker groups is that some jobs need more time to complete and
 // I don't want to hold back the other ones such as (in the future), sending
 // emails, checking stuff, etc.
 func NewPool[T any](

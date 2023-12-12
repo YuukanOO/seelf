@@ -3,10 +3,11 @@ package cleanup
 import (
 	"context"
 
-	"github.com/YuukanOO/seelf/internal/deployment/app/command"
+	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	depldomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/types"
@@ -16,15 +17,15 @@ type (
 	Request depldomain.AppCleanupRequested
 
 	handler struct {
-		logger  log.Logger
-		cleanup func(context.Context, command.CleanupAppCommand) error
+		logger log.Logger
+		bus    bus.Bus
 	}
 )
 
-func New(logger log.Logger, cleanup func(context.Context, command.CleanupAppCommand) error) jobs.Handler {
+func New(logger log.Logger, bus bus.Bus) jobs.Handler {
 	return &handler{
-		logger:  logger,
-		cleanup: cleanup,
+		logger: logger,
+		bus:    bus,
 	}
 }
 
@@ -48,7 +49,7 @@ func (h *handler) Process(ctx context.Context, job domain.Job) error {
 		return domain.ErrInvalidPayload
 	}
 
-	if err := h.cleanup(ctx, command.CleanupAppCommand{
+	if _, err := bus.Send(h.bus, ctx, cleanup_app.Command{
 		ID: string(data),
 	}); err != nil {
 		h.logger.Errorw("cleanup job has failed",

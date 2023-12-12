@@ -67,21 +67,23 @@ func Send[TResult any, TMsg Request[TResult]](bus Bus, ctx context.Context, msg 
 	return r.(TResult), err
 }
 
-// Call every signal handlers registered for the given signal.
-func Notify[TSignal Signal](bus Bus, ctx context.Context, msg TSignal) error {
-	handlers := bus.handler(msg.Name_())
+// Call every signal handlers registered for given signals.
+func Notify(bus Bus, ctx context.Context, msgs ...Signal) error {
+	for _, msg := range msgs {
+		handlers := bus.handler(msg.Name_())
 
-	if handlers == nil {
-		return nil
-	}
+		if handlers == nil {
+			return nil
+		}
 
-	hdls := handlers.([]NextFunc)
+		hdls := handlers.([]NextFunc)
 
-	for _, h := range hdls {
-		_, err := h(ctx, msg)
+		for _, h := range hdls {
+			_, err := h(ctx, msg)
 
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
 		}
 	}
 

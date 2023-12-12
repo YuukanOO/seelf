@@ -6,6 +6,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -49,6 +50,8 @@ type (
 	// EVENTS
 
 	DeploymentCreated struct {
+		bus.Notification
+
 		ID        DeploymentID
 		Config    Config
 		State     State
@@ -57,10 +60,15 @@ type (
 	}
 
 	DeploymentStateChanged struct {
+		bus.Notification
+
 		ID    DeploymentID
 		State State
 	}
 )
+
+func (DeploymentCreated) Name_() string      { return "deployment.event.deployment_created" }
+func (DeploymentStateChanged) Name_() string { return "deployment.event.deployment_state_changed" }
 
 // Creates a new deployment for this app. This method acts as a factory for the deployment
 // entity to make sure a new deployment can be created for an app.

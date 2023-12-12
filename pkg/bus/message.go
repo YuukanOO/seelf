@@ -37,7 +37,7 @@ type (
 		isRequest() T // Marker method. Without it, the compiler will not be able to infer the T.
 	}
 
-	// Message without result.
+	// Message without result implementing the Signal interface.
 	Notification struct{}
 
 	// Request to mutate the system.

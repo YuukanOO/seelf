@@ -1,17 +1,19 @@
 package serve
 
 import (
-	"github.com/YuukanOO/seelf/internal/auth/app/command"
+	"github.com/YuukanOO/seelf/internal/auth/app/get_profile"
+	"github.com/YuukanOO/seelf/internal/auth/app/login"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/http"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
 func (s *server) createSessionHandler() gin.HandlerFunc {
-	return http.Bind(s, func(ctx *gin.Context, cmd command.LoginCommand) error {
+	return http.Bind(s, func(ctx *gin.Context, cmd login.Command) error {
 		sess := sessions.Default(ctx)
 		context := ctx.Request.Context()
-		uid, err := s.login(context, cmd)
+		uid, err := bus.Send(s.bus, context, cmd)
 
 		if err != nil {
 			return err
@@ -24,7 +26,9 @@ func (s *server) createSessionHandler() gin.HandlerFunc {
 			return err
 		}
 
-		user, err := s.authGateway.GetProfile(context, uid)
+		user, err := bus.Send(s.bus, context, get_profile.Query{
+			ID: uid,
+		})
 
 		if err != nil {
 			return err

@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	deplcmd "github.com/YuukanOO/seelf/internal/deployment/app/command"
+	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	depldomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/worker/domain"
 	"github.com/YuukanOO/seelf/internal/worker/infra/jobs"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/types"
@@ -18,14 +19,14 @@ type (
 
 	handler struct {
 		logger log.Logger
-		deploy func(context.Context, deplcmd.DeployCommand) error
+		bus    bus.Bus
 	}
 )
 
-func New(logger log.Logger, deploy func(context.Context, deplcmd.DeployCommand) error) jobs.Handler {
+func New(logger log.Logger, bus bus.Bus) jobs.Handler {
 	return &handler{
 		logger: logger,
-		deploy: deploy,
+		bus:    bus,
 	}
 }
 
@@ -54,7 +55,7 @@ func (h *handler) Process(ctx context.Context, job domain.Job) error {
 
 	// Here the error is not given back to the worker because if it fails, the information
 	// is already in the associated Deployment. The only exception is for sql errors.
-	if err := h.deploy(ctx, deplcmd.DeployCommand{
+	if _, err := bus.Send(h.bus, ctx, deploy.Command{
 		AppID:            string(data.AppID),
 		DeploymentNumber: int(data.DeploymentNumber),
 	}); err != nil {

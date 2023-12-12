@@ -1,7 +1,7 @@
 package archive
 
 import (
-	"github.com/YuukanOO/seelf/internal/deployment/app/query"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 )
 
@@ -15,7 +15,7 @@ func init() {
 		return Data(value), nil
 	})
 
-	query.SourceDataTypes.Register(Data(""), func(value string) (query.SourceData, error) {
+	get_deployment.SourceDataTypes.Register(Data(""), func(value string) (get_deployment.SourceData, error) {
 		return Data(value), nil
 	})
 }

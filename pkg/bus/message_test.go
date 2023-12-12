@@ -10,9 +10,9 @@ import (
 func TestMessage(t *testing.T) {
 	t.Run("should have the appropriate kind", func(t *testing.T) {
 		var (
-			command AddCommand
-			query   GetQuery
-			notif   RegisteredNotification
+			command addCommand
+			query   getQuery
+			notif   registeredNotification
 		)
 
 		testutil.Equals(t, bus.MessageKindCommand, command.Kind_())
@@ -21,25 +21,25 @@ func TestMessage(t *testing.T) {
 	})
 }
 
-type AddCommand struct {
+type addCommand struct {
 	bus.Command[int]
 
 	A int
 	B int
 }
 
-func (AddCommand) Name_() string { return "AddCommand" }
+func (addCommand) Name_() string { return "AddCommand" }
 
-type GetQuery struct {
+type getQuery struct {
 	bus.Query[int]
 }
 
-func (GetQuery) Name_() string { return "GetQuery" }
+func (getQuery) Name_() string { return "GetQuery" }
 
-type RegisteredNotification struct {
+type registeredNotification struct {
 	bus.Notification
 
 	Id int
 }
 
-func (RegisteredNotification) Name_() string { return "RegisteredNotification" }
+func (registeredNotification) Name_() string { return "RegisteredNotification" }

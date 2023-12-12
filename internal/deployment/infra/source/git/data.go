@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/YuukanOO/seelf/internal/deployment/app/query"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
@@ -27,7 +27,7 @@ func init() {
 
 	// Here the registered discriminated type is the same since there are no unexposed fields and
 	// it also handle the retrocompatibility with the old payload format.
-	query.SourceDataTypes.Register(Data{}, func(value string) (query.SourceData, error) {
+	get_deployment.SourceDataTypes.Register(Data{}, func(value string) (get_deployment.SourceData, error) {
 		return tryParseGitData(value)
 	})
 }

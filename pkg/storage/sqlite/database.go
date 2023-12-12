@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
@@ -24,7 +25,7 @@ const (
 type (
 	Database interface {
 		builder.Executor
-		Dispatcher() event.Dispatcher
+		Bus() bus.Bus
 		WithTransaction(ctx context.Context) (context.Context, *sql.Tx)
 		Migrate(...MigrationsModule) error
 		Close() error
@@ -39,16 +40,16 @@ type (
 
 	// Handle to a sqlite database with useful helper methods on it :)
 	database struct {
-		conn       *sql.DB
-		dispatcher event.Dispatcher
-		logger     log.Logger
+		conn   *sql.DB
+		bus    bus.Bus
+		logger log.Logger
 	}
 
 	contextKey string
 )
 
 // Opens a connection to a sqlite database file.
-func Open(dsn string, logger log.Logger, dispatcher event.Dispatcher) (Database, error) {
+func Open(dsn string, logger log.Logger, bus bus.Bus) (Database, error) {
 	db, err := sql.Open(dbDriverName, dsn)
 
 	if err != nil {
@@ -59,7 +60,7 @@ func Open(dsn string, logger log.Logger, dispatcher event.Dispatcher) (Database,
 		return nil, err
 	}
 
-	return &database{db, dispatcher, logger}, nil
+	return &database{db, bus, logger}, nil
 }
 
 // Close the underlying database.
@@ -148,7 +149,7 @@ func (db *database) tryGetTransaction(ctx context.Context) builder.Executor {
 	return querier
 }
 
-func (db *database) Dispatcher() event.Dispatcher { return db.dispatcher }
+func (db *database) Bus() bus.Bus { return db.bus }
 
 // Retrieve the transaction in the given context if any, or nil if it doesn't
 // have one.
@@ -203,14 +204,17 @@ func WriteAndDispatch[T event.Source](
 
 	for _, ent := range entities {
 		events := event.Unwrap(ent)
+		notifs := make([]bus.Signal, len(events)) // It's a shame Go could not accept an array of events as a slice of signals since Event are effectively Signal
 
-		for _, evt := range events {
+		for i, evt := range events {
 			if finalErr = switcher(ctx, evt); finalErr != nil {
 				return
 			}
+
+			notifs[i] = evt
 		}
 
-		if finalErr = db.Dispatcher().Dispatch(ctx, events...); finalErr != nil {
+		if finalErr = bus.Notify(db.Bus(), ctx, notifs...); finalErr != nil {
 			return
 		}
 

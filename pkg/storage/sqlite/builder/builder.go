@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/query"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
@@ -54,7 +53,7 @@ type (
 		// Executes the query and returns the first matching result
 		One(Executor, context.Context, storage.Mapper[T], ...Dataloader[T]) (T, error)
 		// Returns a paginated data result set.
-		Paginate(Executor, context.Context, storage.Mapper[T], int, ...Dataloader[T]) (query.Paginated[T], error)
+		Paginate(Executor, context.Context, storage.Mapper[T], int, ...Dataloader[T]) (storage.Paginated[T], error)
 
 		// Same as One but extract a primitive value by using a simple generic scanner
 		Extract(Executor, context.Context) (T, error)
@@ -211,12 +210,12 @@ func (q *queryBuilder[T]) Paginate(
 	mapper storage.Mapper[T],
 	page int,
 	loaders ...Dataloader[T],
-) (query.Paginated[T], error) {
+) (storage.Paginated[T], error) {
 	// FIXME: Since the query is definitely mutated to paginate the result, it could not
 	// be runned twice. Maybe I should pass the query by value instead, not sure about that.
 	var (
 		err    error
-		result = query.Paginated[T]{
+		result = storage.Paginated[T]{
 			Page:        page,
 			IsFirstPage: page == 1,
 			PerPage:     perPage,

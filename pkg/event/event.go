@@ -1,9 +1,11 @@
 package event
 
+import "github.com/YuukanOO/seelf/pkg/bus"
+
 type (
 	// Event triggered by main aggregates. This type is mostly a precaution in case
 	// required metadata evolve afterwards.
-	Event any
+	Event bus.Signal
 
 	// Represents an event source which contains events before dispatching.
 	// Methods are unexported to avoid polluting the domain entities with those

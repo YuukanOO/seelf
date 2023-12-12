@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -69,6 +70,8 @@ type (
 	// EVENTS
 
 	UserRegistered struct {
+		bus.Notification
+
 		ID           UserID
 		Email        UniqueEmail
 		Password     PasswordHash
@@ -77,15 +80,23 @@ type (
 	}
 
 	UserEmailChanged struct {
+		bus.Notification
+
 		ID    UserID
 		Email UniqueEmail
 	}
 
 	UserPasswordChanged struct {
+		bus.Notification
+
 		ID       UserID
 		Password PasswordHash
 	}
 )
+
+func (UserRegistered) Name_() string      { return "auth.event.user_registered" }
+func (UserEmailChanged) Name_() string    { return "auth.event.user_email_changed" }
+func (UserPasswordChanged) Name_() string { return "auth.event.user_password_changed" }
 
 func NewUser(email UniqueEmail, password PasswordHash, key APIKey) (u User) {
 	u.apply(UserRegistered{

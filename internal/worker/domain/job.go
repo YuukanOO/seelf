@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -59,6 +60,8 @@ type (
 	// EVENTS
 
 	JobQueued struct {
+		bus.Notification
+
 		ID         JobID
 		DedupeName string
 		Data       JobData
@@ -66,15 +69,23 @@ type (
 	}
 
 	JobDone struct {
+		bus.Notification
+
 		ID JobID
 	}
 
 	JobFailed struct {
+		bus.Notification
+
 		ID      JobID
 		ErrCode string
 		RetryAt time.Time
 	}
 )
+
+func (JobQueued) Name_() string { return "worker.event.job_queued" }
+func (JobDone) Name_() string   { return "worker.event.job_done" }
+func (JobFailed) Name_() string { return "worker.event.job_failed" }
 
 // Creates a new job which will be processed by a worker later on.
 // A dedupe name can be provided to avoid multiple workers to process the same kind of job

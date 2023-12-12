@@ -13,10 +13,10 @@ func TestInMemoryBus(t *testing.T) {
 	t.Run("should accepts registration of all message kind", func(t *testing.T) {
 		local := bus.NewInMemoryBus()
 
-		bus.Register(local, AddCommandHandler)
-		bus.Register(local, GetQueryHandler)
-		bus.On(local, NotificationHandler)
-		bus.On(local, OtherNotificationHandler)
+		bus.Register(local, addCommandHandler)
+		bus.Register(local, getQueryHandler)
+		bus.On(local, notificationHandler)
+		bus.On(local, otherNotificationHandler)
 	})
 
 	t.Run("should panic if an handler is already registered for a request", func(t *testing.T) {
@@ -28,14 +28,14 @@ func TestInMemoryBus(t *testing.T) {
 
 		local := bus.NewInMemoryBus()
 
-		bus.Register(local, AddCommandHandler)
-		bus.Register(local, AddCommandHandler)
+		bus.Register(local, addCommandHandler)
+		bus.Register(local, addCommandHandler)
 	})
 
 	t.Run("should returns an error if no handler is registered for a given request", func(t *testing.T) {
 		local := bus.NewInMemoryBus()
 
-		_, err := bus.Send(local, context.Background(), &AddCommand{})
+		_, err := bus.Send(local, context.Background(), &addCommand{})
 
 		testutil.ErrorIs(t, bus.ErrNoHandlerRegistered, err)
 	})
@@ -44,11 +44,11 @@ func TestInMemoryBus(t *testing.T) {
 		local := bus.NewInMemoryBus()
 		expectedErr := errors.New("handler error")
 
-		bus.Register(local, func(ctx context.Context, cmd AddCommand) (int, error) {
+		bus.Register(local, func(ctx context.Context, cmd addCommand) (int, error) {
 			return 0, expectedErr
 		})
 
-		_, err := bus.Send(local, context.Background(), AddCommand{})
+		_, err := bus.Send(local, context.Background(), addCommand{})
 
 		testutil.ErrorIs(t, expectedErr, err)
 	})
@@ -56,17 +56,17 @@ func TestInMemoryBus(t *testing.T) {
 	t.Run("should call the appropriate request handler and returns the result", func(t *testing.T) {
 		local := bus.NewInMemoryBus()
 
-		bus.Register(local, AddCommandHandler)
-		bus.Register(local, GetQueryHandler)
-		bus.On(local, NotificationHandler)
-		bus.On(local, OtherNotificationHandler)
+		bus.Register(local, addCommandHandler)
+		bus.Register(local, getQueryHandler)
+		bus.On(local, notificationHandler)
+		bus.On(local, otherNotificationHandler)
 
-		result, err := bus.Send(local, context.Background(), AddCommand{A: 1, B: 2})
+		result, err := bus.Send(local, context.Background(), addCommand{A: 1, B: 2})
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, 3, result)
 
-		result, err = bus.Send(local, context.Background(), GetQuery{})
+		result, err = bus.Send(local, context.Background(), getQuery{})
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, 42, result)
@@ -75,7 +75,7 @@ func TestInMemoryBus(t *testing.T) {
 	t.Run("should do nothing if no signal handler is registered for a given signal", func(t *testing.T) {
 		local := bus.NewInMemoryBus()
 
-		err := bus.Notify(local, context.Background(), RegisteredNotification{})
+		err := bus.Notify(local, context.Background(), registeredNotification{})
 
 		testutil.IsNil(t, err)
 	})
@@ -84,15 +84,15 @@ func TestInMemoryBus(t *testing.T) {
 		local := bus.NewInMemoryBus()
 		expectedErr := errors.New("handler error")
 
-		bus.On(local, func(ctx context.Context, notif RegisteredNotification) error {
+		bus.On(local, func(ctx context.Context, notif registeredNotification) error {
 			return nil
 		})
 
-		bus.On(local, func(ctx context.Context, notif RegisteredNotification) error {
+		bus.On(local, func(ctx context.Context, notif registeredNotification) error {
 			return expectedErr
 		})
 
-		err := bus.Notify(local, context.Background(), RegisteredNotification{})
+		err := bus.Notify(local, context.Background(), registeredNotification{})
 
 		testutil.ErrorIs(t, expectedErr, err)
 	})
@@ -104,17 +104,17 @@ func TestInMemoryBus(t *testing.T) {
 			secondOneCalled = false
 		)
 
-		bus.On(local, func(ctx context.Context, notif RegisteredNotification) error {
+		bus.On(local, func(ctx context.Context, notif registeredNotification) error {
 			firstOneCalled = true
 			return nil
 		})
 
-		bus.On(local, func(ctx context.Context, notif RegisteredNotification) error {
+		bus.On(local, func(ctx context.Context, notif registeredNotification) error {
 			secondOneCalled = true
 			return nil
 		})
 
-		err := bus.Notify(local, context.Background(), RegisteredNotification{})
+		err := bus.Notify(local, context.Background(), registeredNotification{})
 
 		testutil.IsNil(t, err)
 		testutil.IsTrue(t, firstOneCalled && secondOneCalled)
@@ -142,12 +142,12 @@ func TestInMemoryBus(t *testing.T) {
 			},
 		)
 
-		bus.Register(local, AddCommandHandler)
-		bus.Register(local, GetQueryHandler)
-		bus.On(local, NotificationHandler)
-		bus.On(local, OtherNotificationHandler)
+		bus.Register(local, addCommandHandler)
+		bus.Register(local, getQueryHandler)
+		bus.On(local, notificationHandler)
+		bus.On(local, otherNotificationHandler)
 
-		r, err := bus.Send(local, context.Background(), AddCommand{
+		r, err := bus.Send(local, context.Background(), addCommand{
 			A: 1,
 			B: 2,
 		})
@@ -158,25 +158,25 @@ func TestInMemoryBus(t *testing.T) {
 
 		calls = make([]int, 0)
 
-		bus.Notify(local, context.Background(), RegisteredNotification{})
+		bus.Notify(local, context.Background(), registeredNotification{})
 
 		// Should have been called twice cuz 2 signal handlers are registered
 		testutil.DeepEquals(t, []int{1, 2, 2, 1, 1, 2, 2, 1}, calls)
 	})
 }
 
-func AddCommandHandler(ctx context.Context, cmd AddCommand) (int, error) {
+func addCommandHandler(ctx context.Context, cmd addCommand) (int, error) {
 	return cmd.A + cmd.B, nil
 }
 
-func GetQueryHandler(ctx context.Context, query GetQuery) (int, error) {
+func getQueryHandler(ctx context.Context, query getQuery) (int, error) {
 	return 42, nil
 }
 
-func NotificationHandler(ctx context.Context, notif RegisteredNotification) error {
+func notificationHandler(ctx context.Context, notif registeredNotification) error {
 	return nil
 }
 
-func OtherNotificationHandler(ctx context.Context, notif RegisteredNotification) error {
+func otherNotificationHandler(ctx context.Context, notif registeredNotification) error {
 	return nil
 }

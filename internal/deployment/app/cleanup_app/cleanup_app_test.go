@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/YuukanOO/seelf/cmd"
+	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra"
@@ -27,7 +27,7 @@ func Test_CleanupApp(t *testing.T) {
 	logger := log.NewLogger(false)
 
 	sut := func(initialData initialData) bus.RequestHandler[bool, cleanup_app.Command] {
-		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		opts := config.Default(config.WithTestDefaults())
 		appsStore := memory.NewAppsStore(initialData.existingApps...)
 		deploymentsStore := memory.NewDeploymentsStore(initialData.existingDeployments...)
 		artifactManager := infra.NewLocalArtifactManager(opts, logger)

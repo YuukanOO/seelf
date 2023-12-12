@@ -104,7 +104,7 @@ func Server(options ServerOptions) (ServerRoot, error) {
 }
 
 func (s *serverRoot) Cleanup() error {
-	s.logger.Debug("cleaning server root services")
+	s.logger.Debug("cleaning server services")
 
 	s.pool.Stop()
 

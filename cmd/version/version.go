@@ -1,4 +1,4 @@
-package cmd
+package version
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 var version = "1.1.0"
 
 // Retrieve the currentVersion version with additional vcs info if any.
-func currentVersion() string {
+func Current() string {
 	var suffix string
 
 	if info, ok := debug.ReadBuildInfo(); ok {

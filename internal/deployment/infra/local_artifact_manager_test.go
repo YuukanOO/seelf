@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/YuukanOO/seelf/cmd"
+	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
@@ -17,7 +17,7 @@ func Test_LocalArtifactManager(t *testing.T) {
 	logger := log.NewLogger(false)
 
 	sut := func() domain.ArtifactManager {
-		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		opts := config.Default(config.WithTestDefaults())
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())

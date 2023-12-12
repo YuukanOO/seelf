@@ -39,7 +39,6 @@ type (
 		IsSecure() bool
 		ListenAddress() string
 		Domain() deployment.Url
-		CurrentVersion() string
 	}
 
 	server struct {

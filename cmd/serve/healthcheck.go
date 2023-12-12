@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"github.com/YuukanOO/seelf/cmd/version"
 	"github.com/YuukanOO/seelf/pkg/http"
 	"github.com/gin-gonic/gin"
 )
@@ -12,7 +13,7 @@ type healthCheckResponse struct {
 
 func (s *server) healthcheckHandler(ctx *gin.Context) {
 	http.Ok(ctx, healthCheckResponse{
-		Version: s.options.CurrentVersion(),
+		Version: version.Current(),
 		Domain:  s.options.Domain().String(),
 	})
 }

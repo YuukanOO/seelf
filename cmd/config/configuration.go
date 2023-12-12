@@ -1,4 +1,4 @@
-package cmd
+package config
 
 import (
 	"fmt"
@@ -8,8 +8,10 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/YuukanOO/seelf/cmd/serve"
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/config"
 	"github.com/YuukanOO/seelf/pkg/crypto"
 	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -36,8 +38,16 @@ const (
 )
 
 type (
-	// Structure which hold the application wide configuration.
-	// Implements various options used throughout the application.
+	// Configuration used to configure seelf commands.
+	Configuration interface {
+		serve.Options // The configuration should provide every settings needed by the seelf server
+
+		Initialize(path string, verbose bool) error // Initialize the configuration by loading it (from config file, env vars, etc.)
+	}
+
+	// Configuration builder function used to initialize the configuration object (mostly used in tests).
+	ConfigurationBuilder func(*configuration)
+
 	configuration struct {
 		Verbose  bool `env:"SEELF_DEBUG" yaml:",omitempty"`
 		Data     dataConfiguration
@@ -46,15 +56,11 @@ type (
 		Runners  runnersConfiguration
 		Private  internalConfiguration `yaml:"-"`
 
-		currentVersion        string
 		domain                domain.Url
 		pollInterval          time.Duration
 		deploymentDirTemplate *template.Template
 		path                  string // Holds from where the config was loaded / saved
 	}
-
-	// Configuration builder function used to initialize the configuration object (mostly used in tests).
-	ConfigurationBuilder func(*configuration)
 
 	httpConfiguration struct {
 		Host   string            `env:"HTTP_HOST" yaml:",omitempty"`
@@ -92,12 +98,11 @@ type (
 	}
 )
 
-// Returns the default cmd configuration and apply optional builders to it.
-func DefaultConfiguration(builders ...ConfigurationBuilder) *configuration {
+// Instantiate the default seelf configuration.
+func Default(builders ...ConfigurationBuilder) Configuration {
 	conf := &configuration{
-		path:           filepath.Join(defaultDataDirectory, defaultConfigFilename),
-		currentVersion: currentVersion(),
-		Verbose:        false,
+		path:    filepath.Join(defaultDataDirectory, defaultConfigFilename),
+		Verbose: false,
 		Data: dataConfiguration{
 			Path:                  defaultDataDirectory,
 			DeploymentDirTemplate: defaultDeploymentDirTemplate,
@@ -127,6 +132,17 @@ func DefaultConfiguration(builders ...ConfigurationBuilder) *configuration {
 	return conf
 }
 
+func (c *configuration) Initialize(path string, verbose bool) error {
+	c.path = path
+	c.Verbose = verbose
+
+	if err := config.Load(c.path, c); err != nil {
+		return err
+	}
+
+	return config.Save(c.path, c)
+}
+
 func (c configuration) DataDir() string                           { return c.Data.Path }
 func (c configuration) DeploymentDirTemplate() *template.Template { return c.deploymentDirTemplate }
 func (c configuration) Domain() domain.Url                        { return c.domain }
@@ -136,7 +152,6 @@ func (c configuration) Secret() []byte                            { return []byt
 func (c configuration) IsUsingGeneratedSecret() bool              { return c.Http.Secret == generatedSecretKey }
 func (c configuration) IsVerbose() bool                           { return c.Verbose }
 func (c configuration) ConfigPath() string                        { return c.path }
-func (c configuration) CurrentVersion() string                    { return c.currentVersion }
 func (c configuration) RunnersPollInterval() time.Duration        { return c.pollInterval }
 func (c configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 

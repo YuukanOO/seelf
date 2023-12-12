@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/YuukanOO/seelf/cmd"
+	"github.com/YuukanOO/seelf/cmd/config"
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -29,7 +29,7 @@ func Test_Deploy(t *testing.T) {
 		backend domain.Backend,
 		existingDeployments ...*domain.Deployment,
 	) bus.RequestHandler[bool, deploy.Command] {
-		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		opts := config.Default(config.WithTestDefaults())
 		store := memory.NewDeploymentsStore(existingDeployments...)
 		artifactManager := infra.NewLocalArtifactManager(opts, logger)
 

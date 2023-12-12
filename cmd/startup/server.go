@@ -19,7 +19,10 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/fail_running_deployments"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment_log"
+	"github.com/YuukanOO/seelf/internal/deployment/app/promote"
 	"github.com/YuukanOO/seelf/internal/deployment/app/queue_deployment"
+	"github.com/YuukanOO/seelf/internal/deployment/app/redeploy"
+	"github.com/YuukanOO/seelf/internal/deployment/app/request_app_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_app"
 	deploymentdomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
@@ -165,8 +168,11 @@ func (s *serverRoot) configureServices() error {
 	bus.Register(s.bus, queue_deployment.Handler(appsStore, deploymentsStore, deploymentsStore, sourceFacade))
 	bus.Register(s.bus, deploy.Handler(deploymentsStore, deploymentsStore, artifactManager, sourceFacade, s.docker))
 	bus.Register(s.bus, fail_running_deployments.Handler(deploymentsStore, deploymentsStore))
+	bus.Register(s.bus, request_app_cleanup.Handler(appsStore, appsStore))
 	bus.Register(s.bus, cleanup_app.Handler(deploymentsStore, appsStore, appsStore, artifactManager, s.docker))
 	bus.Register(s.bus, get_deployment_log.Handler(deploymentsStore, artifactManager))
+	bus.Register(s.bus, redeploy.Handler(appsStore, deploymentsStore, deploymentsStore))
+	bus.Register(s.bus, promote.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(s.bus, deploymentQueryHandler.GetAllApps)
 	bus.Register(s.bus, deploymentQueryHandler.GetAppByID)
 	bus.Register(s.bus, deploymentQueryHandler.GetAllDeploymentsByApp)
@@ -174,6 +180,8 @@ func (s *serverRoot) configureServices() error {
 
 	// TODO: since worker jobs are just dispatch of a predefined command in another domain, maybe
 	// we can leverage this to make it more generic.
+
+	//bus.On(s.bus, deploy.DeploymentCreatedHandler(s.bus))
 
 	bus.On(s.bus, func(ctx context.Context, evt deploymentdomain.DeploymentCreated) error {
 		_, err := bus.Send(s.bus, ctx, queue.Command{Payload: deployjob.Request(evt)})

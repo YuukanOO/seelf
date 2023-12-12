@@ -113,6 +113,7 @@
 
 	.outdated {
 		margin-block-start: var(--sp-2);
+		margin-inline: 1px;
 	}
 
 	.outdated + ul {

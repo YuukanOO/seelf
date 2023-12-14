@@ -25,7 +25,7 @@ const (
 type (
 	Database interface {
 		builder.Executor
-		Bus() bus.Bus
+		Bus() bus.Dispatcher
 		WithTransaction(ctx context.Context) (context.Context, *sql.Tx)
 		Migrate(...MigrationsModule) error
 		Close() error
@@ -41,7 +41,7 @@ type (
 	// Handle to a sqlite database with useful helper methods on it :)
 	database struct {
 		conn   *sql.DB
-		bus    bus.Bus
+		bus    bus.Dispatcher
 		logger log.Logger
 	}
 
@@ -49,7 +49,7 @@ type (
 )
 
 // Opens a connection to a sqlite database file.
-func Open(dsn string, logger log.Logger, bus bus.Bus) (Database, error) {
+func Open(dsn string, logger log.Logger, bus bus.Dispatcher) (Database, error) {
 	db, err := sql.Open(dbDriverName, dsn)
 
 	if err != nil {
@@ -149,7 +149,7 @@ func (db *database) tryGetTransaction(ctx context.Context) builder.Executor {
 	return querier
 }
 
-func (db *database) Bus() bus.Bus { return db.bus }
+func (db *database) Bus() bus.Dispatcher { return db.bus }
 
 // Retrieve the transaction in the given context if any, or nil if it doesn't
 // have one.
@@ -214,7 +214,7 @@ func WriteAndDispatch[T event.Source](
 			notifs[i] = evt
 		}
 
-		if finalErr = bus.Notify(db.Bus(), ctx, notifs...); finalErr != nil {
+		if finalErr = db.Bus().Notify(ctx, notifs...); finalErr != nil {
 			return
 		}
 

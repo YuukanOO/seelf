@@ -11,8 +11,8 @@ import (
 type Command struct {
 	bus.Command[bool]
 
-	AppID            string `json:"-"`
-	DeploymentNumber int    `json:"-"`
+	AppID            string `json:"app_id"`
+	DeploymentNumber int    `json:"deployment_number"`
 }
 
 func (Command) Name_() string { return "deployment.command.deploy" }

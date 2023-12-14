@@ -3,8 +3,7 @@ package event
 import "github.com/YuukanOO/seelf/pkg/bus"
 
 type (
-	// Event triggered by main aggregates. This type is mostly a precaution in case
-	// required metadata evolve afterwards.
+	// Event triggered by main aggregates.
 	Event bus.Signal
 
 	// Represents an event source which contains events before dispatching.

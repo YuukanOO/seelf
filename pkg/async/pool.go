@@ -15,9 +15,9 @@ type (
 		Stop()  // Wait for the current pool to complete and returns
 	}
 
-	PollingFunc[T any] func(context.Context, []string) ([]T, error) // Function used to retrieve jobs to process
-	NameFunc[T any]    func(T) string                               // Extract a job name
-	HandlerFunc[T any] func(context.Context, T) error               // Process a single job
+	PollingFunc[T any] func(context.Context) ([]T, error) // Function used to retrieve jobs to process
+	NameFunc[T any]    func(T) string                     // Extract a job name
+	HandlerFunc[T any] func(context.Context, T) error     // Process a single job
 
 	pool[T any] struct {
 		started                bool
@@ -27,7 +27,6 @@ type (
 		nameFunc               NameFunc[T]
 		done                   chan bool
 		exitGroup              sync.WaitGroup // Wait group used to wait for all workers to exit when stopping
-		tags                   []string       // Supported tags (passed to the polling func)
 		jobs                   []chan T       // Jobs channels (one per worker group)
 		tagsJobsChannelMapping map[string]int // Mapping between job name/tag and the appropriate channel index in the jobs array
 		workers                []*worker[T]
@@ -56,14 +55,12 @@ func NewPool[T any](
 	groups ...*group[T],
 ) Pool {
 	var (
-		tags    []string
 		jobs    []chan T
 		mapping map[string]int = make(map[string]int)
 		workers []*worker[T]
 	)
 
 	for idx, g := range groups {
-		tags = append(tags, g.tags...)
 		jobs = append(jobs, make(chan T))
 
 		for _, t := range g.tags {
@@ -81,7 +78,6 @@ func NewPool[T any](
 		pollingFunc:            pollingFunc,
 		nameFunc:               nameFunc,
 		done:                   make(chan bool, 1),
-		tags:                   tags,
 		jobs:                   jobs,
 		tagsJobsChannelMapping: mapping,
 		workers:                workers,
@@ -122,7 +118,7 @@ func (p *pool[T]) Start() {
 
 		lastRun = time.Now()
 
-		jobs, err := p.pollingFunc(context.Background(), p.tags)
+		jobs, err := p.pollingFunc(context.Background())
 
 		if err != nil {
 			p.logger.Errorw("error retrieving jobs",

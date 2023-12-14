@@ -31,6 +31,8 @@ var (
 	ErrLoadProjectFailed     = errors.New("compose_file_malformed")
 	ErrOpenComposeFileFailed = errors.New("compose_file_open_failed")
 	ErrComposeFailed         = errors.New("compose_failed")
+
+	_ domain.Backend = (*Docker)(nil) // Make sure docker implements the Backend interface
 )
 
 const (
@@ -49,14 +51,9 @@ type (
 		AcmeEmail() string
 	}
 
-	Backend interface {
-		domain.Backend
-		Setup() error
-	}
+	DockerOptions func(*Docker)
 
-	DockerOptions func(*docker)
-
-	docker struct {
+	Docker struct {
 		cli     command.Cli // Docker cli to use, if nil, a new one will be created per deployment task
 		compose api.Service // Docker compose service to use, if nil, a new one will be created per deployment task
 		options Options
@@ -66,8 +63,8 @@ type (
 
 // Creates a docker backend with given options. The configuration is mostly used to
 // ease the testing of some internals.
-func New(options Options, logger log.Logger, configuration ...DockerOptions) Backend {
-	d := &docker{
+func New(options Options, logger log.Logger, configuration ...DockerOptions) *Docker {
+	d := &Docker{
 		options: options,
 		logger:  logger,
 	}
@@ -81,13 +78,13 @@ func New(options Options, logger log.Logger, configuration ...DockerOptions) Bac
 
 // Use the given compose service and cli instead of creating new ones. Used for testing.
 func WithDockerAndCompose(cli command.Cli, composeService api.Service) DockerOptions {
-	return func(d *docker) {
+	return func(d *Docker) {
 		d.cli = cli
 		d.compose = composeService
 	}
 }
 
-func (d *docker) Setup() error {
+func (d *Docker) Setup() error {
 	cli, compose, err := d.instantiateClientAndCompose(nil)
 
 	if err != nil {
@@ -163,7 +160,7 @@ func (d *docker) Setup() error {
 	})
 }
 
-func (d *docker) Run(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) (domain.Services, error) {
+func (d *Docker) Run(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) (domain.Services, error) {
 	cli, compose, err := d.instantiateClientAndCompose(logger)
 
 	if err != nil {
@@ -220,7 +217,7 @@ func (d *docker) Run(ctx context.Context, dir string, logger domain.DeploymentLo
 	return services, nil
 }
 
-func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
+func (d *Docker) Cleanup(ctx context.Context, app domain.App) error {
 	cli, _, err := d.instantiateClientAndCompose(nil)
 
 	if err != nil {
@@ -316,7 +313,7 @@ func (d *docker) Cleanup(ctx context.Context, app domain.App) error {
 }
 
 // Initialize a new docker client and compose service. You MUST close the command.Cli once done.
-func (d *docker) instantiateClientAndCompose(logger domain.DeploymentLogger) (command.Cli, api.Service, error) {
+func (d *Docker) instantiateClientAndCompose(logger domain.DeploymentLogger) (command.Cli, api.Service, error) {
 	if d.compose != nil && d.cli != nil {
 		return d.cli, d.compose, nil
 	}
@@ -358,7 +355,7 @@ func (d *docker) instantiateClientAndCompose(logger domain.DeploymentLogger) (co
 //
 // The goal is really for the user to provide a docker-compose file which runs fine locally
 // and we should do our best to expose it accordingly without the user providing anything.
-func (d *docker) generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger) (*types.Project, domain.Services, error) {
+func (d *Docker) generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger) (*types.Project, domain.Services, error) {
 	var (
 		services    domain.Services
 		config      = depl.Config()

@@ -143,6 +143,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'unexpected_error.description': `<p>Looks like something went wrong. Try refreshing the page.</p><p>If the problem persists, please contact the administrator to investigate.</p>`,
 	app_name_already_taken: 'App name is already taken',
 	git_branch_not_found: 'Branch not found',
+	git_remote_not_reachable: 'Remote not reachable',
 	invalid_email_or_password: 'Invalid email or password'
 } satisfies Translations;
 

@@ -136,10 +136,20 @@ func (c *configuration) Initialize(path string, verbose bool) error {
 	c.path = path
 	c.Verbose = verbose
 
-	if err := config.Load(c.path, c); err != nil {
+	// FIXME: Maybe it could be a good idea to ask for a global logger to at least inform the user
+	// that a config file has been read and/or created.
+
+	exists, err := config.Load(c.path, c)
+
+	if err != nil {
 		return err
 	}
 
+	if exists {
+		return nil
+	}
+
+	// Save the config file only if it doesn't exist yet (to preserve the secret generated for example)
 	return config.Save(c.path, c)
 }
 

@@ -33,7 +33,7 @@ func Test_Run(t *testing.T) {
 	composeMock := &composeMockService{}
 	dockerMock := newDockerMockService()
 
-	backend := func(opts options) (docker.Backend, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
+	backend := func(opts options) (*docker.Docker, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
 		artifactManager := infra.NewLocalArtifactManager(opts, logger)
 
 		t.Cleanup(func() {

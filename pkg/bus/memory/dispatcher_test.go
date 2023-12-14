@@ -1,4 +1,4 @@
-package bus_test
+package memory_test
 
 import (
 	"context"
@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/memory"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
-func TestInMemoryBus(t *testing.T) {
+func TestBus(t *testing.T) {
 	t.Run("should accepts registration of all message kind", func(t *testing.T) {
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 
 		bus.Register(local, addCommandHandler)
 		bus.Register(local, getQueryHandler)
@@ -26,14 +27,14 @@ func TestInMemoryBus(t *testing.T) {
 			}
 		}()
 
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 
 		bus.Register(local, addCommandHandler)
 		bus.Register(local, addCommandHandler)
 	})
 
 	t.Run("should returns an error if no handler is registered for a given request", func(t *testing.T) {
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 
 		_, err := bus.Send(local, context.Background(), &addCommand{})
 
@@ -41,7 +42,7 @@ func TestInMemoryBus(t *testing.T) {
 	})
 
 	t.Run("should returns the request handler error back if any", func(t *testing.T) {
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 		expectedErr := errors.New("handler error")
 
 		bus.Register(local, func(ctx context.Context, cmd addCommand) (int, error) {
@@ -54,7 +55,7 @@ func TestInMemoryBus(t *testing.T) {
 	})
 
 	t.Run("should call the appropriate request handler and returns the result", func(t *testing.T) {
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 
 		bus.Register(local, addCommandHandler)
 		bus.Register(local, getQueryHandler)
@@ -73,15 +74,15 @@ func TestInMemoryBus(t *testing.T) {
 	})
 
 	t.Run("should do nothing if no signal handler is registered for a given signal", func(t *testing.T) {
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 
-		err := bus.Notify(local, context.Background(), registeredNotification{})
+		err := local.Notify(context.Background(), registeredNotification{})
 
 		testutil.IsNil(t, err)
 	})
 
 	t.Run("should returns a signal handler error back if any", func(t *testing.T) {
-		local := bus.NewInMemoryBus()
+		local := memory.NewBus()
 		expectedErr := errors.New("handler error")
 
 		bus.On(local, func(ctx context.Context, notif registeredNotification) error {
@@ -92,14 +93,14 @@ func TestInMemoryBus(t *testing.T) {
 			return expectedErr
 		})
 
-		err := bus.Notify(local, context.Background(), registeredNotification{})
+		err := local.Notify(context.Background(), registeredNotification{})
 
 		testutil.ErrorIs(t, expectedErr, err)
 	})
 
 	t.Run("should call every signal handlers registered for the given signal", func(t *testing.T) {
 		var (
-			local           = bus.NewInMemoryBus()
+			local           = memory.NewBus()
 			firstOneCalled  = false
 			secondOneCalled = false
 		)
@@ -114,7 +115,7 @@ func TestInMemoryBus(t *testing.T) {
 			return nil
 		})
 
-		err := bus.Notify(local, context.Background(), registeredNotification{})
+		err := local.Notify(context.Background(), registeredNotification{})
 
 		testutil.IsNil(t, err)
 		testutil.IsTrue(t, firstOneCalled && secondOneCalled)
@@ -123,7 +124,7 @@ func TestInMemoryBus(t *testing.T) {
 	t.Run("should call every middlewares registered", func(t *testing.T) {
 		calls := make([]int, 0)
 
-		local := bus.NewInMemoryBus(
+		local := memory.NewBus(
 			func(next bus.NextFunc) bus.NextFunc {
 				return func(ctx context.Context, m bus.Message) (any, error) {
 					calls = append(calls, 1)
@@ -158,12 +159,35 @@ func TestInMemoryBus(t *testing.T) {
 
 		calls = make([]int, 0)
 
-		bus.Notify(local, context.Background(), registeredNotification{})
+		local.Notify(context.Background(), registeredNotification{})
 
 		// Should have been called twice cuz 2 signal handlers are registered
 		testutil.DeepEquals(t, []int{1, 2, 2, 1, 1, 2, 2, 1}, calls)
 	})
 }
+
+type addCommand struct {
+	bus.Command[int]
+
+	A int
+	B int
+}
+
+func (addCommand) Name_() string { return "AddCommand" }
+
+type getQuery struct {
+	bus.Query[int]
+}
+
+func (getQuery) Name_() string { return "GetQuery" }
+
+type registeredNotification struct {
+	bus.Notification
+
+	Id int
+}
+
+func (registeredNotification) Name_() string { return "RegisteredNotification" }
 
 func addCommandHandler(ctx context.Context, cmd addCommand) (int, error) {
 	return cmd.A + cmd.B, nil

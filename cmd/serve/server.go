@@ -44,13 +44,15 @@ type (
 	server struct {
 		options     ServerOptions
 		router      *gin.Engine
-		bus         bus.Bus
+		bus         bus.Dispatcher
 		logger      log.Logger
 		usersReader domain.UsersReader
 	}
 )
 
 func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
+	gin.SetMode(gin.ReleaseMode)
+
 	s := &server{
 		options:     options,
 		router:      gin.New(),
@@ -58,8 +60,6 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 		bus:         root.Bus(),
 		logger:      root.Logger(),
 	}
-
-	gin.SetMode(gin.ReleaseMode)
 
 	s.router.SetTrustedProxies(nil)
 

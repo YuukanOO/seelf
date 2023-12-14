@@ -11,7 +11,7 @@ import (
 type Command struct {
 	bus.Command[bool]
 
-	ID string
+	ID string `json:"id"`
 }
 
 func (Command) Name_() string { return "deployment.command.cleanup_app" }

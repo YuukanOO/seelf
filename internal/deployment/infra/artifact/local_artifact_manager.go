@@ -1,4 +1,4 @@
-package infra
+package artifact
 
 import (
 	"context"
@@ -25,13 +25,13 @@ const (
 )
 
 type (
-	LocalArtifactOptions interface {
+	LocalOptions interface {
 		DeploymentDirTemplate() *template.Template
 		DataDir() string
 	}
 
 	localArtifactManager struct {
-		options       LocalArtifactOptions
+		options       LocalOptions
 		appsDirectory string
 		logsDirectory string
 		logger        log.Logger
@@ -44,7 +44,7 @@ type (
 )
 
 // Instantiate a new ArtifactManager which will store all the artifacts locally.
-func NewLocalArtifactManager(options LocalArtifactOptions, logger log.Logger) domain.ArtifactManager {
+func NewLocal(options LocalOptions, logger log.Logger) domain.ArtifactManager {
 	return &localArtifactManager{
 		options:       options,
 		appsDirectory: filepath.Join(options.DataDir(), appsDir),
@@ -64,7 +64,7 @@ func (a *localArtifactManager) PrepareBuild(
 		return "", nil, ErrArtifactOpenLoggerFailed
 	}
 
-	logger = NewStepLogger(logfile)
+	logger = newLogger(logfile)
 
 	defer func() {
 		if err == nil {

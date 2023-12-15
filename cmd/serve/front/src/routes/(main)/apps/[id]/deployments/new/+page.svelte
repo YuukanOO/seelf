@@ -11,14 +11,14 @@
 	import Stack from '$components/stack.svelte';
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
-	import { buildFormData } from '$lib/form.js';
+	import { buildFormData } from '$lib/form';
 	import routes from '$lib/path';
 	import service, {
 		type Environment,
 		type SourceDataDiscriminator,
 		type QueueDeploymentData
 	} from '$lib/resources/deployments';
-	import select from '$lib/select.js';
+	import select from '$lib/select';
 	import l from '$lib/localization';
 
 	export let data;

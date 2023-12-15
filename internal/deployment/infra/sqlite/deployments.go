@@ -16,11 +16,11 @@ type (
 	}
 
 	deploymentsStore struct {
-		sqlite.Database
+		db *sqlite.Database
 	}
 )
 
-func NewDeploymentsStore(db sqlite.Database) DeploymentsStore {
+func NewDeploymentsStore(db *sqlite.Database) DeploymentsStore {
 	return &deploymentsStore{db}
 }
 
@@ -44,7 +44,7 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 				,requested_by
 			FROM deployments
 			WHERE app_id = ? AND deployment_number = ?`, id.AppID(), id.DeploymentNumber()).
-		One(s, ctx, domain.DeploymentFrom)
+		One(s.db, ctx, domain.DeploymentFrom)
 }
 
 func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID domain.AppID) (domain.DeploymentNumber, error) {
@@ -52,7 +52,7 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID do
 	// of a job number but on sqlite, I could not find a way yet.
 	c, err := builder.
 		Query[uint]("SELECT COUNT(*) FROM deployments WHERE app_id = ?", appID).
-		Extract(s, ctx)
+		Extract(s.db, ctx)
 
 	if err != nil {
 		return 0, err
@@ -81,7 +81,7 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 			,requested_by
 		FROM deployments
 		WHERE state_status = ?`, domain.DeploymentStatusRunning).
-		All(s, ctx, domain.DeploymentFrom)
+		All(s.db, ctx, domain.DeploymentFrom)
 }
 
 func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appID domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
@@ -91,11 +91,11 @@ func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Conte
 		FROM deployments
 		WHERE app_id = ? AND state_status IN (?, ?)`,
 		appID, domain.DeploymentStatusRunning, domain.DeploymentStatusPending).
-		Extract(s, ctx)
+		Extract(s.db, ctx)
 }
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {
-	return sqlite.WriteAndDispatch(s, c, deployments, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteAndDispatch(s.db, c, deployments, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.DeploymentCreated:
 			return builder.
@@ -110,12 +110,12 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 					"state_services":       evt.State.Services(),
 					"state_started_at":     evt.State.StartedAt(),
 					"state_finished_at":    evt.State.FinishedAt(),
-					"source_discriminator": evt.Source.Discriminator(),
+					"source_discriminator": evt.Source.Kind(),
 					"source":               evt.Source,
 					"requested_at":         evt.Requested.At(),
 					"requested_by":         evt.Requested.By(),
 				}).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.DeploymentStateChanged:
 			return builder.
 				Update("deployments", builder.Values{
@@ -126,7 +126,7 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 					"state_finished_at": evt.State.FinishedAt(),
 				}).
 				F("WHERE app_id = ? AND deployment_number = ?", evt.ID.AppID(), evt.ID.DeploymentNumber()).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		default:
 			return nil
 		}

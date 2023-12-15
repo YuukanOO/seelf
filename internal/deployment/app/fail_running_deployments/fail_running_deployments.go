@@ -12,7 +12,7 @@ import (
 // when the server has crashed or has been hard resetted and some job does not ended
 // correctly. They will need a redeploy.
 type Command struct {
-	bus.Command[bool]
+	bus.Command[bus.UnitType]
 
 	Reason error `json:"-"`
 }
@@ -22,26 +22,26 @@ func (Command) Name_() string { return "deployment.command.fail_running_deployme
 func Handler(
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
-) bus.RequestHandler[bool, Command] {
-	return func(ctx context.Context, cmd Command) (bool, error) {
+) bus.RequestHandler[bus.UnitType, Command] {
+	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
 		deployments, err := reader.GetRunningDeployments(ctx)
 
 		if err != nil {
-			return false, err
+			return bus.Unit, err
 		}
 
 		for idx := range deployments {
 			err = deployments[idx].HasEnded(nil, cmd.Reason)
 
 			if err != nil {
-				return false, err
+				return bus.Unit, err
 			}
 		}
 
 		if err = writer.Write(ctx, collections.ToPointers(deployments)...); err != nil {
-			return false, err
+			return bus.Unit, err
 		}
 
-		return true, nil
+		return bus.Unit, nil
 	}
 }

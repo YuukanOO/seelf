@@ -7,8 +7,8 @@ import (
 
 type Data string
 
-func (p Data) Discriminator() string { return "archive" }
-func (p Data) NeedVCS() bool         { return false }
+func (p Data) Kind() string  { return "archive" }
+func (p Data) NeedVCS() bool { return false }
 
 func init() {
 	domain.SourceDataTypes.Register(Data(""), func(value string) (domain.SourceData, error) {

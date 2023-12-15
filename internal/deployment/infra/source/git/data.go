@@ -15,8 +15,8 @@ type Data struct {
 	Hash   string `json:"hash"`
 }
 
-func (p Data) Discriminator() string { return "git" }
-func (p Data) NeedVCS() bool         { return true }
+func (p Data) Kind() string  { return "git" }
+func (p Data) NeedVCS() bool { return true }
 
 func (p Data) Value() (driver.Value, error) { return storage.ValueJSON(p) }
 

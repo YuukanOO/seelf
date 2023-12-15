@@ -12,7 +12,7 @@ const (
 	JobErrPolicyIgnore                     // Mark the job as done even if an error is returned
 )
 
-var _ Scheduler = (*scheduler)(nil) // Validate interface implementation
+var _ Scheduler = (*DefaultScheduler)(nil) // Validate interface implementation
 
 type (
 	JobErrPolicy uint8
@@ -45,7 +45,7 @@ type (
 		Done(context.Context, ScheduledJob) error                                 // Mark the given job as done
 	}
 
-	scheduler struct {
+	DefaultScheduler struct {
 		bus     Dispatcher
 		logger  log.Logger
 		adapter SchedulerAdapter
@@ -54,15 +54,15 @@ type (
 
 // Builds up a new scheduler used to queue messages for later dispatching using the
 // provided adapter.
-func NewScheduler(adapter SchedulerAdapter, log log.Logger, bus Dispatcher) *scheduler {
-	return &scheduler{
+func NewScheduler(adapter SchedulerAdapter, log log.Logger, bus Dispatcher) *DefaultScheduler {
+	return &DefaultScheduler{
 		bus:     bus,
 		logger:  log,
 		adapter: adapter,
 	}
 }
 
-func (s *scheduler) Queue(
+func (s *DefaultScheduler) Queue(
 	ctx context.Context,
 	msg Request,
 	dedupeName monad.Maybe[string],
@@ -71,11 +71,11 @@ func (s *scheduler) Queue(
 	return s.adapter.Create(ctx, msg, dedupeName, policy)
 }
 
-func (s *scheduler) GetNextPendingJobs(ctx context.Context) ([]ScheduledJob, error) {
+func (s *DefaultScheduler) GetNextPendingJobs(ctx context.Context) ([]ScheduledJob, error) {
 	return s.adapter.GetNextPendingJobs(ctx)
 }
 
-func (s *scheduler) Process(ctx context.Context, job ScheduledJob) error {
+func (s *DefaultScheduler) Process(ctx context.Context, job ScheduledJob) error {
 	_, err := s.bus.Send(ctx, job.Message())
 
 	if err != nil {

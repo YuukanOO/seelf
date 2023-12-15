@@ -11,7 +11,7 @@ import (
 
 	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
@@ -25,7 +25,7 @@ import (
 
 type options interface {
 	docker.Options
-	infra.LocalArtifactOptions
+	artifact.LocalOptions
 }
 
 func Test_Run(t *testing.T) {
@@ -34,7 +34,7 @@ func Test_Run(t *testing.T) {
 	dockerMock := newDockerMockService()
 
 	backend := func(opts options) (*docker.Docker, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
-		artifactManager := infra.NewLocalArtifactManager(opts, logger)
+		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())

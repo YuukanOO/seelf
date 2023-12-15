@@ -18,7 +18,7 @@ func Test_FailRunningDeployments(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	a := domain.NewApp("my-app", "some-uid")
 
-	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[bool, fail_running_deployments.Command] {
+	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[bus.UnitType, fail_running_deployments.Command] {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)
 		return fail_running_deployments.Handler(deploymentsStore, deploymentsStore)
 	}
@@ -39,12 +39,12 @@ func Test_FailRunningDeployments(t *testing.T) {
 
 		uc := sut(&started, &succeeded)
 
-		success, err := uc(ctx, fail_running_deployments.Command{
+		r, err := uc(ctx, fail_running_deployments.Command{
 			Reason: errReset,
 		})
 
 		testutil.IsNil(t, err)
-		testutil.IsTrue(t, success)
+		testutil.Equals(t, bus.Unit, r)
 
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &started, 2)
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())

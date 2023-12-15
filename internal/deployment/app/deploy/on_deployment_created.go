@@ -10,7 +10,7 @@ import (
 )
 
 // Upon receiving a deployment created event, queue a job to deploy the application.
-func DeploymentCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.DeploymentCreated] {
+func OnDeploymentCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.DeploymentCreated] {
 	return func(ctx context.Context, evt domain.DeploymentCreated) error {
 		cmd := Command{
 			AppID:            string(evt.ID.AppID()),

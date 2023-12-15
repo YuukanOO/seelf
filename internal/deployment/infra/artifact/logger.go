@@ -1,4 +1,4 @@
-package infra
+package artifact
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ type stepLogger struct {
 }
 
 // Instantiates a new step logger to provide a simple way to build a deployment logfile.
-func NewStepLogger(writer io.WriteCloser) domain.DeploymentLogger {
+func newLogger(writer io.WriteCloser) domain.DeploymentLogger {
 	return &stepLogger{writer}
 }
 

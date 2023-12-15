@@ -211,6 +211,7 @@ func (c *configuration) PostLoad() error {
 }
 
 // Configuration builder used to set some tests sensible defaults.
+// Generates a random data directory path to avoid conflicts with other tests.
 func WithTestDefaults() ConfigurationBuilder {
 	return func(c *configuration) {
 		c.Data.Path = fmt.Sprintf("__testdata_%s", id.New[string]())

@@ -1,4 +1,4 @@
-package infra_test
+package artifact_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/testutil"
@@ -23,7 +23,7 @@ func Test_LocalArtifactManager(t *testing.T) {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return infra.NewLocalArtifactManager(opts, logger)
+		return artifact.NewLocal(opts, logger)
 	}
 
 	t.Run("should correctly prepare a build directory", func(t *testing.T) {

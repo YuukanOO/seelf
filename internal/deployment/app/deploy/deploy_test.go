@@ -10,7 +10,7 @@ import (
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -31,7 +31,7 @@ func Test_Deploy(t *testing.T) {
 	) bus.RequestHandler[bool, deploy.Command] {
 		opts := config.Default(config.WithTestDefaults())
 		store := memory.NewDeploymentsStore(existingDeployments...)
-		artifactManager := infra.NewLocalArtifactManager(opts, logger)
+		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())

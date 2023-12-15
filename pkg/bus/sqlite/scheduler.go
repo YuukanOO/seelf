@@ -30,7 +30,7 @@ type (
 	}
 
 	scheduler struct {
-		sqlite.Database
+		db *sqlite.Database
 	}
 )
 
@@ -38,7 +38,7 @@ func (j *job) ID() string               { return j.id }
 func (j *job) Message() bus.Request     { return j.msg }
 func (j *job) Policy() bus.JobErrPolicy { return j.policy }
 
-func NewSchedulerAdapter(db sqlite.Database) bus.SchedulerAdapter {
+func NewSchedulerAdapter(db *sqlite.Database) bus.SchedulerAdapter {
 	return &scheduler{db}
 }
 
@@ -46,7 +46,7 @@ func NewSchedulerAdapter(db sqlite.Database) bus.SchedulerAdapter {
 // them as not retrieved so they will be picked up next time GetNextPendingJobs is called.
 // You MUST call this method at the application startup.
 func (s *scheduler) Setup() error {
-	if err := s.Migrate(migrationsModule); err != nil {
+	if err := s.db.Migrate(migrationsModule); err != nil {
 		return err
 	}
 
@@ -55,7 +55,7 @@ func (s *scheduler) Setup() error {
 			"retrieved": false,
 		}).
 		F("WHERE retrieved = true").
-		Exec(s, context.Background())
+		Exec(s.db, context.Background())
 }
 
 func (s *scheduler) Create(
@@ -81,7 +81,7 @@ func (s *scheduler) Create(
 			"policy":       policy,
 			"retrieved":    false,
 		}).
-		Exec(s, ctx)
+		Exec(s.db, ctx)
 }
 
 func (s *scheduler) GetNextPendingJobs(ctx context.Context) ([]bus.ScheduledJob, error) {
@@ -100,7 +100,7 @@ WHERE id IN (SELECT id FROM (
 	)
 )
 RETURNING id, message_name, message_data, policy`).
-		All(s, ctx, jobMapper)
+		All(s.db, ctx, jobMapper)
 }
 
 func (s *scheduler) Retry(ctx context.Context, j bus.ScheduledJob, err error) error {
@@ -111,13 +111,13 @@ func (s *scheduler) Retry(ctx context.Context, j bus.ScheduledJob, err error) er
 			"retrieved": false,
 		}).
 		F("WHERE id = ?", j.ID()).
-		Exec(s, ctx)
+		Exec(s.db, ctx)
 }
 
 func (s *scheduler) Done(ctx context.Context, j bus.ScheduledJob) error {
 	return builder.
 		Command("DELETE FROM scheduled_jobs WHERE id = ?", j.ID()).
-		Exec(s, ctx)
+		Exec(s.db, ctx)
 }
 
 func jobMapper(scanner storage.Scanner) (bus.ScheduledJob, error) {
@@ -138,7 +138,7 @@ func jobMapper(scanner storage.Scanner) (bus.ScheduledJob, error) {
 		return &j, err
 	}
 
-	j.msg, err = bus.UnmarshalMessage(msgName, msgData)
+	j.msg, err = bus.Marshallable.From(msgName, msgData)
 
 	return &j, err
 }

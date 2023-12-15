@@ -1,4 +1,4 @@
-package infra
+package crypto
 
 import (
 	"github.com/YuukanOO/seelf/internal/auth/domain"

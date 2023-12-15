@@ -14,10 +14,10 @@ import (
 )
 
 type gateway struct {
-	sqlite.Database
+	db *sqlite.Database
 }
 
-func NewGateway(db sqlite.Database) *gateway {
+func NewGateway(db *sqlite.Database) *gateway {
 	return &gateway{db}
 }
 
@@ -33,7 +33,7 @@ func (s *gateway) GetAllApps(ctx context.Context, cmd get_apps.Query) ([]get_app
 				,users.email
 			FROM apps
 			INNER JOIN users ON users.id = apps.created_by`).
-		All(s, ctx, appDataMapper, appLastDeploymentsByEnvDataloader)
+		All(s.db, ctx, appDataMapper, appLastDeploymentsByEnvDataloader)
 }
 
 func (s *gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get_app_detail.App, error) {
@@ -52,7 +52,7 @@ func (s *gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get
 			FROM apps
 			INNER JOIN users ON users.id = apps.created_by
 			WHERE apps.id = ?`, cmd.ID).
-		One(s, ctx, appDetailDataMapper, appDetailLastDeploymentsByEnvDataloader)
+		One(s.db, ctx, appDetailDataMapper, appDetailLastDeploymentsByEnvDataloader)
 }
 
 func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deployments.Query) (storage.Paginated[get_deployment.Deployment], error) {
@@ -77,7 +77,7 @@ func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deploy
 			WHERE deployments.app_id = ?`, cmd.AppID).
 		S(builder.MaybeValue(cmd.Environment, "AND deployments.config_environment = ?")).
 		F("ORDER BY deployments.deployment_number DESC").
-		Paginate(s, ctx, deploymentMapper, cmd.Page.Get(1))
+		Paginate(s.db, ctx, deploymentMapper, cmd.Page.Get(1))
 }
 
 func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Query) (get_deployment.Deployment, error) {
@@ -100,7 +100,7 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Quer
 		FROM deployments
 		INNER JOIN users ON users.id = deployments.requested_by
 		WHERE deployments.app_id = ? AND deployments.deployment_number = ?`, cmd.AppID, cmd.DeploymentNumber).
-		One(s, ctx, deploymentMapper)
+		One(s.db, ctx, deploymentMapper)
 }
 
 // Specific case because the deployments dataloader can be use to fill the App and AppDetail

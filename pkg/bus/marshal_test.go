@@ -10,7 +10,7 @@ import (
 
 func TestMarshal(t *testing.T) {
 	t.Run("should returns an error if the type is not registered", func(t *testing.T) {
-		_, err := bus.UnmarshalMessage(notRegistered{}.Name_(), "")
+		_, err := bus.Marshallable.From(notRegistered{}.Name_(), "")
 
 		testutil.ErrorIs(t, storage.ErrCouldNotUnmarshalGivenType, err)
 	})
@@ -25,7 +25,7 @@ func TestMarshal(t *testing.T) {
 	t.Run("should be able to unmarshal a registered type", func(t *testing.T) {
 		bus.RegisterForMarshalling[addCommand]()
 
-		r, err := bus.UnmarshalMessage(addCommand{}.Name_(), `{"A":1,"B":2}`)
+		r, err := bus.Marshallable.From(addCommand{}.Name_(), `{"A":1,"B":2}`)
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, addCommand{A: 1, B: 2}, r.(addCommand))

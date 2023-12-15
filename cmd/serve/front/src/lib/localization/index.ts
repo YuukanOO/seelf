@@ -150,7 +150,6 @@ export type AppTranslations = (typeof en)['translations'];
 const locales = [en, fr] satisfies Locale<AppTranslations>[];
 
 export type AppLocales = typeof locales;
-export type AppLocaleCodes = LocaleCode<AppLocales>;
 export type AppTranslationsString = KeysOfType<AppTranslations, string>;
 export type AppTranslationsFunc = KeysOfType<AppTranslations, TranslationFunc>;
 

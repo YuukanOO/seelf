@@ -10,10 +10,10 @@ import (
 )
 
 type gateway struct {
-	sqlite.Database
+	db *sqlite.Database
 }
 
-func NewGateway(db sqlite.Database) *gateway {
+func NewGateway(db *sqlite.Database) *gateway {
 	return &gateway{db}
 }
 
@@ -27,7 +27,7 @@ func (s *gateway) GetProfile(ctx context.Context, q get_profile.Query) (get_prof
 				,api_key
 			FROM users
 			WHERE id = ?`, q.ID).
-		One(s, ctx, profileMapper)
+		One(s.db, ctx, profileMapper)
 }
 
 func profileMapper(row storage.Scanner) (p get_profile.Profile, err error) {

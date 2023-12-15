@@ -6,7 +6,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/app/update_user"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
-	"github.com/YuukanOO/seelf/internal/auth/infra"
+	"github.com/YuukanOO/seelf/internal/auth/infra/crypto"
 	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
@@ -15,7 +15,7 @@ import (
 )
 
 func Test_UpdateUser(t *testing.T) {
-	hasher := infra.NewBCryptHasher()
+	hasher := crypto.NewBCryptHasher()
 
 	sut := func(existingUsers ...*domain.User) bus.RequestHandler[string, update_user.Command] {
 		store := memory.NewUsersStore(existingUsers...)

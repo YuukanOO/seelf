@@ -14,6 +14,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/redeploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_app_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_app"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/archive"
@@ -27,7 +28,7 @@ import (
 
 type Options interface {
 	docker.Options
-	LocalArtifactOptions
+	artifact.LocalOptions
 }
 
 // Setup the deployment module and register everything needed in the given
@@ -35,7 +36,7 @@ type Options interface {
 func Setup(
 	opts Options,
 	logger log.Logger,
-	db sqlite.Database,
+	db *sqlite.Database,
 	b bus.Bus,
 	scheduler bus.Scheduler,
 ) error {
@@ -48,7 +49,7 @@ func Setup(
 		return err
 	}
 
-	artifactManager := NewLocalArtifactManager(opts, logger)
+	artifactManager := artifact.NewLocal(opts, logger)
 
 	sourceFacade := source.NewFacade(
 		raw.New(),
@@ -71,8 +72,8 @@ func Setup(
 	bus.Register(b, deploymentQueryHandler.GetAllDeploymentsByApp)
 	bus.Register(b, deploymentQueryHandler.GetDeploymentByID)
 
-	bus.On(b, deploy.DeploymentCreatedHandler(scheduler))
-	bus.On(b, cleanup_app.AppCleanupRequestedHandler(scheduler))
+	bus.On(b, deploy.OnDeploymentCreatedHandler(scheduler))
+	bus.On(b, cleanup_app.OnAppCleanupRequestedHandler(scheduler))
 
 	if err := db.Migrate(deploymentsqlite.Migrations); err != nil {
 		return err

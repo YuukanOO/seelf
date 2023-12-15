@@ -6,7 +6,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/app/create_first_account"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
-	"github.com/YuukanOO/seelf/internal/auth/infra"
+	"github.com/YuukanOO/seelf/internal/auth/infra/crypto"
 	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/testutil"
@@ -15,8 +15,8 @@ import (
 
 func Test_CreateFirstAccount(t *testing.T) {
 	ctx := context.Background()
-	hasher := infra.NewBCryptHasher()
-	keygen := infra.NewKeyGenerator()
+	hasher := crypto.NewBCryptHasher()
+	keygen := crypto.NewKeyGenerator()
 
 	sut := func(existingUsers ...*domain.User) (bus.RequestHandler[string, create_first_account.Command], memory.UsersStore) {
 		store := memory.NewUsersStore(existingUsers...)

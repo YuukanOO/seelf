@@ -8,7 +8,9 @@ import (
 )
 
 type (
-	discriminatedType storage.Discriminated
+	discriminatedType interface {
+		Discriminator() string
+	}
 
 	type1 struct {
 		data string
@@ -22,7 +24,9 @@ type (
 func (t type1) Discriminator() string { return "type1" }
 func (t type2) Discriminator() string { return "type2" }
 
-var mapper = storage.NewDiscriminatedMapper[discriminatedType]()
+var mapper = storage.NewDiscriminatedMapper(func(dt discriminatedType) string {
+	return dt.Discriminator()
+})
 
 func Test_Discriminated(t *testing.T) {
 	mapper.Register(type1{}, func(data string) (discriminatedType, error) { return type1{data}, nil })

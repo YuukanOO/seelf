@@ -22,15 +22,9 @@ const (
 	transactionContextKey contextKey = "sqlitetx"
 )
 
-type (
-	Database interface {
-		builder.Executor
-		Bus() bus.Dispatcher
-		WithTransaction(ctx context.Context) (context.Context, *sql.Tx)
-		Migrate(...MigrationsModule) error
-		Close() error
-	}
+var _ builder.Executor = (*Database)(nil) // Ensure Database implements the Executor interface
 
+type (
 	// Represents a single module for database migrations.
 	MigrationsModule struct {
 		name string // Name of the module, used as a prefix for the migrations history table.
@@ -39,7 +33,7 @@ type (
 	}
 
 	// Handle to a sqlite database with useful helper methods on it :)
-	database struct {
+	Database struct {
 		conn   *sql.DB
 		bus    bus.Dispatcher
 		logger log.Logger
@@ -49,7 +43,7 @@ type (
 )
 
 // Opens a connection to a sqlite database file.
-func Open(dsn string, logger log.Logger, bus bus.Dispatcher) (Database, error) {
+func Open(dsn string, logger log.Logger, bus bus.Dispatcher) (*Database, error) {
 	db, err := sql.Open(dbDriverName, dsn)
 
 	if err != nil {
@@ -60,16 +54,16 @@ func Open(dsn string, logger log.Logger, bus bus.Dispatcher) (Database, error) {
 		return nil, err
 	}
 
-	return &database{db, bus, logger}, nil
+	return &Database{db, bus, logger}, nil
 }
 
 // Close the underlying database.
-func (db *database) Close() error {
+func (db *Database) Close() error {
 	return db.conn.Close()
 }
 
 // Migrates the opened database to the latest version.
-func (db *database) Migrate(modules ...MigrationsModule) error {
+func (db *Database) Migrate(modules ...MigrationsModule) error {
 	for _, module := range modules {
 		source, err := iofs.New(module.fs, module.dir)
 
@@ -91,7 +85,7 @@ func (db *database) Migrate(modules ...MigrationsModule) error {
 			return err
 		}
 
-		db.logger.Debugw("migrating database as needed",
+		db.logger.Debugw("migrating database",
 			"module", module.name)
 
 		if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
@@ -102,36 +96,59 @@ func (db *database) Migrate(modules ...MigrationsModule) error {
 	return nil
 }
 
-// Creates and attach a transaction to the given context. It will be instantiated by
-// a middleware so every writes will share the same tx, retrieved from the context.
-// It will panic if transaction creation failed. The caller is responsible to
-// commit / rollback the returned transaction.
-func (db *database) WithTransaction(ctx context.Context) (context.Context, *sql.Tx) {
+// Creates and enhance the given context with a transaction if no one exists yet.
+// The returned boolean indicates if the transaction has been created by this call
+// with true and if it returns false, it means the transaction has been initiated early.
+//
+// The caller MUST commit or rollback it.
+//
+// If the transaction could not be created, this method will panic.
+func (db *Database) WithTransaction(ctx context.Context) (context.Context, *sql.Tx, bool) {
+	tx := Transaction(ctx)
+
+	if tx != nil {
+		return ctx, tx, false
+	}
+
 	tx, err := db.conn.BeginTx(ctx, &sql.TxOptions{})
 
 	if err != nil {
 		panic(err)
 	}
 
-	return context.WithValue(ctx, transactionContextKey, tx), tx
+	db.logger.Debug("transaction created")
+
+	return context.WithValue(ctx, transactionContextKey, tx), tx, true
 }
 
-func (db *database) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+// Retrieve the transaction in the given context if any, or nil if it doesn't
+// have one.
+func Transaction(ctx context.Context) *sql.Tx {
+	val := ctx.Value(transactionContextKey)
+
+	if val == nil {
+		return nil
+	}
+
+	return val.(*sql.Tx)
+}
+
+func (db *Database) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return db.tryGetTransaction(ctx).ExecContext(ctx, query, args...)
 }
 
-func (db *database) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+func (db *Database) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return db.tryGetTransaction(ctx).QueryContext(ctx, query, args...)
 }
 
-func (db *database) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+func (db *Database) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return db.tryGetTransaction(ctx).QueryRowContext(ctx, query, args...)
 }
 
 // Retrieve the executor from the given context. This is needed to execute query
 // in the current transaction if any could be found in the given context.
 // If no transaction is opened, then the request is just sent to the connection.
-func (db *database) tryGetTransaction(ctx context.Context) builder.Executor {
+func (db *Database) tryGetTransaction(ctx context.Context) builder.Executor {
 	var querier builder.Executor = db.conn
 
 	// FIXME: may be we should use prepared statement instead and have something along the line
@@ -149,55 +166,39 @@ func (db *database) tryGetTransaction(ctx context.Context) builder.Executor {
 	return querier
 }
 
-func (db *database) Bus() bus.Dispatcher { return db.bus }
-
-// Retrieve the transaction in the given context if any, or nil if it doesn't
-// have one.
-func Transaction(ctx context.Context) *sql.Tx {
-	val := ctx.Value(transactionContextKey)
-
-	if val == nil {
-		return nil
-	}
-
-	return val.(*sql.Tx)
-}
-
 // Helpers to handle database writes from an array of event sources and handle events dispatching.
 // It will open and manage a transaction if none exist in the given context. This way,
 // we make sure event handlers participates in the same transaction so they are resolved as
 // a whole.
 //
 // There's no way to add this method to the DB without type conversion so this is the easiest way
-// for now.
+// for now. Without the generics, I will always have to convert an array of entities to []event.Source
+// which is not very convenient.
 func WriteAndDispatch[T event.Source](
-	db Database,
+	db *Database,
 	ctx context.Context,
 	entities []T,
 	switcher func(context.Context, event.Event) error,
 ) (finalErr error) {
 	var (
-		selfManaged bool
-		tx          = Transaction(ctx)
+		tx      *sql.Tx
+		created bool
 	)
 
-	// No transaction exists, let's managed it ourselves to make sure event handlers share
-	// the same one
-	if tx == nil {
-		ctx, tx = db.WithTransaction(ctx)
-		selfManaged = true
-	}
+	ctx, tx, created = db.WithTransaction(ctx)
 
 	defer func() {
-		if !selfManaged {
+		if !created {
 			return
 		}
 
 		if finalErr != nil {
+			db.logger.Debug("rollbacking transaction")
 			if err := tx.Rollback(); err != nil {
 				finalErr = err
 			}
 		} else {
+			db.logger.Debug("commiting transaction")
 			finalErr = tx.Commit()
 		}
 	}()
@@ -214,7 +215,7 @@ func WriteAndDispatch[T event.Source](
 			notifs[i] = evt
 		}
 
-		if finalErr = db.Bus().Notify(ctx, notifs...); finalErr != nil {
+		if finalErr = db.bus.Notify(ctx, notifs...); finalErr != nil {
 			return
 		}
 

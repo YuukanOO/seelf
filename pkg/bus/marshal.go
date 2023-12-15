@@ -6,31 +6,22 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
-type UnmarshalFunc func(string, string) (Request, error)
-
 // Contains available message name -> unmarshal function
-var marshallable map[string]UnmarshalFunc = make(map[string]UnmarshalFunc)
+var Marshallable = storage.NewDiscriminatedMapper(func(r Request) string { return r.Name_() })
 
-// Rebuild a message from a given name and serialized data.
-func UnmarshalMessage(name, data string) (Request, error) {
-	fn, found := marshallable[name]
-
-	if !found {
-		return nil, storage.ErrCouldNotUnmarshalGivenType
-	}
-
-	return fn(name, data)
-}
-
-// Marshal the given message
+// Marshal the given message. Simple helper func, it justs call storage.ValueJSON.
+// To rehydrate a message, just call bus.Marshallable.From.
 func MarshalMessage[T Request](msg T) (driver.Value, error) { return storage.ValueJSON(msg) }
 
 // Register given message type for marshalling which will make it marshallable
 // and unmarshallable to and from JSON. This is needed when persisting scheduled jobs.
+// Simple helper function to register the type on the Marshallable discriminated mapper
+// using storage.ScanJSON.
 func RegisterForMarshalling[T Request]() {
 	var msg T
-	marshallable[msg.Name_()] = func(name, data string) (Request, error) {
+
+	Marshallable.Register(msg, func(data string) (Request, error) {
 		var out T
 		return out, storage.ScanJSON(data, &out)
-	}
+	})
 }

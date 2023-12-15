@@ -8,7 +8,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
-var SourceDataTypes = storage.NewDiscriminatedMapper[SourceData]()
+var SourceDataTypes = storage.NewDiscriminatedMapper(func(sd SourceData) string { return sd.Kind() })
 
 type (
 	// Retrieve a deployment detail.
@@ -39,7 +39,9 @@ type (
 		Data          SourceData `json:"data"`
 	}
 
-	SourceData storage.Discriminated
+	SourceData interface {
+		Kind() string
+	}
 
 	State struct {
 		Status     uint8                  `json:"status"`

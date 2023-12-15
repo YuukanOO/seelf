@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	authdomain "github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/internal/auth/domain"
 	authinfra "github.com/YuukanOO/seelf/internal/auth/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
@@ -35,7 +35,7 @@ type (
 		Cleanup() error
 		Bus() bus.Dispatcher
 		Logger() log.Logger
-		UsersReader() authdomain.UsersReader
+		UsersReader() domain.UsersReader
 	}
 
 	ServerOptions interface {
@@ -54,8 +54,8 @@ type (
 		options     ServerOptions
 		bus         bus.Bus
 		logger      log.Logger
-		db          sqlite.Database
-		usersReader authdomain.UsersReader
+		db          *sqlite.Database
+		usersReader domain.UsersReader
 		pool        async.Pool
 	}
 )
@@ -138,9 +138,9 @@ func (s *serverRoot) Cleanup() error {
 	return s.db.Close()
 }
 
-func (s *serverRoot) Bus() bus.Dispatcher                 { return s.bus }
-func (s *serverRoot) Logger() log.Logger                  { return s.logger }
-func (s *serverRoot) UsersReader() authdomain.UsersReader { return s.usersReader }
+func (s *serverRoot) Bus() bus.Dispatcher             { return s.bus }
+func (s *serverRoot) Logger() log.Logger              { return s.logger }
+func (s *serverRoot) UsersReader() domain.UsersReader { return s.usersReader }
 
 func (s *serverRoot) checkNonSupportedConfigChanges() error {
 	fingerprintPath := filepath.Join(s.options.DataDir(), configFingerprintName)

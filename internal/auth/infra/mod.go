@@ -11,6 +11,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/app/login"
 	"github.com/YuukanOO/seelf/internal/auth/app/update_user"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/internal/auth/infra/crypto"
 	authsqlite "github.com/YuukanOO/seelf/internal/auth/infra/sqlite"
 )
 
@@ -23,14 +24,14 @@ type Options interface {
 func Setup(
 	opts Options,
 	logger log.Logger,
-	db sqlite.Database,
+	db *sqlite.Database,
 	b bus.Bus,
 ) (domain.UsersReader, error) {
 	usersStore := authsqlite.NewUsersStore(db)
 	authQueryHandler := authsqlite.NewGateway(db)
 
-	passwordHasher := NewBCryptHasher()
-	keyGenerator := NewKeyGenerator()
+	passwordHasher := crypto.NewBCryptHasher()
+	keyGenerator := crypto.NewKeyGenerator()
 
 	bus.Register(b, login.Handler(usersStore, passwordHasher))
 	bus.Register(b, create_first_account.Handler(usersStore, usersStore, passwordHasher, keyGenerator))

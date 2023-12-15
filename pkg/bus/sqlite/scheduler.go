@@ -65,18 +65,13 @@ func (s *scheduler) Create(
 	policy bus.JobErrPolicy,
 ) error {
 	jobId := id.New[string]()
-	msgData, err := bus.MarshalMessage(msg)
-
-	if err != nil {
-		return err
-	}
 
 	return builder.
 		Insert("scheduled_jobs", builder.Values{
 			"id":           jobId,
 			"dedupe_name":  dedupeName.Get(jobId), // Default to the job id if no dedupe
 			"message_name": msg.Name_(),
-			"message_data": msgData,
+			"message_data": msg,
 			"queued_at":    time.Now().UTC(),
 			"policy":       policy,
 			"retrieved":    false,

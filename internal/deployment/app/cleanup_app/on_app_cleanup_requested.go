@@ -18,7 +18,3 @@ func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[dom
 		return scheduler.Queue(ctx, cmd, monad.None[string](), bus.JobErrPolicyRetry)
 	}
 }
-
-func init() {
-	bus.RegisterForMarshalling[Command]()
-}

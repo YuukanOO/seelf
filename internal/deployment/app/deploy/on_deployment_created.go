@@ -23,7 +23,3 @@ func OnDeploymentCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domai
 		return scheduler.Queue(ctx, cmd, dedupeName, bus.JobErrPolicyIgnore)
 	}
 }
-
-func init() {
-	bus.RegisterForMarshalling[Command]()
-}

@@ -6,6 +6,8 @@
 // and a way to add middlewares to your handlers.
 package bus
 
+import "github.com/YuukanOO/seelf/pkg/storage"
+
 const (
 	MessageKindNotification MessageKind = iota
 	MessageKindCommand
@@ -15,6 +17,9 @@ const (
 // Constant unit value to return when a request does not need a specific result set.
 // In my mind, it should avoid the cost of allocating something not needed.
 const Unit UnitType = iota
+
+// Contains message which can be unmarshalled from a raw string (= those used in the scheduler).
+var Marshallable = storage.NewDiscriminatedMapper(func(r Request) string { return r.Name_() })
 
 type (
 	// Sometimes, you may not need a result type on a request but the RequestHandler expect one, just

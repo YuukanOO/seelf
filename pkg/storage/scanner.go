@@ -41,6 +41,12 @@ func ScanJSON[T any](value any, target *T) error {
 	return json.Unmarshal([]byte(str), target)
 }
 
+// Helper function, similar to ScanJSON but directly returns the unmarshalled value.
+func UnmarshalJSON[T any](data string) (T, error) {
+	var out T
+	return out, ScanJSON(data, &out)
+}
+
 // Ease the valueing of a json serialized field by calling json.Marshal and returning
 // a string as accepted as a valid driver.Value.
 func ValueJSON[T any](v T) (driver.Value, error) {

@@ -2,11 +2,13 @@ package cleanup_app
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 // Cleanup an application artifacts, images, networks, volumes and so on...
@@ -16,7 +18,12 @@ type Command struct {
 	ID string `json:"id"`
 }
 
-func (Command) Name_() string { return "deployment.command.cleanup_app" }
+func (Command) Name_() string                  { return "deployment.command.cleanup_app" }
+func (c Command) Value() (driver.Value, error) { return storage.ValueJSON(c) }
+
+func init() {
+	bus.Marshallable.Register(Command{}, func(s string) (bus.Request, error) { return storage.UnmarshalJSON[Command](s) })
+}
 
 func Handler(
 	deploymentsReader domain.DeploymentsReader,

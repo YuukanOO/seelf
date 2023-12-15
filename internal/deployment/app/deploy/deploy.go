@@ -2,9 +2,11 @@ package deploy
 
 import (
 	"context"
+	"database/sql/driver"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 // Process a deployment, this is where the magic happen!
@@ -15,7 +17,12 @@ type Command struct {
 	DeploymentNumber int    `json:"deployment_number"`
 }
 
-func (Command) Name_() string { return "deployment.command.deploy" }
+func (Command) Name_() string                  { return "deployment.command.deploy" }
+func (c Command) Value() (driver.Value, error) { return storage.ValueJSON(c) }
+
+func init() {
+	bus.Marshallable.Register(Command{}, func(s string) (bus.Request, error) { return storage.UnmarshalJSON[Command](s) })
+}
 
 func Handler(
 	reader domain.DeploymentsReader,

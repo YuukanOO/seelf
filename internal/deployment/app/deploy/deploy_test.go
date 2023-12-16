@@ -28,7 +28,7 @@ func Test_Deploy(t *testing.T) {
 		source domain.Source,
 		backend domain.Backend,
 		existingDeployments ...*domain.Deployment,
-	) bus.RequestHandler[bool, deploy.Command] {
+	) bus.RequestHandler[bus.UnitType, deploy.Command] {
 		opts := config.Default(config.WithTestDefaults())
 		store := memory.NewDeploymentsStore(existingDeployments...)
 		artifactManager := artifact.NewLocal(opts, logger)
@@ -42,10 +42,10 @@ func Test_Deploy(t *testing.T) {
 
 	t.Run("should fail if the deployment does not exists", func(t *testing.T) {
 		uc := sut(source(nil), backend(nil))
-		success, err := uc(ctx, deploy.Command{})
+		r, err := uc(ctx, deploy.Command{})
 
 		testutil.ErrorIs(t, apperr.ErrNotFound, err)
-		testutil.IsFalse(t, success)
+		testutil.Equals(t, bus.Unit, r)
 	})
 
 	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
@@ -55,13 +55,13 @@ func Test_Deploy(t *testing.T) {
 		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
 		uc := sut(src, backend(nil), &depl)
 
-		success, err := uc(ctx, deploy.Command{
+		r, err := uc(ctx, deploy.Command{
 			AppID:            string(a.ID()),
 			DeploymentNumber: 1,
 		})
 
 		testutil.ErrorIs(t, srcErr, err)
-		testutil.IsFalse(t, success)
+		testutil.Equals(t, bus.Unit, r)
 
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
@@ -78,13 +78,13 @@ func Test_Deploy(t *testing.T) {
 		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
 		uc := sut(src, be, &depl)
 
-		success, err := uc(ctx, deploy.Command{
+		r, err := uc(ctx, deploy.Command{
 			AppID:            string(a.ID()),
 			DeploymentNumber: 1,
 		})
 
 		testutil.ErrorIs(t, backendErr, err)
-		testutil.IsFalse(t, success)
+		testutil.Equals(t, bus.Unit, r)
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
@@ -98,13 +98,13 @@ func Test_Deploy(t *testing.T) {
 		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
 		uc := sut(src, backend(nil), &depl)
 
-		success, err := uc(ctx, deploy.Command{
+		r, err := uc(ctx, deploy.Command{
 			AppID:            string(a.ID()),
 			DeploymentNumber: 1,
 		})
 
 		testutil.IsNil(t, err)
-		testutil.IsTrue(t, success)
+		testutil.Equals(t, bus.Unit, r)
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())

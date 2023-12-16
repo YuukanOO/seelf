@@ -11,7 +11,7 @@ import (
 
 // Process a deployment, this is where the magic happen!
 type Command struct {
-	bus.Command[bool]
+	bus.Command[bus.UnitType]
 
 	AppID            string `json:"app_id"`
 	DeploymentNumber int    `json:"deployment_number"`
@@ -30,25 +30,27 @@ func Handler(
 	artifactManager domain.ArtifactManager,
 	source domain.Source,
 	backend domain.Backend,
-) bus.RequestHandler[bool, Command] {
-	return func(ctx context.Context, cmd Command) (success bool, finalErr error) {
+) bus.RequestHandler[bus.UnitType, Command] {
+	return func(ctx context.Context, cmd Command) (result bus.UnitType, finalErr error) {
+		result = bus.Unit
+
 		depl, err := reader.GetByID(ctx, domain.DeploymentIDFrom(
 			domain.AppID(cmd.AppID),
 			domain.DeploymentNumber(cmd.DeploymentNumber),
 		))
 
 		if err != nil {
-			return success, err
+			return result, err
 		}
 
 		err = depl.HasStarted()
 
 		if err != nil {
-			return success, err
+			return result, err
 		}
 
 		if err = writer.Write(ctx, &depl); err != nil {
-			return success, err
+			return result, err
 		}
 
 		var (
@@ -99,6 +101,6 @@ func Handler(
 			return
 		}
 
-		return true, nil
+		return
 	}
 }

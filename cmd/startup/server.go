@@ -1,10 +1,12 @@
 package startup
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
@@ -56,7 +58,7 @@ type (
 		logger      log.Logger
 		db          *sqlite.Database
 		usersReader domain.UsersReader
-		pool        async.Pool
+		pool        async.Pool[bus.ScheduledJob]
 	}
 )
 
@@ -114,20 +116,25 @@ func Server(options ServerOptions) (ServerRoot, error) {
 		return nil, err
 	}
 
+	// Names of jobs to process in a specific group since it can take a long time
+	deploymentNames := []string{
+		deploy.Command{}.Name_(),
+		cleanup_app.Command{}.Name_(),
+	}
+
 	s.pool = async.NewPool(
 		s.logger,
-		s.options.RunnersPollInterval(),
-		scheduler.GetNextPendingJobs,
-		func(job bus.ScheduledJob) string { return job.Message().Name_() },
-		async.Group(
+		async.Poll(s.options.RunnersPollInterval(), scheduler.GetNextPendingJobs),
+		async.GroupFunc(
 			s.options.RunnersDeploymentCount(),
 			scheduler.Process,
-			deploy.Command{}.Name_(), cleanup_app.Command{}.Name_()),
+			func(ctx context.Context, job bus.ScheduledJob) bool {
+				return slices.Contains(deploymentNames, job.Message().Name_())
+			},
+		),
 	)
 
-	go s.pool.Start()
-
-	return s, nil
+	return s, s.pool.Start()
 }
 
 func (s *serverRoot) Cleanup() error {

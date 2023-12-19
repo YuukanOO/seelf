@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,16 +16,24 @@ import (
 	"github.com/YuukanOO/seelf/pkg/config"
 	"github.com/YuukanOO/seelf/pkg/crypto"
 	"github.com/YuukanOO/seelf/pkg/id"
+	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
+	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/validation"
 	"github.com/YuukanOO/seelf/pkg/validation/numbers"
 )
 
 var (
-	userConfigDir        = must.Panic(os.UserConfigDir())
-	generatedSecretKey   = must.Panic(crypto.RandomKey[string](64))
-	defaultDataDirectory = filepath.Join(userConfigDir, "seelf")
+	userConfigDir                          = must.Panic(os.UserConfigDir())
+	generatedSecretKey                     = must.Panic(crypto.RandomKey[string](64))
+	defaultDataDirectory                   = filepath.Join(userConfigDir, "seelf")
+	DefaultConfigPath                      = filepath.Join(defaultDataDirectory, defaultConfigFilename)
+	configFingerprintName                  = "last_run_data"
+	noticeNotSupportedConfigChangeDetected = `looks like you have changed the domain used by seelf for your apps (either the protocol or the domain itself).
+	
+	Those changes are not supported yet. For now, for things to keep running correctly, you'll have to manually redeploy all of your apps.`
+	noticeSecretKeyGenerated = `a default secret key has been generated. If you want to override it, you can set the HTTP_SECRET environment variable.`
 )
 
 const (
@@ -42,14 +52,19 @@ type (
 	Configuration interface {
 		serve.Options // The configuration should provide every settings needed by the seelf server
 
-		Initialize(path string, verbose bool) error // Initialize the configuration by loading it (from config file, env vars, etc.)
+		Initialize(log.ConfigurableLogger, CliOptions) error // Initialize the configuration by loading it (from config file, env vars, etc.)
 	}
 
 	// Configuration builder function used to initialize the configuration object (mostly used in tests).
 	ConfigurationBuilder func(*configuration)
 
+	// Represents options sets on the CLI level.
+	CliOptions struct {
+		Path    string
+		Verbose bool
+	}
+
 	configuration struct {
-		Verbose  bool `env:"SEELF_DEBUG" yaml:",omitempty"`
 		Data     dataConfiguration
 		Http     httpConfiguration
 		Balancer balancerConfiguration
@@ -59,7 +74,6 @@ type (
 		domain                domain.Url
 		pollInterval          time.Duration
 		deploymentDirTemplate *template.Template
-		path                  string // Holds from where the config was loaded / saved
 	}
 
 	httpConfiguration struct {
@@ -101,8 +115,6 @@ type (
 // Instantiate the default seelf configuration.
 func Default(builders ...ConfigurationBuilder) Configuration {
 	conf := &configuration{
-		path:    filepath.Join(defaultDataDirectory, defaultConfigFilename),
-		Verbose: false,
 		Data: dataConfiguration{
 			Path:                  defaultDataDirectory,
 			DeploymentDirTemplate: defaultDeploymentDirTemplate,
@@ -132,25 +144,42 @@ func Default(builders ...ConfigurationBuilder) Configuration {
 	return conf
 }
 
-func (c *configuration) Initialize(path string, verbose bool) error {
-	c.path = path
-	c.Verbose = verbose
+func (c *configuration) Initialize(logger log.ConfigurableLogger, opts CliOptions) error {
+	if opts.Path == "" {
+		opts.Path = DefaultConfigPath
+	}
 
-	// FIXME: Maybe it could be a good idea to ask for a global logger to at least inform the user
-	// that a config file has been read and/or created.
-
-	exists, err := config.Load(c.path, c)
+	exists, err := config.Load(opts.Path, c)
 
 	if err != nil {
 		return err
 	}
 
-	if exists {
-		return nil
+	// Update logger based on loaded configuration
+	if opts.Verbose {
+		logger.Configure(log.OutputConsole, log.DebugLevel, true)
+	} else {
+		logger.Configure(log.OutputConsole, log.InfoLevel, false)
 	}
 
-	// Save the config file only if it doesn't exist yet (to preserve the secret generated for example)
-	return config.Save(c.path, c)
+	if exists {
+		logger.Infow("configuration loaded",
+			"path", opts.Path)
+	} else {
+		logger.Infow("configuration not found, saving current configuration",
+			"path", opts.Path)
+
+		// Save the config file only if it doesn't exist yet (to preserve the secret generated for example)
+		if err := config.Save(opts.Path, c); err != nil {
+			return err
+		}
+	}
+
+	if c.Http.Secret == generatedSecretKey {
+		logger.Info(noticeSecretKeyGenerated)
+	}
+
+	return c.checkNonSupportedConfigChanges(logger)
 }
 
 func (c configuration) DataDir() string                           { return c.Data.Path }
@@ -159,9 +188,6 @@ func (c configuration) Domain() domain.Url                        { return c.dom
 func (c configuration) DefaultEmail() string                      { return c.Private.Email }
 func (c configuration) DefaultPassword() string                   { return c.Private.Password }
 func (c configuration) Secret() []byte                            { return []byte(c.Http.Secret) }
-func (c configuration) IsUsingGeneratedSecret() bool              { return c.Http.Secret == generatedSecretKey }
-func (c configuration) IsVerbose() bool                           { return c.Verbose }
-func (c configuration) ConfigPath() string                        { return c.path }
 func (c configuration) RunnersPollInterval() time.Duration        { return c.pollInterval }
 func (c configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 
@@ -208,6 +234,25 @@ func (c *configuration) PostLoad() error {
 			return validation.Value(c.AcmeEmail(), &acmeEmail, auth.EmailFrom)
 		}),
 	})
+}
+
+func (c *configuration) checkNonSupportedConfigChanges(logger log.Logger) error {
+	fingerprintPath := filepath.Join(c.Data.Path, configFingerprintName)
+	fingerprint := c.Balancer.Domain
+
+	data, err := os.ReadFile(fingerprintPath)
+
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+
+	strdata := string(data)
+
+	if strdata != "" && strdata != fingerprint {
+		logger.Warn(noticeNotSupportedConfigChangeDetected)
+	}
+
+	return ostools.WriteFile(fingerprintPath, []byte(fingerprint))
 }
 
 // Configuration builder used to set some tests sensible defaults.

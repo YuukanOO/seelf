@@ -23,7 +23,7 @@ type initialData struct {
 
 func Test_CleanupApp(t *testing.T) {
 	ctx := context.Background()
-	logger := log.NewLogger(false)
+	logger, _ := log.NewLogger()
 
 	sut := func(initialData initialData) bus.RequestHandler[bus.UnitType, cleanup_app.Command] {
 		opts := config.Default(config.WithTestDefaults())

@@ -17,7 +17,6 @@ import (
 	deployment "github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
-	"github.com/gin-contrib/pprof"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -34,7 +33,6 @@ const (
 type (
 	// Configuration options needed by the server to handle request correctly.
 	ServerOptions interface {
-		IsVerbose() bool
 		Secret() []byte
 		IsSecure() bool
 		ListenAddress() string
@@ -72,12 +70,9 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	})
 
 	middlewares := []gin.HandlerFunc{
+		s.requestLogger,
 		s.recoverer,
 		sessions.Sessions(sessionName, store),
-	}
-
-	if s.options.IsVerbose() {
-		middlewares = append([]gin.HandlerFunc{s.requestLogger}, middlewares...)
 	}
 
 	s.router.Use(middlewares...)
@@ -107,10 +102,6 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	v1securedAllowApi.POST("/apps/:id/deployments/:number/redeploy", s.redeployHandler())
 	v1securedAllowApi.POST("/apps/:id/deployments/:number/promote", s.promoteHandler())
 	v1securedAllowApi.GET("/apps/:id/deployments/:number/logs", s.getDeploymentLogsHandler())
-
-	if s.options.IsVerbose() {
-		pprof.Register(s.router)
-	}
 
 	s.useSPA()
 

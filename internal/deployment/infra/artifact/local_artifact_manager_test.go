@@ -14,7 +14,7 @@ import (
 )
 
 func Test_LocalArtifactManager(t *testing.T) {
-	logger := log.NewLogger(false)
+	logger, _ := log.NewLogger()
 
 	sut := func() domain.ArtifactManager {
 		opts := config.Default(config.WithTestDefaults())

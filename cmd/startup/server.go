@@ -2,10 +2,6 @@ package startup
 
 import (
 	"context"
-	"errors"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"slices"
 	"time"
 
@@ -19,16 +15,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus/memory"
 	bussqlite "github.com/YuukanOO/seelf/pkg/bus/sqlite"
 	"github.com/YuukanOO/seelf/pkg/log"
-	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
-)
-
-var (
-	configFingerprintName                  = "last_run_data"
-	noticeNotSupportedConfigChangeDetected = `looks like you have changed the domain used by seelf for your apps (either the protocol or the domain itself).
-	
-	Those changes are not supported yet. For now, for things to keep running correctly, you'll have to manually redeploy all of your apps.`
-	noticeSecretKeyGenerated = `a default secret key has been generated. If you want to override it, you can set the HTTP_SECRET environment variable.`
 )
 
 type (
@@ -46,10 +33,7 @@ type (
 
 		RunnersPollInterval() time.Duration
 		RunnersDeploymentCount() int
-		IsVerbose() bool
 		ConnectionString() string
-		IsUsingGeneratedSecret() bool
-		ConfigPath() string
 	}
 
 	serverRoot struct {
@@ -64,12 +48,11 @@ type (
 
 // Instantiate a new server root, registering and initializing every services
 // needed by the server.
-func Server(options ServerOptions) (ServerRoot, error) {
-	s := &serverRoot{options: options}
-
-	s.logger = log.NewLogger(s.options.IsVerbose())
-	s.logger.Infow("configuration loaded",
-		"path", s.options.ConfigPath())
+func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
+	s := &serverRoot{
+		options: options,
+		logger:  logger,
+	}
 
 	s.bus = memory.NewBus()
 
@@ -107,15 +90,6 @@ func Server(options ServerOptions) (ServerRoot, error) {
 		return nil, err
 	}
 
-	if s.options.IsUsingGeneratedSecret() {
-		s.logger.Info(noticeSecretKeyGenerated)
-	}
-
-	// Checks for unsupported configuration modifications
-	if err := s.checkNonSupportedConfigChanges(); err != nil {
-		return nil, err
-	}
-
 	// Names of jobs to process in a specific group since it can take a long time
 	deploymentNames := []string{
 		deploy.Command{}.Name_(),
@@ -148,22 +122,3 @@ func (s *serverRoot) Cleanup() error {
 func (s *serverRoot) Bus() bus.Dispatcher             { return s.bus }
 func (s *serverRoot) Logger() log.Logger              { return s.logger }
 func (s *serverRoot) UsersReader() domain.UsersReader { return s.usersReader }
-
-func (s *serverRoot) checkNonSupportedConfigChanges() error {
-	fingerprintPath := filepath.Join(s.options.DataDir(), configFingerprintName)
-	fingerprint := s.options.Domain().String()
-
-	data, err := os.ReadFile(fingerprintPath)
-
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-
-	strdata := string(data)
-
-	if strdata != "" && strdata != fingerprint {
-		s.logger.Warn(noticeNotSupportedConfigChangeDetected)
-	}
-
-	return ostools.WriteFile(fingerprintPath, []byte(fingerprint))
-}

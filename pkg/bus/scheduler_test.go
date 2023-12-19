@@ -8,12 +8,13 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus/memory"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func TestScheduler(t *testing.T) {
 	t.Run("should be able to queue a job using a specific adapter", func(t *testing.T) {
-		scheduler := bus.NewScheduler(memory.NewSchedulerAdapter(), log.NewLogger(false), memory.NewBus())
+		scheduler := bus.NewScheduler(memory.NewSchedulerAdapter(), must.Panic(log.NewLogger()), memory.NewBus())
 
 		err := scheduler.Queue(context.Background(), addCommand{}, monad.None[string](), bus.JobErrPolicyRetry)
 
@@ -26,7 +27,7 @@ func TestScheduler(t *testing.T) {
 	})
 
 	t.Run("should be able to process a scheduled job and mark it as done", func(t *testing.T) {
-		scheduler := bus.NewScheduler(memory.NewSchedulerAdapter(), log.NewLogger(false), memory.NewBus())
+		scheduler := bus.NewScheduler(memory.NewSchedulerAdapter(), must.Panic(log.NewLogger()), memory.NewBus())
 		scheduler.Queue(context.Background(), addCommand{}, monad.None[string](), bus.JobErrPolicyRetry)
 		jobs, _ := scheduler.GetNextPendingJobs(context.Background())
 

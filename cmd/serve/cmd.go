@@ -2,6 +2,7 @@ package serve
 
 import (
 	"github.com/YuukanOO/seelf/cmd/startup"
+	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/spf13/cobra"
 )
 
@@ -11,12 +12,12 @@ type Options interface {
 }
 
 // Returns the root serve command
-func Root(opts Options) *cobra.Command {
+func Root(opts Options, logger log.Logger) *cobra.Command {
 	serveCmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Launch the web application!",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			root, err := startup.Server(opts)
+			root, err := startup.Server(opts, logger)
 
 			if err != nil {
 				return err

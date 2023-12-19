@@ -22,7 +22,7 @@ import (
 func Test_Deploy(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
 	a := domain.NewApp("my-app", "some-uid")
-	logger := log.NewLogger(false)
+	logger, _ := log.NewLogger()
 
 	sut := func(
 		source domain.Source,

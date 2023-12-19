@@ -4,16 +4,18 @@ import (
 	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/cmd/serve"
 	"github.com/YuukanOO/seelf/cmd/version"
+	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/spf13/cobra"
 )
 
 // Build the root command where everything start!
 func Root() *cobra.Command {
 	var (
-		conf              = config.Default()
-		configurationPath = conf.ConfigPath()
-		isVerbose         = conf.IsVerbose()
+		conf    = config.Default()
+		cliOpts config.CliOptions
 	)
+
+	logger, loggerErr := log.NewLogger()
 
 	rootCmd := &cobra.Command{
 		Use:          "seelf",
@@ -21,15 +23,19 @@ func Root() *cobra.Command {
 		Version:      version.Current(),
 		Short:        "Painless self-hosting in a single binary.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return conf.Initialize(configurationPath, isVerbose)
+			if loggerErr != nil {
+				return loggerErr
+			}
+
+			return conf.Initialize(logger, cliOpts)
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&configurationPath, "config", "c", configurationPath, "config file to use")
-	rootCmd.PersistentFlags().BoolVarP(&isVerbose, "verbose", "v", isVerbose, "enable verbose mode")
+	rootCmd.PersistentFlags().StringVarP(&cliOpts.Path, "config", "c", config.DefaultConfigPath, "config file to use")
+	rootCmd.PersistentFlags().BoolVarP(&cliOpts.Verbose, "verbose", "v", cliOpts.Verbose, "enable verbose mode")
 
 	// Add sub-commands
-	rootCmd.AddCommand(serve.Root(conf))
+	rootCmd.AddCommand(serve.Root(conf, logger))
 
 	return rootCmd
 }

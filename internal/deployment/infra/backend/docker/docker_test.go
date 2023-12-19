@@ -29,7 +29,8 @@ type options interface {
 }
 
 func Test_Run(t *testing.T) {
-	logger := log.NewLogger(false)
+	logger, _ := log.NewLogger()
+
 	composeMock := &composeMockService{}
 	dockerMock := newDockerMockService()
 

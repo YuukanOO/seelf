@@ -11,10 +11,11 @@ import (
 // Build the root command where everything start!
 func Root() *cobra.Command {
 	var (
-		conf    = config.Default()
-		cliOpts config.CliOptions
+		conf = config.Default()
+		path string
 	)
 
+	// Instantiate the logger here since it should be available for sub-commands.
 	logger, loggerErr := log.NewLogger()
 
 	rootCmd := &cobra.Command{
@@ -27,12 +28,11 @@ func Root() *cobra.Command {
 				return loggerErr
 			}
 
-			return conf.Initialize(logger, cliOpts)
+			return conf.Initialize(logger, path)
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&cliOpts.Path, "config", "c", config.DefaultConfigPath, "config file to use")
-	rootCmd.PersistentFlags().BoolVarP(&cliOpts.Verbose, "verbose", "v", cliOpts.Verbose, "enable verbose mode")
+	rootCmd.PersistentFlags().StringVarP(&path, "config", "c", config.DefaultConfigPath, "config file to use")
 
 	// Add sub-commands
 	rootCmd.AddCommand(serve.Root(conf, logger))

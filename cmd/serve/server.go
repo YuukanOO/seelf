@@ -69,13 +69,7 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	middlewares := []gin.HandlerFunc{
-		s.requestLogger,
-		s.recoverer,
-		sessions.Sessions(sessionName, store),
-	}
-
-	s.router.Use(middlewares...)
+	s.router.Use(s.requestLogger, s.recoverer, sessions.Sessions(sessionName, store))
 
 	// Let's register every routes now!
 	v1 := s.router.Group("/api/v1")

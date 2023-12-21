@@ -28,7 +28,7 @@ var (
 	userConfigDir                          = must.Panic(os.UserConfigDir())
 	generatedSecretKey                     = must.Panic(crypto.RandomKey[string](64))
 	defaultDataDirectory                   = filepath.Join(userConfigDir, "seelf")
-	DefaultConfigPath                      = filepath.Join(defaultDataDirectory, defaultConfigFilename)
+	DefaultConfigPath                      = filepath.Join(defaultDataDirectory, defaultConfigFilename) // Default configuration path
 	configFingerprintName                  = "last_run_data"
 	noticeNotSupportedConfigChangeDetected = `looks like you have changed the domain used by seelf for your apps (either the protocol or the domain itself).
 	
@@ -52,19 +52,14 @@ type (
 	Configuration interface {
 		serve.Options // The configuration should provide every settings needed by the seelf server
 
-		Initialize(log.ConfigurableLogger, CliOptions) error // Initialize the configuration by loading it (from config file, env vars, etc.)
+		Initialize(log.ConfigurableLogger, string) error // Initialize the configuration by loading it (from config file, env vars, etc.)
 	}
 
 	// Configuration builder function used to initialize the configuration object (mostly used in tests).
 	ConfigurationBuilder func(*configuration)
 
-	// Represents options sets on the CLI level.
-	CliOptions struct {
-		Path    string
-		Verbose bool
-	}
-
 	configuration struct {
+		Log      logConfiguration
 		Data     dataConfiguration
 		Http     httpConfiguration
 		Balancer balancerConfiguration
@@ -74,6 +69,13 @@ type (
 		domain                domain.Url
 		pollInterval          time.Duration
 		deploymentDirTemplate *template.Template
+		logLevel              log.Level
+		logFormat             log.OutputFormat
+	}
+
+	logConfiguration struct {
+		Level  string `env:"LOG_LEVEL"`
+		Format string `env:"LOG_FORMAT"`
 	}
 
 	httpConfiguration struct {
@@ -115,6 +117,10 @@ type (
 // Instantiate the default seelf configuration.
 func Default(builders ...ConfigurationBuilder) Configuration {
 	conf := &configuration{
+		Log: logConfiguration{
+			Level:  "info",
+			Format: "console",
+		},
 		Data: dataConfiguration{
 			Path:                  defaultDataDirectory,
 			DeploymentDirTemplate: defaultDeploymentDirTemplate,
@@ -144,33 +150,27 @@ func Default(builders ...ConfigurationBuilder) Configuration {
 	return conf
 }
 
-func (c *configuration) Initialize(logger log.ConfigurableLogger, opts CliOptions) error {
-	if opts.Path == "" {
-		opts.Path = DefaultConfigPath
-	}
-
-	exists, err := config.Load(opts.Path, c)
+func (c *configuration) Initialize(logger log.ConfigurableLogger, path string) error {
+	exists, err := config.Load(path, c)
 
 	if err != nil {
 		return err
 	}
 
 	// Update logger based on loaded configuration
-	if opts.Verbose {
-		logger.Configure(log.OutputConsole, log.DebugLevel, true)
-	} else {
-		logger.Configure(log.OutputConsole, log.InfoLevel, false)
+	if err = logger.Configure(c.logFormat, c.logLevel); err != nil {
+		return err
 	}
 
 	if exists {
 		logger.Infow("configuration loaded",
-			"path", opts.Path)
+			"path", path)
 	} else {
 		logger.Infow("configuration not found, saving current configuration",
-			"path", opts.Path)
+			"path", path)
 
 		// Save the config file only if it doesn't exist yet (to preserve the secret generated for example)
-		if err := config.Save(opts.Path, c); err != nil {
+		if err := config.Save(path, c); err != nil {
 			return err
 		}
 	}
@@ -226,6 +226,8 @@ func (c *configuration) PostLoad() error {
 	)
 
 	return validation.Check(validation.Of{
+		"log.level":                    validation.Value(c.Log.Level, &c.logLevel, log.ParseLevel),
+		"log.format":                   validation.Value(c.Log.Format, &c.logFormat, log.ParseFormat),
 		"data.deployment_dir_template": validation.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
 		"runners.poll_interval":        validation.Value(c.Runners.PollInterval, &c.pollInterval, time.ParseDuration),
 		"runners.deployment":           validation.Is(c.Runners.Deployment, numbers.Min(1)),

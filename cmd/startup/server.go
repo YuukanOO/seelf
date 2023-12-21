@@ -72,7 +72,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 
 	scheduler := bus.NewScheduler(adapter, s.logger, s.bus)
 
-	// Setups auth infrastructure
+	// Setup auth infrastructure
 	s.usersReader, err = authinfra.Setup(s.options, s.logger, s.db, s.bus)
 
 	if err != nil {
@@ -90,7 +90,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		return nil, err
 	}
 
-	// Names of jobs to process in a specific group since it can take a long time
+	// Names of jobs to process in a specific group since they can take a long time
 	deploymentNames := []string{
 		deploy.Command{}.Name_(),
 		cleanup_app.Command{}.Name_(),

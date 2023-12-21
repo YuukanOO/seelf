@@ -2,138 +2,83 @@ package async
 
 import (
 	"context"
+	"errors"
 	"sync"
-	"time"
 
 	"github.com/YuukanOO/seelf/pkg/log"
 )
 
+var ErrAlreadyStarted = errors.New("already_started")
+
 type (
-	// Generic interface for an async worker which can be started and stopped.
-	Pool interface {
-		Start() // Start the pool and all its workers (must be called in a goroutine)
-		Stop()  // Wait for the current pool to complete and returns
+	// Represents an asynchronous pool which can process multiple jobs simultaneously.
+	Pool[T any] interface {
+		Start() error // Start the pool
+		Stop()        // Wait for the current pool to complete running jobs and returns
 	}
 
-	PollingFunc[T any] func(context.Context, []string) ([]T, error) // Function used to retrieve jobs to process
-	NameFunc[T any]    func(T) string                               // Extract a job name
-	HandlerFunc[T any] func(context.Context, T) error               // Process a single job
+	Func func(<-chan bool) // Async function run by the pool
+
+	// Pool context as seen by puller, groups and internal stuff.
+	PoolContext[T any] interface {
+		Queue(context.Context, ...T) // Queue one or multiple jobs to be processed
+		Logger() log.Logger          // Returns the logger used by the pool
+		Run(Func)                    // Launch a function in a new goroutine which MUST listen for the done signal and exit when it receives it
+	}
+
+	// Puller interface used to retrieve jobs to process from somewhere.
+	Puller[T any] interface {
+		OnStart(PoolContext[T]) // Called upon pool startup, use PoolContext.Run to register a goroutine
+	}
+
+	// Async group of runners which can actually handle jobs.
+	Group[T any] interface {
+		OnStart(PoolContext[T])         // Called upon pool startup, use PoolContext.Run to register a goroutine
+		Handle(context.Context, T) bool // Try to handle the given job, returns true if the job was handled, false otherwise
+	}
 
 	pool[T any] struct {
-		started                bool
-		logger                 log.Logger
-		interval               time.Duration // Interval at which the PollingFunc will be called
-		pollingFunc            PollingFunc[T]
-		nameFunc               NameFunc[T]
-		done                   chan bool
-		exitGroup              sync.WaitGroup // Wait group used to wait for all workers to exit when stopping
-		tags                   []string       // Supported tags (passed to the polling func)
-		jobs                   []chan T       // Jobs channels (one per worker group)
-		tagsJobsChannelMapping map[string]int // Mapping between job name/tag and the appropriate channel index in the jobs array
-		workers                []*worker[T]
-	}
-
-	group[T any] struct {
-		size        int
-		handlerFunc HandlerFunc[T]
-		tags        []string
+		started   bool
+		logger    log.Logger
+		puller    Puller[T]
+		done      []chan bool    // Contains exit channels used to signal participating functions to stop
+		exitGroup sync.WaitGroup // Wait group used to wait for all workers to exit when stopping
+		groups    []Group[T]
 	}
 )
 
-// Builds a new pool which will poll for jobs at specific intervals.
-// You must provide worker groups which will process specific job types retrieved
-// by the polling function. This polling function will fill a channel so worker can pick
-// jobs as soon as they are available.
+// Builds a new pool with a specific Puller to feed registered groups with actual
+// jobs to process.
 //
-// The idea behind worker groups is that some jobs need more time to complete and
+// The idea behind groups is that some jobs need more time to complete and
 // I don't want to hold back the other ones such as (in the future), sending
 // emails, checking stuff, etc.
 func NewPool[T any](
 	logger log.Logger,
-	interval time.Duration,
-	pollingFunc PollingFunc[T],
-	nameFunc NameFunc[T],
-	groups ...*group[T],
-) Pool {
-	var (
-		tags    []string
-		jobs    []chan T
-		mapping map[string]int = make(map[string]int)
-		workers []*worker[T]
-	)
-
-	for idx, g := range groups {
-		tags = append(tags, g.tags...)
-		jobs = append(jobs, make(chan T))
-
-		for _, t := range g.tags {
-			mapping[t] = idx
-		}
-
-		for i := 0; i < g.size; i++ {
-			workers = append(workers, newWorker(logger, jobs[idx], g.handlerFunc))
-		}
-	}
-
+	puller Puller[T],
+	groups ...Group[T],
+) Pool[T] {
 	return &pool[T]{
-		logger:                 logger,
-		interval:               interval,
-		pollingFunc:            pollingFunc,
-		nameFunc:               nameFunc,
-		done:                   make(chan bool, 1),
-		tags:                   tags,
-		jobs:                   jobs,
-		tagsJobsChannelMapping: mapping,
-		workers:                workers,
+		logger: logger,
+		puller: puller,
+		groups: groups,
 	}
 }
 
-func (p *pool[T]) Start() {
+func (p *pool[T]) Start() error {
 	if p.started {
-		p.logger.Warn("pool already started")
-		return
+		return ErrAlreadyStarted
 	}
 
 	p.started = true
 
-	// Launch every worker registered in this pool
-	for _, wo := range p.workers {
-		p.exitGroup.Add(1)
-		go func(w *worker[T]) {
-			defer p.exitGroup.Done()
-			w.Start()
-		}(wo)
+	for _, g := range p.groups {
+		g.OnStart(p)
 	}
 
-	var (
-		delay   time.Duration
-		lastRun time.Time = time.Now()
-	)
+	p.puller.OnStart(p)
 
-	for {
-		delay = p.interval - time.Since(lastRun)
-
-		select {
-		case <-p.done:
-			p.done <- true
-			return
-		case <-time.After(delay):
-		}
-
-		lastRun = time.Now()
-
-		jobs, err := p.pollingFunc(context.Background(), p.tags)
-
-		if err != nil {
-			p.logger.Errorw("error retrieving jobs",
-				"error", err)
-			continue
-		}
-
-		for _, job := range jobs {
-			p.jobs[p.tagsJobsChannelMapping[p.nameFunc(job)]] <- job
-		}
-	}
+	return nil
 }
 
 func (p *pool[T]) Stop() {
@@ -141,18 +86,35 @@ func (p *pool[T]) Stop() {
 		return
 	}
 
-	p.done <- true
 	p.logger.Info("waiting for current jobs to finish")
-	<-p.done
 
-	for _, wo := range p.workers {
-		wo.Stop()
+	for _, done := range p.done {
+		done <- true
 	}
 
 	p.exitGroup.Wait()
 }
 
-// Builds a new group for the given tags and specified number of concurrent jobs allowed.
-func Group[T any](size int, handlerFunc HandlerFunc[T], tags ...string) *group[T] {
-	return &group[T]{size, handlerFunc, tags}
+func (p *pool[T]) Logger() log.Logger { return p.logger }
+
+func (p *pool[T]) Run(fn Func) {
+	done := make(chan bool, 1)
+	p.done = append(p.done, done)
+
+	p.exitGroup.Add(1)
+	go func(d <-chan bool) {
+		defer p.exitGroup.Done()
+		fn(d)
+	}(done)
+}
+
+func (p *pool[T]) Queue(ctx context.Context, jobs ...T) {
+	for _, job := range jobs {
+		for _, g := range p.groups {
+			// Stop at the first group which can handle the job
+			if g.Handle(ctx, job) {
+				break
+			}
+		}
+	}
 }

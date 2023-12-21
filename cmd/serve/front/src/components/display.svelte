@@ -22,5 +22,7 @@
 
 	.value {
 		color: var(--co-text-5);
+		text-overflow: ellipsis;
+		overflow: hidden;
 	}
 </style>

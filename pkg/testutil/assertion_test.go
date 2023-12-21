@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
@@ -303,14 +304,24 @@ type (
 		event.Emitter
 	}
 
-	eventA struct{ msg string }
-	eventB struct{ number int }
+	eventA struct {
+		bus.Notification
+		msg string
+	}
+
+	eventB struct {
+		bus.Notification
+		number int
+	}
 )
+
+func (eventA) Name_() string { return "eventA" }
+func (eventB) Name_() string { return "eventB" }
 
 func Test_EventIs(t *testing.T) {
 	var entity domainEntity
 
-	entity = entity.apply(eventA{"test"}).apply(eventB{42})
+	entity = entity.apply(eventA{msg: "test"}).apply(eventB{number: 42})
 
 	t.Run("should be able to retrieve an event if it exists", func(t *testing.T) {
 		evt := testutil.EventIs[eventA](t, &entity, 0)
@@ -353,7 +364,7 @@ func Test_EventIs(t *testing.T) {
 func Test_HasNEvents(t *testing.T) {
 	var entity domainEntity
 
-	entity = entity.apply(eventA{"test"}).apply(eventB{42})
+	entity = entity.apply(eventA{msg: "test"}).apply(eventB{number: 42})
 
 	tests := []struct {
 		expected   int

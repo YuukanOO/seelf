@@ -154,8 +154,9 @@ HTTP_TWO=true`,
 
 			var conf configuration
 
-			err := config.Load(confFilename, &conf, envFilename)
+			exists, err := config.Load(confFilename, &conf, envFilename)
 			testutil.IsNil(t, err)
+			testutil.Equals(t, tt.conf != "", exists)
 			testutil.DeepEquals(t, tt.expected, conf)
 		})
 	}
@@ -166,13 +167,10 @@ HTTP_TWO=true`,
 			confFilename = "test-conf.yml"
 		)
 
-		t.Cleanup(func() {
-			os.Remove(confFilename)
-		})
-
-		err := config.Load(confFilename, &conf)
+		exists, err := config.Load(confFilename, &conf)
 
 		testutil.ErrorIs(t, errPostLoad, err)
+		testutil.IsFalse(t, exists)
 	})
 }
 

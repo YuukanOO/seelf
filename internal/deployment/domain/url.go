@@ -9,7 +9,9 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 )
 
-// Url struct which embed an url.URL struct and provides additional methods and meanings.
+const schemeHttps = "https"
+
+// Url struct which embed an url.URL struct and provides additional methods and meaning.
 type Url struct {
 	value *url.URL
 }
@@ -28,7 +30,7 @@ func UrlFrom(raw string) (Url, error) {
 }
 
 func (u Url) Host() string { return u.value.Host }
-func (u Url) UseSSL() bool { return u.value.Scheme == "https" }
+func (u Url) UseSSL() bool { return u.value.Scheme == schemeHttps }
 
 // Returns a new url representing a subdomain.
 func (u Url) SubDomain(subdomain string) Url {

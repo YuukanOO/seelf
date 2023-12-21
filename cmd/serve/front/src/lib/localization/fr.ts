@@ -150,6 +150,7 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées : co
 			"<p>Quelque chose s'est mal passé. Tentez de rafraichir la page.</p><p>Si le problème persiste, veuillez contacter l'administrateur.</p>",
 		app_name_already_taken: "Nom d'application déjà utilisé",
 		git_branch_not_found: 'Branche non trouvée',
+		git_remote_not_reachable: 'Origine injoignable',
 		invalid_email_or_password: 'Email ou mot de passe invalide'
 	}
 } as const satisfies Locale<AppTranslations>;

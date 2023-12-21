@@ -187,5 +187,5 @@ type meta struct {
 	isVCS bool
 }
 
-func (meta) Discriminator() string { return "test" }
-func (m meta) NeedVCS() bool       { return m.isVCS }
+func (meta) Kind() string    { return "test" }
+func (m meta) NeedVCS() bool { return m.isVCS }

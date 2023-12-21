@@ -11,14 +11,14 @@ var (
 	ErrNoValidSourceFound   = errors.New("no_valid_source_found")
 	ErrInvalidSourcePayload = errors.New("invalid_source_payload")
 
-	SourceDataTypes = storage.NewDiscriminatedMapper[SourceData]()
+	SourceDataTypes = storage.NewDiscriminatedMapper(func(sd SourceData) string { return sd.Kind() })
 )
 
 type (
 	// Contains stuff related to how the deployment has been triggered.
 	// The inner data depends on the Source which has been requested.
 	SourceData interface {
-		storage.Discriminated
+		Kind() string
 		NeedVCS() bool
 	}
 

@@ -35,6 +35,7 @@
 		border-radius: var(--ra-4);
 		border: 1px solid var(--co-divider-4);
 		font: var(--ty-caption);
+		flex-shrink: 0;
 		padding: var(--sp-1) var(--sp-2);
 	}
 

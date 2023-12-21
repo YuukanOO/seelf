@@ -11,10 +11,12 @@
       "mode": "debug",
       "program": "main.go",
       "env": {
+        "LOG_LEVEL": "debug",
+        "LOG_FORMAT": "console",
         "SEELF_ADMIN_EMAIL": "admin@example.com",
         "SEELF_ADMIN_PASSWORD": "admin"
       },
-      "args": ["serve", "-v"]
+      "args": ["serve"]
     }
   ]
 }

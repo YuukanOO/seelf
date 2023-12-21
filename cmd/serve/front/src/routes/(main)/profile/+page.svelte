@@ -8,7 +8,7 @@
 	import Stack from '$components/stack.svelte';
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
-	import service from '$lib/resources/users.js';
+	import service from '$lib/resources/users';
 	import l from '$lib/localization';
 	import Dropdown from '$components/dropdown.svelte';
 

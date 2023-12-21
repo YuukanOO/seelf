@@ -7,12 +7,11 @@ require (
 	github.com/docker/cli v24.0.6+incompatible
 	github.com/docker/compose/v2 v2.23.0
 	github.com/docker/docker v24.0.6+incompatible
-	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-git/go-git/v5 v5.10.0
 	github.com/golang-migrate/migrate/v4 v4.16.2
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.18
+	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/segmentio/ksuid v1.0.4
 	github.com/spf13/cobra v1.8.0
 	go.uber.org/zap v1.26.0

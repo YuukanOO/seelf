@@ -2,7 +2,7 @@ serve-front: # Launch the frontend dev server
 	cd cmd/serve/front && npm i && npm run dev
 
 serve-back: # Launch the backend API and creates an admin user if needed
-	SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=admin go run main.go serve -v
+	SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=admin LOG_LEVEL=debug go run main.go serve
 
 test: # Launch every tests
 	cd cmd/serve/front && npm i && npm test && cd ../../..

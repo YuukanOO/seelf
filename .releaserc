@@ -16,7 +16,7 @@
       "@semantic-release/git",
       {
         "assets": [
-          "cmd/version.go"
+          "cmd/version/version.go"
         ],
         "message": "chore(release): bump version to ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }

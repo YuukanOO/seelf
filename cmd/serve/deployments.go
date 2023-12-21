@@ -4,10 +4,14 @@ import (
 	"mime/multipart"
 	"strconv"
 
-	"github.com/YuukanOO/seelf/internal/deployment/app/command"
-	"github.com/YuukanOO/seelf/internal/deployment/app/query"
-	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_app_deployments"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment_log"
+	"github.com/YuukanOO/seelf/internal/deployment/app/promote"
+	"github.com/YuukanOO/seelf/internal/deployment/app/queue_deployment"
+	"github.com/YuukanOO/seelf/internal/deployment/app/redeploy"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/git"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/http"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/gin-gonic/gin"
@@ -39,7 +43,7 @@ func (s *server) queueDeploymentHandler() gin.HandlerFunc {
 			payload = body.Archive
 		}
 
-		number, err := s.queueDeployment(context, command.QueueDeploymentCommand{
+		number, err := bus.Send(s.bus, context, queue_deployment.Command{
 			AppID:       appid,
 			Environment: body.Environment,
 			Payload:     payload,
@@ -56,12 +60,11 @@ func (s *server) queueDeploymentHandler() gin.HandlerFunc {
 func (s *server) redeployHandler() gin.HandlerFunc {
 	return http.Send(s, func(ctx *gin.Context) error {
 		var (
-			context   = ctx.Request.Context()
 			appid     = ctx.Param("id")
 			source, _ = strconv.Atoi(ctx.Param("number"))
 		)
 
-		number, err := s.redeploy(context, command.RedeployCommand{
+		number, err := bus.Send(s.bus, ctx.Request.Context(), redeploy.Command{
 			AppID:            appid,
 			DeploymentNumber: source,
 		})
@@ -77,12 +80,11 @@ func (s *server) redeployHandler() gin.HandlerFunc {
 func (s *server) promoteHandler() gin.HandlerFunc {
 	return http.Send(s, func(ctx *gin.Context) error {
 		var (
-			context   = ctx.Request.Context()
 			appid     = ctx.Param("id")
 			source, _ = strconv.Atoi(ctx.Param("number"))
 		)
 
-		number, err := s.promote(context, command.PromoteCommand{
+		number, err := bus.Send(s.bus, ctx.Request.Context(), promote.Command{
 			AppID:            appid,
 			DeploymentNumber: source,
 		})
@@ -99,7 +101,10 @@ func (s *server) getDeploymentByIDHandler() gin.HandlerFunc {
 	return http.Send(s, func(ctx *gin.Context) error {
 		number, _ := strconv.Atoi(ctx.Param("number"))
 
-		deployment, err := s.deploymentGateway.GetDeploymentByID(ctx.Request.Context(), ctx.Param("id"), number)
+		deployment, err := bus.Send(s.bus, ctx.Request.Context(), get_deployment.Query{
+			AppID:            ctx.Param("id"),
+			DeploymentNumber: number,
+		})
 
 		if err != nil {
 			return err
@@ -113,17 +118,17 @@ func (s *server) getDeploymentLogsHandler() gin.HandlerFunc {
 	return http.Send(s, func(ctx *gin.Context) error {
 		appid := ctx.Param("id")
 		number, _ := strconv.Atoi(ctx.Param("number"))
-		c := ctx.Request.Context()
 
-		// FIXME: in the future, query will be refactored to use message too and this could be refactored
-
-		depl, err := s.deploymentsReader.GetByID(c, domain.DeploymentIDFrom(domain.AppID(appid), domain.DeploymentNumber(number)))
+		logpath, err := bus.Send(s.bus, ctx.Request.Context(), get_deployment_log.Query{
+			AppID:            appid,
+			DeploymentNumber: number,
+		})
 
 		if err != nil {
 			return err
 		}
 
-		return http.File(ctx, s.artifactManager.LogPath(c, depl))
+		return http.File(ctx, logpath)
 	})
 }
 
@@ -135,17 +140,19 @@ type getDeploymentsFilters struct {
 
 func (s *server) listDeploymentsByAppHandler() gin.HandlerFunc {
 	return http.Bind(s, func(ctx *gin.Context, request getDeploymentsFilters) error {
-		var filters query.GetDeploymentsFilters
+		query := get_app_deployments.Query{
+			AppID: ctx.Param("id"),
+		}
 
 		if request.Environment != "" {
-			filters.Environment = filters.Environment.WithValue(request.Environment)
+			query.Environment = query.Environment.WithValue(request.Environment)
 		}
 
 		if request.Page != 0 {
-			filters.Page = filters.Page.WithValue(request.Page)
+			query.Page = query.Page.WithValue(request.Page)
 		}
 
-		deployments, err := s.deploymentGateway.GetAllDeploymentsByApp(ctx.Request.Context(), ctx.Param("id"), filters)
+		deployments, err := bus.Send(s.bus, ctx.Request.Context(), query)
 
 		if err != nil {
 			return err
@@ -156,7 +163,10 @@ func (s *server) listDeploymentsByAppHandler() gin.HandlerFunc {
 }
 
 func (s *server) sendDeploymentCreatedResponse(ctx *gin.Context, appid string, number int) error {
-	deployment, err := s.deploymentGateway.GetDeploymentByID(ctx.Request.Context(), appid, number)
+	deployment, err := bus.Send(s.bus, ctx.Request.Context(), get_deployment.Query{
+		AppID:            appid,
+		DeploymentNumber: number,
+	})
 
 	if err != nil {
 		return err

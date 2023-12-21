@@ -44,18 +44,18 @@ Every entities should be read from the persistent store as a whole (= it should 
 
 Some value objects implements the `Scanner`, `Valuer`, `Marshaler` and `Unmarshaler` interfaces when they must be persisted in a single column. I may eventualy found another cleaner way to do this but this is sufficient for now.
 
-Some types are represented as discriminated union to express dynamic types. For example, `SourceData` (archive, git or raw file) could be anything supported by a `Source` and should be persisted and rehydrated as such. To enable those kind of use cases, they implement the `storage.Discriminated` interface and should returns a discriminator, use to call the appropriate loader when rehydrating.
+Some types are represented as discriminated union to express dynamic types. For example, `SourceData` (archive, git or raw file) could be anything supported by a `Source` and should be persisted and rehydrated as such. To enable those kind of use cases, every supported discriminated union type expose a `storage.DiscriminatedMapper` on the specific needed type and each types supported should register on it by defining a function to call to rehydrate this type specifically from a raw `string` payload.
 
 Retrieving related data is easy thanks to something inspired by graphql dataloaders. When querying the database, you can provide an optional array of `Dataloader[T]` which will execute additional requests based on key extracted from the parent result set. This approach enables efficient querying of the database by avoiding N+1 queries.
 
-## Commands and DataGateway
+## Commands and Queries
 
 The domain is never accessed directly by client applications (here, a REST API). That's why there's `app` packages in every domain represented by an `internal/` sub-package.
 
-`app` packages expose:
+`app` packages expose commands and queries which can be processed by a `bus.Dispatcher` everywhere. Handlers are registered at the application startup by each `infra/mod.go` `Setup` function. Commands and queries means different things:
 
 - `command/`: mutate the system based on given inputs, only take and returns primitive types. Commands translate application usecases to domain actions.
-- `query/`: read stuff from the database using `Gateway` interfaces. Taken and returned types are defined in the package itself since the representation differ from the mutating stuff. Here, every field is public since it will be serialized afterwards and represents only UI needs.
+- `query/`: read stuff from the database. Types manipulated by queries are defined in the package itself since the representation may differ from the mutating stuff. Here, every field is public since it will be serialized afterwards and represents only UI needs. Query handlers are for the most part directly implemented by `infra/sqlite` packages in each domain.
 
 ## Optionality
 

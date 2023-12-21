@@ -16,18 +16,18 @@ type (
 	}
 
 	appsStore struct {
-		sqlite.Database
+		db *sqlite.Database
 	}
 )
 
-func NewAppsStore(db sqlite.Database) AppsStore {
+func NewAppsStore(db *sqlite.Database) AppsStore {
 	return &appsStore{db}
 }
 
 func (s *appsStore) IsNameUnique(ctx context.Context, name domain.AppName) (domain.UniqueAppName, error) {
 	count, err := builder.
 		Query[uint]("SELECT COUNT(name) FROM apps WHERE name = ?", name).
-		Extract(s, ctx)
+		Extract(s.db, ctx)
 
 	if err != nil {
 		return "", err
@@ -55,11 +55,11 @@ func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, e
 				,created_by
 			FROM apps
 			WHERE id = ?`, id).
-		One(s, ctx, domain.AppFrom)
+		One(s.db, ctx, domain.AppFrom)
 }
 
 func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
-	return sqlite.WriteAndDispatch(s, c, apps, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteAndDispatch(s.db, c, apps, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.AppCreated:
 			return builder.
@@ -69,21 +69,21 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 					"created_at": evt.Created.At(),
 					"created_by": evt.Created.By(),
 				}).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.AppEnvChanged:
 			return builder.
 				Update("apps", builder.Values{
 					"env": evt.Env,
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.AppEnvRemoved:
 			return builder.
 				Update("apps", builder.Values{
 					"env": nil,
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.AppVCSConfigured:
 			return builder.
 				Update("apps", builder.Values{
@@ -91,7 +91,7 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 					"vcs_token": evt.Config.Token(),
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.AppVCSRemoved:
 			return builder.
 				Update("apps", builder.Values{
@@ -99,7 +99,7 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 					"vcs_token": nil,
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.AppCleanupRequested:
 			return builder.
 				Update("apps", builder.Values{
@@ -107,11 +107,11 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 					"cleanup_requested_by": evt.Requested.By(),
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.AppDeleted:
 			return builder.
 				Command("DELETE FROM apps WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		default:
 			return nil
 		}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/id"
@@ -54,38 +55,60 @@ type (
 	// EVENTS
 
 	AppCreated struct {
+		bus.Notification
+
 		ID      AppID
 		Name    UniqueAppName
 		Created shared.Action[domain.UserID]
 	}
 
 	AppEnvChanged struct {
+		bus.Notification
+
 		ID  AppID
 		Env EnvironmentsEnv
 	}
 
 	AppEnvRemoved struct {
+		bus.Notification
+
 		ID AppID
 	}
 
 	AppVCSConfigured struct {
+		bus.Notification
+
 		ID     AppID
 		Config VCSConfig
 	}
 
 	AppVCSRemoved struct {
+		bus.Notification
+
 		ID AppID
 	}
 
 	AppCleanupRequested struct {
+		bus.Notification
+
 		ID        AppID
 		Requested shared.Action[domain.UserID]
 	}
 
 	AppDeleted struct {
+		bus.Notification
+
 		ID AppID
 	}
 )
+
+func (AppCreated) Name_() string          { return "deployment.event.app_created" }
+func (AppEnvChanged) Name_() string       { return "deployment.event.app_env_changed" }
+func (AppEnvRemoved) Name_() string       { return "deployment.event.app_env_removed" }
+func (AppVCSConfigured) Name_() string    { return "deployment.event.app_vcs_configured" }
+func (AppVCSRemoved) Name_() string       { return "deployment.event.app_vcs_removed" }
+func (AppCleanupRequested) Name_() string { return "deployment.event.app_cleanup_requested" }
+func (AppDeleted) Name_() string          { return "deployment.event.app_deleted" }
 
 // Instantiates a new App.
 func NewApp(name UniqueAppName, createdBy domain.UserID) (app App) {

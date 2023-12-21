@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/YuukanOO/seelf/internal/deployment/app/query"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
@@ -15,20 +15,20 @@ type Data struct {
 	Hash   string `json:"hash"`
 }
 
-func (p Data) Discriminator() string { return "git" }
-func (p Data) NeedVCS() bool         { return true }
+func (p Data) Kind() string  { return "git" }
+func (p Data) NeedVCS() bool { return true }
 
 func (p Data) Value() (driver.Value, error) { return storage.ValueJSON(p) }
 
 func init() {
-	domain.SourceDataTypes.Register(Data{}, func(value string) (domain.SourceData, error) {
-		return tryParseGitData(value)
+	domain.SourceDataTypes.Register(Data{}, func(s string) (domain.SourceData, error) {
+		return tryParseGitData(s)
 	})
 
 	// Here the registered discriminated type is the same since there are no unexposed fields and
 	// it also handle the retrocompatibility with the old payload format.
-	query.SourceDataTypes.Register(Data{}, func(value string) (query.SourceData, error) {
-		return tryParseGitData(value)
+	get_deployment.SourceDataTypes.Register(Data{}, func(s string) (get_deployment.SourceData, error) {
+		return tryParseGitData(s)
 	})
 }
 

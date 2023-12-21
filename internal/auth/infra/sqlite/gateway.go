@@ -3,74 +3,40 @@ package sqlite
 import (
 	"context"
 
-	"github.com/YuukanOO/seelf/internal/auth/app/query"
+	"github.com/YuukanOO/seelf/internal/auth/app/get_profile"
 	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
 )
 
 type gateway struct {
-	sqlite.Database
+	db *sqlite.Database
 }
 
-func NewGateway(db sqlite.Database) query.Gateway {
+func NewGateway(db *sqlite.Database) *gateway {
 	return &gateway{db}
 }
 
-func (s *gateway) GetAllUsers(ctx context.Context) ([]query.User, error) {
+func (s *gateway) GetProfile(ctx context.Context, q get_profile.Query) (get_profile.Profile, error) {
 	return builder.
-		Query[query.User](`
-			SELECT
-				id
-				,email
-				,registered_at
-			FROM users
-			ORDER BY registered_at DESC`).
-		All(s, ctx, userMapper)
-}
-
-func (s *gateway) GetUserByID(ctx context.Context, id string) (query.User, error) {
-	return builder.
-		Query[query.User](`
-			SELECT
-				id
-				,email
-				,registered_at
-			FROM users
-			WHERE id = ?`, id).
-		One(s, ctx, userMapper)
-}
-
-func (s *gateway) GetProfile(ctx context.Context, id string) (query.Profile, error) {
-	return builder.
-		Query[query.Profile](`
+		Query[get_profile.Profile](`
 			SELECT
 				id
 				,email
 				,registered_at
 				,api_key
 			FROM users
-			WHERE id = ?`, id).
-		One(s, ctx, profileMapper)
+			WHERE id = ?`, q.ID).
+		One(s.db, ctx, profileMapper)
 }
 
-func userMapper(row storage.Scanner) (u query.User, err error) {
+func profileMapper(row storage.Scanner) (p get_profile.Profile, err error) {
 	err = row.Scan(
-		&u.ID,
-		&u.Email,
-		&u.RegisteredAt,
+		&p.ID,
+		&p.Email,
+		&p.RegisteredAt,
+		&p.APIKey,
 	)
 
-	return u, err
-}
-
-func profileMapper(row storage.Scanner) (u query.Profile, err error) {
-	err = row.Scan(
-		&u.ID,
-		&u.Email,
-		&u.RegisteredAt,
-		&u.APIKey,
-	)
-
-	return u, err
+	return p, err
 }

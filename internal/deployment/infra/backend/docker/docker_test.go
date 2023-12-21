@@ -9,9 +9,9 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 
-	"github.com/YuukanOO/seelf/cmd"
+	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
@@ -25,16 +25,17 @@ import (
 
 type options interface {
 	docker.Options
-	infra.LocalArtifactOptions
+	artifact.LocalOptions
 }
 
 func Test_Run(t *testing.T) {
-	logger := log.NewLogger(false)
+	logger, _ := log.NewLogger()
+
 	composeMock := &composeMockService{}
 	dockerMock := newDockerMockService()
 
-	backend := func(opts options) (docker.Backend, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
-		artifactManager := infra.NewLocalArtifactManager(opts, logger)
+	backend := func(opts options) (*docker.Docker, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
+		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())
@@ -44,7 +45,7 @@ func Test_Run(t *testing.T) {
 	}
 
 	t.Run("should setup the balancer correctly without SSL", func(t *testing.T) {
-		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		opts := config.Default(config.WithTestDefaults())
 		dockerBackend, _, composeMock, _ := backend(opts)
 
 		err := dockerBackend.Setup()
@@ -74,9 +75,9 @@ func Test_Run(t *testing.T) {
 	})
 
 	t.Run("should setup the balancer correctly with SSL", func(t *testing.T) {
-		opts := cmd.DefaultConfiguration(
-			cmd.WithTestDefaults(),
-			cmd.WithBalancer("https://docker.localhost", "someone@example.com"),
+		opts := config.Default(
+			config.WithTestDefaults(),
+			config.WithBalancer("https://docker.localhost", "someone@example.com"),
 		)
 		dockerBackend, _, composeMock, _ := backend(opts)
 
@@ -120,7 +121,7 @@ func Test_Run(t *testing.T) {
 	})
 
 	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
-		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		opts := config.Default(config.WithTestDefaults())
 		app := domain.NewApp("my-app", "uid")
 		depl, _ := app.NewDeployment(1, raw.Data(""), domain.Production, "uid")
 		dockerBackend, artifactManager, _, _ := backend(opts)
@@ -331,14 +332,14 @@ volumes:
 	}
 
 	t.Run("should correctly expose services from a compose file without SSL", func(t *testing.T) {
-		opts := cmd.DefaultConfiguration(cmd.WithTestDefaults())
+		opts := config.Default(config.WithTestDefaults())
 		testServices(t, opts)
 	})
 
 	t.Run("should correctly expose services from a compose file with SSL", func(t *testing.T) {
-		opts := cmd.DefaultConfiguration(
-			cmd.WithTestDefaults(),
-			cmd.WithBalancer("https://docker.localhost", "someone@example.com"),
+		opts := config.Default(
+			config.WithTestDefaults(),
+			config.WithBalancer("https://docker.localhost", "someone@example.com"),
 		)
 		testServices(t, opts)
 	})

@@ -3,6 +3,7 @@ package event_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
@@ -14,9 +15,17 @@ type (
 		name string
 	}
 
-	domainEventA struct{}
-	domainEventB struct{}
+	domainEventA struct {
+		bus.Notification
+	}
+
+	domainEventB struct {
+		bus.Notification
+	}
 )
+
+func (domainEventA) Name_() string { return "domain_event_a" }
+func (domainEventB) Name_() string { return "domain_event_b" }
 
 func Test_Emitter(t *testing.T) {
 	t.Run("should be able to store and retrieve events from an Emitter", func(t *testing.T) {
@@ -66,7 +75,7 @@ func Test_Emitter(t *testing.T) {
 	})
 }
 
-func (d domainEntity) apply(e any) domainEntity {
+func (d domainEntity) apply(e event.Event) domainEntity {
 	switch e.(type) {
 	case domainEventA:
 		d.name = "eventA"

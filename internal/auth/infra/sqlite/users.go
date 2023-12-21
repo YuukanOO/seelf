@@ -17,18 +17,18 @@ type (
 	}
 
 	usersStore struct {
-		sqlite.Database
+		db *sqlite.Database
 	}
 )
 
-func NewUsersStore(db sqlite.Database) UsersStore {
+func NewUsersStore(db *sqlite.Database) UsersStore {
 	return &usersStore{db}
 }
 
 func (s *usersStore) GetUsersCount(ctx context.Context) (uint, error) {
 	return builder.
 		Query[uint]("SELECT COUNT(id) FROM users").
-		Extract(s, ctx)
+		Extract(s.db, ctx)
 }
 
 func (s *usersStore) IsEmailUnique(ctx context.Context, email domain.Email) (domain.UniqueEmail, error) {
@@ -50,7 +50,7 @@ func (s *usersStore) GetByID(ctx context.Context, id domain.UserID) (u domain.Us
 				,registered_at
 			FROM users
 			WHERE id = ?`, id).
-		One(s, ctx, domain.UserFrom)
+		One(s.db, ctx, domain.UserFrom)
 }
 
 func (s *usersStore) GetByEmail(ctx context.Context, email domain.Email) (u domain.User, err error) {
@@ -64,17 +64,17 @@ func (s *usersStore) GetByEmail(ctx context.Context, email domain.Email) (u doma
 				,registered_at
 			FROM users
 			WHERE email = ?`, email).
-		One(s, ctx, domain.UserFrom)
+		One(s.db, ctx, domain.UserFrom)
 }
 
 func (s *usersStore) GetIDFromAPIKey(ctx context.Context, key domain.APIKey) (domain.UserID, error) {
 	return builder.
 		Query[domain.UserID]("SELECT id FROM users WHERE api_key = ?", key).
-		Extract(s, ctx)
+		Extract(s.db, ctx)
 }
 
 func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
-	return sqlite.WriteAndDispatch(s, c, users, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteAndDispatch(s.db, c, users, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.UserRegistered:
 			return builder.
@@ -85,21 +85,21 @@ func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
 					"api_key":       evt.Key,
 					"registered_at": evt.RegisteredAt,
 				}).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.UserEmailChanged:
 			return builder.
 				Update("users", builder.Values{
 					"email": evt.Email,
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		case domain.UserPasswordChanged:
 			return builder.
 				Update("users", builder.Values{
 					"password_hash": evt.Password,
 				}).
 				F("WHERE id = ?", evt.ID).
-				Exec(s, ctx)
+				Exec(s.db, ctx)
 		default:
 			return nil
 		}
@@ -110,7 +110,7 @@ func (s *usersStore) getUniqueEmail(ctx context.Context, email domain.Email, uid
 	count, err := builder.
 		Query[uint]("SELECT COUNT(email) FROM users WHERE email = ?", email).
 		S(builder.MaybeValue(uid, "AND id != ?")).
-		Extract(s, ctx)
+		Extract(s.db, ctx)
 
 	if err != nil {
 		return "", err

@@ -20,7 +20,7 @@ build: # Build the final binary for the current platform
 	go build -ldflags="-s -w" -o seelf
 
 prepare-release: # Update the version.go file with the SEELF_VERSION env variable
-	@sed -i".bak" "s/version = \".*\"/version = \"$(SEELF_VERSION)\"/g" cmd/version.go
+	@sed -i".bak" "s/version = \".*\"/version = \"$(SEELF_VERSION)\"/g" cmd/version/version.go
 
 release-docker: # Build and push the docker image
 	@docker buildx build --platform linux/amd64,linux/arm64/v8 -t "yuukanoo/seelf:$(SEELF_VERSION)" -t yuukanoo/seelf:latest --push .

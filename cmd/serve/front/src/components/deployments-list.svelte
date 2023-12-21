@@ -38,14 +38,14 @@
 			<ul class="deployments">
 				{#each data as depl}
 					<Stack as="li" gap={2} justify="space-between">
-						<Stack gap={2}>
+						<Stack gap={2} class="hide-overflow">
 							<span
 								class="status"
 								class:success={depl.state.status === DeploymentStatus.Succeeded}
 								class:failed={depl.state.status === DeploymentStatus.Failed}
 								class:running={depl.state.status === DeploymentStatus.Running}
 							/>
-							<div>
+							<div class="hide-overflow">
 								<div class="title">
 									{variant === 'env' ? depl.environment : l.datetime(depl.requested_at)}
 								</div>
@@ -83,6 +83,8 @@
 
 	.metadata {
 		font: var(--ty-caption);
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.title {
@@ -101,6 +103,10 @@
 		inset-block: 0;
 		border-inline-start: 2px dotted var(--co-divider-4);
 		z-index: 0;
+	}
+
+	.hide-overflow {
+		overflow: hidden;
 	}
 
 	.status {

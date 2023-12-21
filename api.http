@@ -32,14 +32,6 @@ Content-Type: application/json
 }
 
 ###
-
-GET {{url}}/users
-
-###
-
-GET {{url}}/users/2IdkLl1EaJpkQlBj26dGKcMznwe
-
-###
 # @name createApp
 
 POST {{url}}/apps

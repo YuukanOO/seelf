@@ -22,9 +22,6 @@ type (
 		// Queue a request to be dispatched asynchronously at a later time.
 		// The string parameter is the dedupe name and provide a way to avoid multiple
 		// messages sharing the same dedupe name to be processed at the same time.
-		//
-		// You MUST register the type of Request using bus.RegisterForMarshalling[YourRequest]()
-		// to make sure the scheduler will be able to (de)serialize the request when persisting.
 		Queue(context.Context, Request, monad.Maybe[string], JobErrPolicy) error
 	}
 

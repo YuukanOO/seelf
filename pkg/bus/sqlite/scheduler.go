@@ -38,6 +38,8 @@ func (j *job) ID() string               { return j.id }
 func (j *job) Message() bus.Request     { return j.msg }
 func (j *job) Policy() bus.JobErrPolicy { return j.policy }
 
+// Builds a new adapter persisting jobs in the given sqlite database.
+// For it to work, commands must be (de)serializable using the bus.Marshallable mapper.
 func NewSchedulerAdapter(db *sqlite.Database) bus.SchedulerAdapter {
 	return &scheduler{db}
 }

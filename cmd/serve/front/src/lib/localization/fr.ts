@@ -107,7 +107,7 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées : co
 		'deployment.finished_at': 'terminé à',
 		'deployment.queued_at': 'demandé à',
 		'deployment.duration': 'durée',
-		'deployment.services': 'services exposés',
+		'deployment.services': 'services déployés',
 		'deployment.branch': 'branche',
 		'deployment.commit': 'commit',
 		'deployment.error_code': 'code erreur',

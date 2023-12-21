@@ -2,6 +2,8 @@ package async
 
 import (
 	"context"
+
+	"github.com/YuukanOO/seelf/pkg/log"
 )
 
 type (
@@ -10,7 +12,6 @@ type (
 
 	group[T any] struct {
 		jobs        chan T
-		pool        Pool[T]
 		handlerFunc HandlerFunc[T]
 		canHandle   SelectorFunc[T]
 		runners     []*runner[T]
@@ -46,24 +47,25 @@ func (g *group[T]) Handle(ctx context.Context, job T) bool {
 	return false
 }
 
-func (g *group[T]) OnStart(pool Pool[T]) {
-	g.pool = pool
+func (g *group[T]) OnStart(pool PoolContext[T]) {
 	for _, r := range g.runners {
-		pool.Participate(r.start)
+		pool.Run(r.routine(pool.Logger()))
 	}
 }
 
-func (r *runner[T]) start(done <-chan bool) {
-	for {
-		select {
-		case job := <-r.group.jobs:
-			if err := r.group.handlerFunc(context.Background(), job); err != nil {
-				r.group.pool.Logger().Errorw("error processing job",
-					"error", err,
-					"job", job)
+func (r *runner[T]) routine(logger log.Logger) Func {
+	return func(done <-chan bool) {
+		for {
+			select {
+			case job := <-r.group.jobs:
+				if err := r.group.handlerFunc(context.Background(), job); err != nil {
+					logger.Errorw("error processing job",
+						"error", err,
+						"job", job)
+				}
+			case <-done:
+				return
 			}
-		case <-done:
-			return
 		}
 	}
 }

@@ -13,21 +13,27 @@ var ErrAlreadyStarted = errors.New("already_started")
 type (
 	// Represents an asynchronous pool which can process multiple jobs simultaneously.
 	Pool[T any] interface {
-		Start() error                  // Start the pool
-		Queue(context.Context, ...T)   // Queue one or multiple jobs to be processed
-		Logger() log.Logger            // Returns the logger used by the pool
-		Participate(func(<-chan bool)) // Launch a function in a new goroutine which MUST listen for the done signal and exit when it receives it
-		Stop()                         // Wait for the current pool to complete running jobs and returns
+		Start() error // Start the pool
+		Stop()        // Wait for the current pool to complete running jobs and returns
+	}
+
+	Func func(<-chan bool) // Async function run by the pool
+
+	// Pool context as seen by puller, groups and internal stuff.
+	PoolContext[T any] interface {
+		Queue(context.Context, ...T) // Queue one or multiple jobs to be processed
+		Logger() log.Logger          // Returns the logger used by the pool
+		Run(Func)                    // Launch a function in a new goroutine which MUST listen for the done signal and exit when it receives it
 	}
 
 	// Puller interface used to retrieve jobs to process from somewhere.
 	Puller[T any] interface {
-		OnStart(Pool[T]) // Called upon pool startup, use pool.Participate to register a goroutine
+		OnStart(PoolContext[T]) // Called upon pool startup, use PoolContext.Run to register a goroutine
 	}
 
 	// Async group of runners which can actually handle jobs.
 	Group[T any] interface {
-		OnStart(Pool[T])                // Called upon pool startup, use pool.Participate to register a goroutine
+		OnStart(PoolContext[T])         // Called upon pool startup, use PoolContext.Run to register a goroutine
 		Handle(context.Context, T) bool // Try to handle the given job, returns true if the job was handled, false otherwise
 	}
 
@@ -91,7 +97,7 @@ func (p *pool[T]) Stop() {
 
 func (p *pool[T]) Logger() log.Logger { return p.logger }
 
-func (p *pool[T]) Participate(fn func(<-chan bool)) {
+func (p *pool[T]) Run(fn Func) {
 	done := make(chan bool, 1)
 	p.done = append(p.done, done)
 

@@ -2,7 +2,6 @@ import fetcher, { type FetchOptions, type FetchService } from '$lib/fetcher';
 
 export type HealthCheckResult = {
 	version: string;
-	domain: string;
 };
 
 export interface HealthCheckService {

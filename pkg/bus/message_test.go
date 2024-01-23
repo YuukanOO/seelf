@@ -28,7 +28,8 @@ type addCommand struct {
 	B int
 }
 
-func (addCommand) Name_() string { return "AddCommand" }
+func (addCommand) Name_() string      { return "AddCommand" }
+func (addCommand) ResourceID() string { return "" }
 
 type getQuery struct {
 	bus.Query[int]

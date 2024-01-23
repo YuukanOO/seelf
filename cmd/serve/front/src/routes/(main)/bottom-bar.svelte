@@ -3,11 +3,13 @@
 	import Prose from '$components/prose.svelte';
 	import Stack from '$components/stack.svelte';
 	import l from '$lib/localization';
+
+	export let version: string;
 </script>
 
 <Prose class="bottom-bar">
 	<Stack justify="space-between" wrap="wrap">
-		<p>{l.translate('footer.description')}</p>
+		<p>{l.translate('footer.description', [version])}</p>
 		<Stack as="ul">
 			<li>
 				<Link href="https://github.com/YuukanOO/seelf/" external newWindow>

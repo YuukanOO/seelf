@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DeploymentData } from '$lib/resources/deployments';
+	import type { Deployment } from '$lib/resources/deployments';
 	import Git from '$assets/icons/git.svelte';
 	import Archive from '$assets/icons/archive.svelte';
 	import File from '$assets/icons/file.svelte';
@@ -8,7 +8,7 @@
 	import routes from '$lib/path';
 	import l from '$lib/localization';
 
-	export let data: DeploymentData;
+	export let data: Deployment;
 </script>
 
 <Stack

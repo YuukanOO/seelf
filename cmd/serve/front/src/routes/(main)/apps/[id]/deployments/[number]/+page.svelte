@@ -16,7 +16,7 @@
 	export let data;
 
 	$: isStale =
-		data.app.environments[data.deployment.environment]?.deployment_number !==
+		data.app.latest_deployments[data.deployment.environment]?.deployment_number !==
 		data.deployment.deployment_number;
 
 	$: pollNeeded = !data.deployment.state.finished_at; // Poll or not based on wether the deployment has ended
@@ -81,7 +81,7 @@
 	]}
 >
 	{#if data.app.cleanup_requested_at}
-		<CleanupNotice data={data.app} />
+		<CleanupNotice requested_at={data.app.cleanup_requested_at} />
 	{:else}
 		{#if data.deployment.environment !== 'production'}
 			<Button
@@ -112,7 +112,7 @@
 		<Console title="deployment.logs" data={$logs} />
 	{:else}
 		<BlankSlate>
-			<p>Waiting for logs...</p>
+			<p>{l.translate('deployment.waiting_for_logs')}</p>
 		</BlankSlate>
 	{/if}
 </Stack>

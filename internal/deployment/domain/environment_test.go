@@ -52,74 +52,150 @@ func Test_Environment(t *testing.T) {
 	})
 }
 
-func Test_EnvironmentsEnv(t *testing.T) {
-	t.Run("should require valid environment names", func(t *testing.T) {
-		rawEnvs := map[string]map[string]map[string]string{
-			"production":      {"app": {}},
-			"not a valid env": {"app": {}},
-		}
-
-		r, err := domain.EnvironmentsEnvFrom(rawEnvs)
-
-		testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, err)
-		testutil.DeepEquals(t, domain.EnvironmentsEnv{}, r)
-	})
-
+func Test_ServicesEnv(t *testing.T) {
 	t.Run("should builds a map from a raw one", func(t *testing.T) {
-		rawEnvs := map[string]map[string]map[string]string{
-			"production": {"app": {"DEBUG": "false"}},
-			"staging":    {"app": {"DEBUG": "true"}},
+		rawEnvs := map[string]map[string]string{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
 		}
 
-		r, err := domain.EnvironmentsEnvFrom(rawEnvs)
+		r := domain.ServicesEnvFrom(rawEnvs)
 
-		testutil.IsNil(t, err)
-		testutil.DeepEquals(t, domain.EnvironmentsEnv{
-			"production": {"app": {"DEBUG": "false"}},
-			"staging":    {"app": {"DEBUG": "true"}},
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
 		}, r)
 	})
 
-	t.Run("should be able to compare itself with another envs map", func(t *testing.T) {
+	t.Run("should returns an empty map if the raw one is nil", func(t *testing.T) {
+		r := domain.ServicesEnvFrom(nil)
+
+		testutil.DeepEquals(t, domain.ServicesEnv{}, r)
+	})
+
+	t.Run("should skip nil environment variables values", func(t *testing.T) {
+		rawEnvs := map[string]map[string]string{
+			"app": {"DEBUG": "false"},
+			"db":  nil,
+		}
+
+		r := domain.ServicesEnvFrom(rawEnvs)
+
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+		}, r)
+	})
+
+	t.Run("should implement the Valuer interface", func(t *testing.T) {
+		str, err := domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
+		}.Value()
+
+		testutil.IsNil(t, err)
+
+		testutil.Equals(t, `{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`, str)
+	})
+
+	t.Run("should implement the Scanner interface", func(t *testing.T) {
+		var r domain.ServicesEnv
+
+		err := r.Scan(`{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`)
+
+		testutil.IsNil(t, err)
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
+		}, r)
+	})
+}
+
+func Test_EnvironmentConfig(t *testing.T) {
+	t.Run("should be able to build a new environment config", func(t *testing.T) {
+		target := domain.TargetID("target")
+
+		r := domain.NewEnvironmentConfig(target)
+
+		testutil.Equals(t, target, r.Target())
+		testutil.IsFalse(t, r.Vars().HasValue())
+	})
+
+	t.Run("should be able to configure environment variables", func(t *testing.T) {
+		target := domain.TargetID("target")
+		vars := domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
+		}
+
+		r := domain.NewEnvironmentConfig(target)
+		r.HasEnvironmentVariables(vars)
+
+		testutil.Equals(t, target, r.Target())
+		testutil.IsTrue(t, r.Vars().HasValue())
+		testutil.DeepEquals(t, vars, r.Vars().MustGet())
+	})
+
+	t.Run("should be able to compare itself with another config", func(t *testing.T) {
 		tests := []struct {
-			a        domain.EnvironmentsEnv
-			b        domain.EnvironmentsEnv
+			a        func() domain.EnvironmentConfig
+			b        func() domain.EnvironmentConfig
 			expected bool
 		}{
-			{nil, nil, true},
 			{
-				a:        nil,
-				b:        domain.EnvironmentsEnv{},
-				expected: false,
-			},
-			{
-				a:        domain.EnvironmentsEnv{"production": {}},
-				b:        domain.EnvironmentsEnv{"production": {}},
+				a:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
+				b:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
 				expected: true,
 			},
 			{
-				a:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
-				b:        domain.EnvironmentsEnv{"production": {}},
+				a:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
+				b:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("2") },
 				expected: false,
 			},
 			{
-				a:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
-				b:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
+				a: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
+				b: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
 				expected: true,
 			},
 			{
-				a:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
-				b:        domain.EnvironmentsEnv{"production": {"another": {"level": "nope"}}},
+				a: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
+				b:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
+				expected: false,
+			},
+			{
+				a: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
+				b: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}})
+					return conf
+				},
 				expected: false,
 			},
 		}
 
 		for _, test := range tests {
-			t.Run(fmt.Sprintf("%v %v", test.a, test.b), func(t *testing.T) {
-				r := test.a.Equals(test.b)
+			a := test.a()
+			b := test.b()
+			t.Run(fmt.Sprintf("%v %v", a, b), func(t *testing.T) {
+				r := a.Equals(b)
 				testutil.Equals(t, test.expected, r)
 
-				r = test.b.Equals(test.a)
+				r = b.Equals(a)
 				testutil.Equals(t, test.expected, r)
 			})
 		}

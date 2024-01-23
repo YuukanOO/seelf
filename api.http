@@ -32,23 +32,68 @@ Content-Type: application/json
 }
 
 ###
+
+GET {{url}}/targets
+
+###
+# @name createTarget
+
+POST {{url}}/targets
+Content-Type: application/json
+
+{
+    "name": "local docker",
+    "url": "http://docker.localhost",
+    "docker": {
+        
+    }
+}
+
+###
+
+PATCH {{url}}/targets/{{createTarget.response.body.$.id}}
+Content-Type: application/json
+
+{
+    "name": "docker outside",
+    "url": "http://docker.localhost",
+    "docker": {}
+}
+
+###
+
+POST {{url}}/targets/{{createTarget.response.body.$.id}}/reconfigure
+
+###
+
+GET {{url}}/targets/{{createTarget.response.body.$.id}}
+
+###
+
+DELETE {{url}}/targets/{{createTarget.response.body.$.id}}
+
+###
 # @name createApp
 
 POST {{url}}/apps
 Content-Type: application/json
 
 {
-    "name": "go-api",
-    "vcs": {
+    "name": "sandbox",
+    "version_control": {
         "url": "https://git.voixdu.net/jleicher/go-api-example.git"
     },
-    "env": {
-        "production": {
+    "production": {
+        "target": "{{createTarget.response.body.$.id}}",
+        "vars": {
             "app": {
                 "DEBUG": "false"
             }
-        },
-        "staging": {
+        }
+    },
+    "staging": {
+        "target": "{{createTarget.response.body.$.id}}",
+        "vars": {
             "app": {
                 "DEBUG": "true"
             }
@@ -70,10 +115,15 @@ PATCH {{url}}/apps/{{createApp.response.body.$.id}}
 Content-Type: application/json
 
 {
-    "vcs": {
+    "version_control": {
         "url": "https://git.voixdu.net/jleicher/go-api-example.git"
     },
-    "env": {}
+    "production": {
+        "target": "{{createTarget.response.body.$.id}}"
+    },
+    "staging": {
+        "target": "{{createTarget.response.body.$.id}}"
+    }
 }
 
 ###
@@ -131,3 +181,7 @@ GET {{url}}/apps/{{queueDeployment.response.body.$.app_id}}/deployments/{{queueD
 ###
 
 DELETE {{url}}/apps/{{createApp.response.body.$.id}}
+
+###
+
+GET {{url}}/jobs

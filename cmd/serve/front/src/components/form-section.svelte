@@ -3,9 +3,6 @@
 	import l, { type AppTranslationsString } from '$lib/localization';
 
 	export let title: AppTranslationsString;
-
-	/** Render the section title but does not wrap the inner slot in a specific container style */
-	export let transparent: boolean = false;
 </script>
 
 <fieldset class="section">
@@ -17,7 +14,7 @@
 			</Stack>
 		{/if}
 	</Stack>
-	<div class="content" class:transparent>
+	<div class="content">
 		<slot />
 	</div>
 </fieldset>
@@ -37,11 +34,6 @@
 		border-radius: var(--ra-4);
 		padding: var(--sp-4);
 		margin-block-start: var(--sp-2);
-	}
-
-	.content.transparent {
-		background-color: transparent;
-		padding: 0;
 	}
 
 	@media screen and (min-width: 56rem) {

@@ -65,6 +65,12 @@ github.com/ProtonMail/go-crypto v0.0.0-20230923063757-afb1ddc0824c/go.mod h1:EjA
 github.com/Shopify/logrus-bugsnag v0.0.0-20170309145241-6dbc35f2c30d/go.mod h1:HI8ITrYtUY+O+ZhtlqUnD8+KwNPOyugEhfP9fdUIaEQ=
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d h1:UrqY+r/OJnIp5u0s1SbQ8dVfLCZJsnvazdBP5hS4iRs=
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d/go.mod h1:HI8ITrYtUY+O+ZhtlqUnD8+KwNPOyugEhfP9fdUIaEQ=
+github.com/YuukanOO/ssh_config v0.0.0-20240311151048-0bc1d29af7b9 h1:bGYWIrzxjlxxGF93tvJGq57czjSNDrVWyEHkdx00upo=
+github.com/YuukanOO/ssh_config v0.0.0-20240311151048-0bc1d29af7b9/go.mod h1:msAJaW3sr/cWfHgGEjPFQQwKFt0VLNCGOB7pgK3PwXI=
+github.com/YuukanOO/ssh_config v0.0.0-20240313114639-85ccad9f96c9 h1:rGrL37Xmp5VaRsjpQkkY7FZZFCFV+UyuMI8oEkqP/dA=
+github.com/YuukanOO/ssh_config v0.0.0-20240313114639-85ccad9f96c9/go.mod h1:msAJaW3sr/cWfHgGEjPFQQwKFt0VLNCGOB7pgK3PwXI=
+github.com/YuukanOO/ssh_config v0.0.0-20240313135817-9af26488786c h1:BQGBJfB/qFGPaCJOFmz+BHL1miQrZP+lgSonwdlLTsc=
+github.com/YuukanOO/ssh_config v0.0.0-20240313135817-9af26488786c/go.mod h1:msAJaW3sr/cWfHgGEjPFQQwKFt0VLNCGOB7pgK3PwXI=
 github.com/acomagu/bufpipe v1.0.4 h1:e3H4WUzM3npvo5uv95QuJM3cQspFNtFBzvJ2oNjKIDQ=
 github.com/acomagu/bufpipe v1.0.4/go.mod h1:mxdxdup/WdsKVreO5GpW4+M/1CE2sMG4jeGJ2sYmHc4=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

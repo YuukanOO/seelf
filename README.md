@@ -4,9 +4,6 @@
 
 I mean, for real!
 
-> [!IMPORTANT]
-> [v2 is right around the corner](https://github.com/YuukanOO/seelf/milestone/2) and will include **remote docker deployments** and **better documentation**, release expected around **April 2024**!
-
 https://github.com/YuukanOO/seelf/assets/939842/d234bf40-1927-4057-a62b-8357c935506b
 
 > [!NOTE]
@@ -21,7 +18,8 @@ Got an already working docker compose file for your project ? Just send it to yo
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/)
+- [Docker >= v18.0.9](https://docs.docker.com/get-docker/)
+- SSH (for remote targets)
 - A DNS correctly configured (with a wildcard redirecting to where seelf is hosted)
 
 ## Quick start

@@ -10,11 +10,11 @@
 <ProgressBar visible={$navigating != null} />
 
 <div class="container">
-	<Topbar user={data.user} version={data.health.version} />
-	<div class="content">
+	<Topbar user={data.user} />
+	<main class="content">
 		<slot />
-	</div>
-	<BottomBar />
+	</main>
+	<BottomBar version={data.health.version} />
 </div>
 
 <style module>

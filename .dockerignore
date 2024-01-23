@@ -1,5 +1,7 @@
 examples
 Dockerfile
 docker-compose.yml
+docs
+node_modules
 **/Dockerfile
 **/node_modules

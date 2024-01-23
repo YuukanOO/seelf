@@ -2,107 +2,144 @@ package cleanup_app_test
 
 import (
 	"context"
-	"os"
 	"testing"
+	"time"
 
-	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 type initialData struct {
-	existingApps        []*domain.App
-	existingDeployments []*domain.Deployment
+	deployments []*domain.Deployment
+	targets     []*domain.Target
 }
 
 func Test_CleanupApp(t *testing.T) {
 	ctx := context.Background()
-	logger, _ := log.NewLogger()
 
-	sut := func(initialData initialData) bus.RequestHandler[bus.UnitType, cleanup_app.Command] {
-		opts := config.Default(config.WithTestDefaults())
-		appsStore := memory.NewAppsStore(initialData.existingApps...)
-		deploymentsStore := memory.NewDeploymentsStore(initialData.existingDeployments...)
-		artifactManager := artifact.NewLocal(opts, logger)
-
-		t.Cleanup(func() {
-			os.RemoveAll(opts.DataDir())
-		})
-
-		return cleanup_app.Handler(deploymentsStore, appsStore, appsStore, artifactManager, &dummyBackend{})
+	sut := func(data initialData) (bus.RequestHandler[bus.UnitType, cleanup_app.Command], *dummyProvider) {
+		targetsStore := memory.NewTargetsStore(data.targets...)
+		deploymentsStore := memory.NewDeploymentsStore(data.deployments...)
+		provider := &dummyProvider{}
+		return cleanup_app.Handler(targetsStore, deploymentsStore, provider), provider
 	}
 
-	t.Run("should returns no error if the application does not exist", func(t *testing.T) {
-		uc := sut(initialData{})
+	t.Run("should fail silently if the target does not exist anymore", func(t *testing.T) {
+		uc, provider := sut(initialData{})
 
-		r, err := uc(ctx, cleanup_app.Command{
-			ID: "some-id",
-		})
+		r, err := uc(ctx, cleanup_app.Command{})
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
+		testutil.IsFalse(t, provider.called)
 	})
 
-	t.Run("should fail if the application cleanup as not been requested", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
-		uc := sut(initialData{
-			existingApps: []*domain.App{&a},
+	t.Run("should fail if the target is configuring", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "uid"))
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))
+		deployment := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
+		deployment.HasStarted()
+		deployment.HasEnded(domain.Services{}, nil)
+
+		uc, provider := sut(initialData{
+			targets:     []*domain.Target{&target},
+			deployments: []*domain.Deployment{&deployment},
 		})
 
-		r, err := uc(ctx, cleanup_app.Command{
-			ID: string(a.ID()),
+		_, err := uc(ctx, cleanup_app.Command{
+			TargetID:    string(target.ID()),
+			AppID:       string(app.ID()),
+			Environment: string(domain.Production),
+			From:        deployment.Requested().At().Add(-1 * time.Hour),
+			To:          deployment.Requested().At().Add(1 * time.Hour),
 		})
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
-		testutil.Equals(t, bus.Unit, r)
+		testutil.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
+		testutil.IsFalse(t, provider.called)
 	})
 
-	t.Run("should fail if there are still pending or running deployments", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
-		depl, _ := a.NewDeployment(1, raw.Data(""), domain.Production, "uid")
-		a.RequestCleanup("uid")
+	t.Run("should succeed if the target is being deleted", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "uid"))
+		target.Configured(target.CurrentVersion(), nil)
+		target.RequestCleanup(false, "uid")
 
-		uc := sut(initialData{
-			existingApps:        []*domain.App{&a},
-			existingDeployments: []*domain.Deployment{&depl},
+		uc, provider := sut(initialData{
+			targets: []*domain.Target{&target},
 		})
 
-		r, err := uc(ctx, cleanup_app.Command{
-			ID: string(a.ID()),
-		})
-
-		testutil.ErrorIs(t, domain.ErrAppHasRunningOrPendingDeployments, err)
-		testutil.Equals(t, bus.Unit, r)
-	})
-
-	t.Run("should succeed if everything is good", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
-		a.RequestCleanup("uid")
-
-		uc := sut(initialData{
-			existingApps: []*domain.App{&a},
-		})
-
-		r, err := uc(ctx, cleanup_app.Command{
-			ID: string(a.ID()),
+		_, err := uc(ctx, cleanup_app.Command{
+			TargetID: string(target.ID()),
 		})
 
 		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
-		testutil.EventIs[domain.AppDeleted](t, &a, 2)
+		testutil.IsFalse(t, provider.called)
+	})
+
+	t.Run("should succeed if no successful deployments has been made", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "uid"))
+		target.Configured(target.CurrentVersion(), nil)
+
+		uc, provider := sut(initialData{
+			targets: []*domain.Target{&target},
+		})
+
+		_, err := uc(ctx, cleanup_app.Command{
+			TargetID: string(target.ID()),
+		})
+
+		testutil.IsNil(t, err)
+		testutil.IsFalse(t, provider.called)
+	})
+
+	t.Run("should succeed if the target is ready and successful deployments have been made", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "uid"))
+		target.Configured(target.CurrentVersion(), nil)
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))
+		deployment := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
+		deployment.HasStarted()
+		deployment.HasEnded(domain.Services{}, nil)
+
+		uc, provider := sut(initialData{
+			targets:     []*domain.Target{&target},
+			deployments: []*domain.Deployment{&deployment},
+		})
+
+		_, err := uc(ctx, cleanup_app.Command{
+			TargetID:    string(target.ID()),
+			AppID:       string(app.ID()),
+			Environment: string(domain.Production),
+			From:        deployment.Requested().At().Add(-1 * time.Hour),
+			To:          deployment.Requested().At().Add(1 * time.Hour),
+		})
+
+		testutil.IsNil(t, err)
+		testutil.IsTrue(t, provider.called)
 	})
 }
 
-type dummyBackend struct {
-	domain.Backend
+type dummyProvider struct {
+	domain.Provider
+	called bool
 }
 
-func (d *dummyBackend) Cleanup(ctx context.Context, app domain.App) error {
+func (d *dummyProvider) Cleanup(_ context.Context, _ domain.AppID, _ domain.Target, _ domain.Environment, s domain.CleanupStrategy) error {
+	d.called = s != domain.CleanupStrategySkip
 	return nil
 }

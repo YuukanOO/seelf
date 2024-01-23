@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
@@ -85,5 +86,32 @@ func Test_Url(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, "http://something.com", url.String())
+	})
+
+	t.Run("should retrieve the user part of an url if any", func(t *testing.T) {
+		url := must.Panic(domain.UrlFrom("http://seelf@docker.localhost"))
+
+		testutil.IsTrue(t, url.User().HasValue())
+		testutil.Equals(t, "seelf", url.User().MustGet())
+
+		url = must.Panic(domain.UrlFrom("http://docker.localhost"))
+
+		testutil.IsFalse(t, url.User().HasValue())
+	})
+
+	t.Run("should be able to remove the user part of an url", func(t *testing.T) {
+		url := must.Panic(domain.UrlFrom("http://seelf@docker.localhost"))
+
+		testutil.Equals(t, "http://docker.localhost", url.WithoutUser().String())
+
+		url = must.Panic(domain.UrlFrom("http://docker.localhost"))
+
+		testutil.Equals(t, "http://docker.localhost", url.WithoutUser().String())
+	})
+
+	t.Run("should be able to remove path and query from an url", func(t *testing.T) {
+		url := must.Panic(domain.UrlFrom("http://docker.localhost/some/path?query=value"))
+
+		testutil.Equals(t, "http://docker.localhost", url.Root().String())
 	})
 }

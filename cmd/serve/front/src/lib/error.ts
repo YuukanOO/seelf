@@ -5,9 +5,7 @@ export type AppError<TDetail> = {
 };
 
 /** Error detail for form validation */
-export type ValidationDetail = {
-	fields: Record<string, AppError<unknown>>;
-};
+export type ValidationDetail = Record<string, AppError<unknown>>;
 
 /** Validation error after a form submission */
 export class BadRequestError extends Error {
@@ -16,8 +14,8 @@ export class BadRequestError extends Error {
 
 	public constructor(data: AppError<ValidationDetail>) {
 		super(data.code);
-		this.isValidationError = !!data.detail?.fields;
-		this.fields = Object.entries(data.detail?.fields ?? {}).reduce(
+		this.isValidationError = data.code === 'validation_failed';
+		this.fields = Object.entries(data.detail ?? {}).reduce(
 			(result, [name, err]) => ({
 				...result,
 				[name]: err.code

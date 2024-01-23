@@ -25,6 +25,7 @@ export type SourceDataDiscriminator = SourceData['discriminator'];
 export type Service = {
 	name: string;
 	image: string;
+	subdomain?: string;
 	url?: string;
 };
 
@@ -38,17 +39,24 @@ export type StateData = {
 
 export type Environment = 'production' | 'staging';
 
-export type DeploymentData = {
+export type TargetSummary = {
+	id: string;
+	name?: string;
+	url?: string;
+};
+
+export type Deployment = {
 	app_id: string;
 	deployment_number: number;
 	environment: Environment;
+	target: TargetSummary;
 	source: SourceData;
 	state: StateData;
 	requested_at: string;
 	requested_by: ByUserData;
 };
 
-export type QueueDeploymentData =
+export type QueueDeployment =
 	| FormData
 	| ({
 			environment: Environment;
@@ -60,20 +68,13 @@ export type QueryDeploymentsFilters = {
 };
 
 export interface DeploymentsService {
-	queue(appid: string, data: QueueDeploymentData): Promise<DeploymentData>;
-	redeploy(appid: string, number: number): Promise<DeploymentData>;
-	promote(appid: string, number: number): Promise<DeploymentData>;
-	queryAllByApp(
-		id: string,
-		filters?: QueryDeploymentsFilters
-	): QueryResult<Paginated<DeploymentData>>;
+	queue(appid: string, data: QueueDeployment): Promise<Deployment>;
+	redeploy(appid: string, number: number): Promise<Deployment>;
+	promote(appid: string, number: number): Promise<Deployment>;
+	queryAllByApp(id: string, filters?: QueryDeploymentsFilters): QueryResult<Paginated<Deployment>>;
 	queryLogs(appid: string, number: number, poll?: boolean): QueryResult<string>;
-	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<DeploymentData>;
-	fetchByAppAndNumber(
-		appid: string,
-		number: number,
-		options?: FetchOptions
-	): Promise<DeploymentData>;
+	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<Deployment>;
+	fetchByAppAndNumber(appid: string, number: number, options?: FetchOptions): Promise<Deployment>;
 }
 
 type Options = {
@@ -84,11 +85,7 @@ type Options = {
 class RemoteDeploymentsService implements DeploymentsService {
 	constructor(private readonly _fetcher: FetchService, private readonly _options: Options) {}
 
-	fetchByAppAndNumber(
-		appid: string,
-		number: number,
-		options?: FetchOptions
-	): Promise<DeploymentData> {
+	fetchByAppAndNumber(appid: string, number: number, options?: FetchOptions): Promise<Deployment> {
 		return this._fetcher.get(`/api/v1/apps/${appid}/deployments/${number}`, options);
 	}
 
@@ -99,34 +96,31 @@ class RemoteDeploymentsService implements DeploymentsService {
 		});
 	}
 
-	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<DeploymentData> {
+	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<Deployment> {
 		return this._fetcher.query(`/api/v1/apps/${appid}/deployments/${number}`, {
 			refreshInterval: poll ? this._options.runningDeploymentsPollingInterval : undefined
 		});
 	}
 
-	queue(appid: string, data: QueueDeploymentData): Promise<DeploymentData> {
+	queue(appid: string, data: QueueDeployment): Promise<Deployment> {
 		return this._fetcher.post(`/api/v1/apps/${appid}/deployments`, data, {
 			invalidate: [`/api/v1/apps/${appid}`, '/api/v1/apps']
 		});
 	}
 
-	redeploy(appid: string, number: number): Promise<DeploymentData> {
+	redeploy(appid: string, number: number): Promise<Deployment> {
 		return this._fetcher.post(`/api/v1/apps/${appid}/deployments/${number}/redeploy`, undefined, {
 			invalidate: [`/api/v1/apps/${appid}`, `/api/v1/apps/${appid}/deployments`, '/api/v1/apps']
 		});
 	}
 
-	promote(appid: string, number: number): Promise<DeploymentData> {
+	promote(appid: string, number: number): Promise<Deployment> {
 		return this._fetcher.post(`/api/v1/apps/${appid}/deployments/${number}/promote`, undefined, {
 			invalidate: [`/api/v1/apps/${appid}`, `/api/v1/apps/${appid}/deployments`, '/api/v1/apps']
 		});
 	}
 
-	queryAllByApp(
-		id: string,
-		filters?: QueryDeploymentsFilters
-	): QueryResult<Paginated<DeploymentData>> {
+	queryAllByApp(id: string, filters?: QueryDeploymentsFilters): QueryResult<Paginated<Deployment>> {
 		return this._fetcher.query(`/api/v1/apps/${id}/deployments`, {
 			params: filters
 		});

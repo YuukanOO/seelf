@@ -7,8 +7,13 @@
 	import TextArea from '$components/text-area.svelte';
 	import l from '$lib/localization';
 
-	export let title: string;
 	export let values: ServiceVariables[] = [];
+	export let latestServiceNames: Maybe<string[]> = undefined;
+
+	let className: string = '';
+
+	/** Additional css classes */
+	export { className as class };
 
 	function add() {
 		values = [...values, { name: '', values: '' }];
@@ -19,24 +24,28 @@
 	}
 </script>
 
-<Stack direction="column">
+<Stack direction="column" class={className}>
 	<Stack justify="space-between">
-		<h3 class="title">{title}</h3>
-		<Button on:click={add} text="app.environments.service.add" />
+		<h3 class="title">{l.translate('app.environment.vars')}</h3>
+		<Button on:click={add} text="app.environment.vars.service.add" />
 	</Stack>
 	{#if values.length === 0}
 		<BlankSlate>
-			<p>{@html l.translate('app.environments.blankslate', [title])}</p>
+			<p>{@html l.translate('app.environment.vars.blankslate')}</p>
 		</BlankSlate>
 	{:else}
-		{#each values as value, i}
+		{#each values as value, i (i)}
 			<Stack class="container" direction="column">
 				<Stack class="service" wrap="wrap" align="flex-start">
-					<TextInput label="app.environments.service.name" bind:value={value.name} required />
+					<TextInput label="app.environment.vars.service.name" bind:value={value.name} required>
+						<p>
+							{@html l.translate('app.environment.vars.service.name.help', [latestServiceNames])}
+						</p>
+					</TextInput>
 					<TextArea
 						rows={5}
 						code
-						label="app.environments.service.env"
+						label="app.environment.vars.service.env"
 						placeholder="KEY=value
 SOME=value"
 						bind:value={value.values}
@@ -46,7 +55,7 @@ SOME=value"
 					<Button
 						variant="outlined"
 						on:click={() => remove(i)}
-						text="app.environments.service.delete"
+						text="app.environment.vars.service.delete"
 					/>
 				</Stack>
 			</Stack>

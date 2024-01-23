@@ -81,11 +81,9 @@ func (s *server) getAppByIDHandler() gin.HandlerFunc {
 
 func (s *server) requestAppCleanupHandler() gin.HandlerFunc {
 	return http.Send(s, func(ctx *gin.Context) error {
-		cmd := request_app_cleanup.Command{
+		if _, err := bus.Send(s.bus, ctx.Request.Context(), request_app_cleanup.Command{
 			ID: ctx.Param("id"),
-		}
-
-		if _, err := bus.Send(s.bus, ctx.Request.Context(), cmd); err != nil {
+		}); err != nil {
 			return err
 		}
 

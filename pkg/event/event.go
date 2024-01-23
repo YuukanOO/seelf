@@ -1,6 +1,8 @@
 package event
 
-import "github.com/YuukanOO/seelf/pkg/bus"
+import (
+	"github.com/YuukanOO/seelf/pkg/bus"
+)
 
 type (
 	// Event triggered by main aggregates.
@@ -14,6 +16,7 @@ type (
 	Source interface {
 		storeEvents(...Event)
 		pendingEvents() []Event
+		replaceEvent(Event)
 		// clearEvents()
 	}
 
@@ -39,6 +42,12 @@ func Unwrap(s Source) []Event {
 	return s.pendingEvents()
 }
 
+// If there is already an event of the same type in the source, replace it with the
+// given one, else, just append it.
+func Replace(s Source, event Event) {
+	s.replaceEvent(event)
+}
+
 // // Remove all events from the given source. This is needed to mark them has already
 // // processed by the system.
 // func Clear(s Source) {
@@ -51,6 +60,21 @@ func (e *Emitter) storeEvents(events ...Event) {
 
 func (e *Emitter) pendingEvents() []Event {
 	return e.events
+}
+
+func (e *Emitter) replaceEvent(event Event) {
+	name := event.Name_()
+	evts := e.events[:0] // As the wiki says https://go.dev/wiki/SliceTricks#filtering-without-allocating
+	for i, evt := range e.events {
+		if evt.Name_() == name {
+			e.events[i] = nil
+			continue
+		}
+
+		evts = append(evts, evt)
+	}
+
+	e.events = append(evts, event)
 }
 
 // func (e *Emitter) clearEvents() {

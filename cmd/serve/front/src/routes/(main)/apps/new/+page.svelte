@@ -3,16 +3,16 @@
 	import Breadcrumb from '$components/breadcrumb.svelte';
 	import Button from '$components/button.svelte';
 	import routes from '$lib/path';
-	import service, { type CreateAppData } from '$lib/resources/apps';
+	import service, { type CreateApp } from '$lib/resources/apps';
 	import AppForm from '../app-form.svelte';
 	import l from '$lib/localization';
 
 	export let data;
 
-	const submit = (data: CreateAppData) => service.create(data).then((a) => goto(routes.app(a.id)));
+	const submit = (data: CreateApp) => service.create(data).then((a) => goto(routes.app(a.id)));
 </script>
 
-<AppForm handler={submit} domain={data.health.domain}>
+<AppForm handler={submit} targets={data.targets}>
 	<Breadcrumb
 		slot="default"
 		let:submitting

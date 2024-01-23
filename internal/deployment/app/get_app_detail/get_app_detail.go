@@ -1,6 +1,9 @@
 package get_app_detail
 
 import (
+	"time"
+
+	"github.com/YuukanOO/seelf/internal/deployment/app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_apps"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -16,21 +19,33 @@ type (
 	}
 
 	App struct {
-		get_apps.App
-		Env monad.Maybe[Env]       `json:"env"`
-		VCS monad.Maybe[VCSConfig] `json:"vcs"`
+		ID                 string                       `json:"id"`
+		Name               string                       `json:"name"`
+		CleanupRequestedAt monad.Maybe[time.Time]       `json:"cleanup_requested_at"`
+		CleanupRequestedBy monad.Maybe[app.UserSummary] `json:"cleanup_requested_by"`
+		CreatedAt          time.Time                    `json:"created_at"`
+		CreatedBy          app.UserSummary              `json:"created_by"`
+		LatestDeployments  get_apps.LatestDeployments   `json:"latest_deployments"`
+		Production         EnvironmentConfig            `json:"production"`
+		Staging            EnvironmentConfig            `json:"staging"`
+		VersionControl     monad.Maybe[VersionControl]  `json:"version_control"`
 	}
 
-	VCSConfig struct {
+	VersionControl struct {
 		Url   string                            `json:"url"`
 		Token monad.Maybe[storage.SecretString] `json:"token"`
 	}
 
-	Env map[string]map[string]map[string]string
+	EnvironmentConfig struct {
+		Target app.TargetSummary        `json:"target"`
+		Vars   monad.Maybe[ServicesEnv] `json:"vars"`
+	}
+
+	ServicesEnv map[string]map[string]string
 )
 
 func (Query) Name_() string { return "deployment.query.get_app_detail" }
 
-func (e *Env) Scan(value any) error {
+func (e *ServicesEnv) Scan(value any) error {
 	return storage.ScanJSON(value, e)
 }

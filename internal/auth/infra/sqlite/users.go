@@ -5,7 +5,6 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
-	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
 )
@@ -31,12 +30,22 @@ func (s *usersStore) GetUsersCount(ctx context.Context) (uint, error) {
 		Extract(s.db, ctx)
 }
 
-func (s *usersStore) IsEmailUnique(ctx context.Context, email domain.Email) (domain.UniqueEmail, error) {
-	return s.getUniqueEmail(ctx, email, monad.None[domain.UserID]())
-}
+func (s *usersStore) GetEmailAvailability(ctx context.Context, email domain.Email, excluded ...domain.UserID) (domain.EmailAvailability, error) {
+	count, err := builder.
+		Query[uint](`
+		SELECT
+			COUNT(email)
+		FROM users
+		WHERE
+			email = ?`, email).
+		S(builder.Array("AND id NOT IN", excluded)).
+		Extract(s.db, ctx)
 
-func (s *usersStore) IsEmailUniqueForUser(ctx context.Context, id domain.UserID, email domain.Email) (domain.UniqueEmail, error) {
-	return s.getUniqueEmail(ctx, email, monad.Value(id))
+	if err != nil {
+		return false, err
+	}
+
+	return count == 0, nil
 }
 
 func (s *usersStore) GetByID(ctx context.Context, id domain.UserID) (u domain.User, err error) {
@@ -104,21 +113,4 @@ func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
 			return nil
 		}
 	})
-}
-
-func (s *usersStore) getUniqueEmail(ctx context.Context, email domain.Email, uid monad.Maybe[domain.UserID]) (domain.UniqueEmail, error) {
-	count, err := builder.
-		Query[uint]("SELECT COUNT(email) FROM users WHERE email = ?", email).
-		S(builder.MaybeValue(uid, "AND id != ?")).
-		Extract(s.db, ctx)
-
-	if err != nil {
-		return "", err
-	}
-
-	if count > 0 {
-		return "", domain.ErrEmailAlreadyTaken
-	}
-
-	return domain.UniqueEmail(email), nil
 }

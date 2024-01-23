@@ -47,13 +47,15 @@ func Handler(
 		}
 
 		if cmd.Email.HasValue() {
-			uniqueEmail, err := reader.IsEmailUniqueForUser(ctx, user.ID(), email)
+			availability, err := reader.GetEmailAvailability(ctx, email, user.ID())
 
 			if err != nil {
 				return "", err
 			}
 
-			user.HasEmail(uniqueEmail)
+			if err = user.HasEmail(email, availability); err != nil {
+				return "", validation.WrapIfAppErr(err, "email")
+			}
 		}
 
 		if newPassword, isSet := cmd.Password.TryGet(); isSet {

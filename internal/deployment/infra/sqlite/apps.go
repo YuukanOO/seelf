@@ -2,9 +2,11 @@ package sqlite
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
 )
@@ -18,26 +20,114 @@ type (
 	appsStore struct {
 		db *sqlite.Database
 	}
+
+	appNameUniquenessResult struct {
+		productionCount  uint
+		productionTarget bool
+		stagingCount     uint
+		stagingTarget    bool
+	}
+
+	appNameUniquenessOnTargetEnvironmentResult struct {
+		count  uint
+		target bool
+	}
 )
 
 func NewAppsStore(db *sqlite.Database) AppsStore {
 	return &appsStore{db}
 }
 
-func (s *appsStore) IsNameUnique(ctx context.Context, name domain.AppName) (domain.UniqueAppName, error) {
-	count, err := builder.
-		Query[uint]("SELECT COUNT(name) FROM apps WHERE name = ?", name).
-		Extract(s.db, ctx)
+func (s *appsStore) GetAppNamingAvailability(
+	ctx context.Context,
+	name domain.AppName,
+	production domain.TargetID,
+	staging domain.TargetID,
+) (domain.AppNamingAvailability, error) {
+	var availability domain.AppNamingAvailability
+
+	r, err := builder.
+		Query[appNameUniquenessResult](`
+		SELECT
+			COUNT(CASE WHEN apps.production_target = ? THEN 1 END) AS production_count
+			,MAX(CASE WHEN targets.id = ? THEN true ELSE false END) AS production_target_exists
+			,COUNT(CASE WHEN apps.staging_target = ? THEN 1 END) AS staging_count
+			,MAX(CASE WHEN targets.id = ? THEN true ELSE false END) AS staging_target_exists
+		FROM
+			targets
+		LEFT JOIN apps ON apps.production_target = targets.id OR apps.staging_target = targets.id
+		WHERE 
+			targets.id IN (?, ?)
+			AND (apps.name = ? OR apps.name IS NULL)
+		`, production, production, staging, staging, production, staging, name).
+		One(s.db, ctx, appNameUniquenessResultMapper)
 
 	if err != nil {
-		return "", err
+		return availability, err
 	}
 
-	if count > 0 {
-		return "", domain.ErrAppNameAlreadyTaken
+	if !r.productionTarget {
+		availability = availability | domain.AppNamingProductionTargetNotFound
 	}
 
-	return domain.UniqueAppName(name), nil
+	if !r.stagingTarget {
+		availability = availability | domain.AppNamingStagingTargetNotFound
+	}
+
+	if r.productionCount > 0 {
+		availability = availability | domain.AppNamingTakenInProduction
+	}
+
+	if r.stagingCount > 0 {
+		availability = availability | domain.AppNamingTakenInStaging
+	}
+
+	if availability != 0 {
+		return availability, nil
+	}
+
+	return domain.AppNamingAvailable, nil
+}
+
+func (s *appsStore) GetTargetAppNamingAvailability(
+	ctx context.Context,
+	id domain.AppID,
+	env domain.Environment,
+	target domain.TargetID,
+) (domain.TargetAppNamingAvailability, error) {
+	var availability domain.TargetAppNamingAvailability
+
+	r, err := builder.
+		Query[appNameUniquenessOnTargetEnvironmentResult](fmt.Sprintf(`
+		SELECT
+			COUNT(apps.id) AS count
+			,MAX(CASE WHEN targets.id = ? THEN true ELSE false END) AS exists
+		FROM
+			targets
+		LEFT JOIN apps ON apps.%s_target = targets.id
+		WHERE
+			targets.id = ?
+			AND apps.name = (SELECT name FROM apps WHERE apps.id = ?)
+			AND apps.id != ?`, env), target, target, id, id).
+		One(s.db, ctx, appNameUniquenessOnTargetEnvironmentResultMapper)
+
+	if err != nil {
+		return availability, err
+	}
+
+	if !r.target {
+		availability = availability | domain.TargetAppNamingTargetNotFound
+	}
+
+	if r.count > 0 {
+		availability = availability | domain.TargetAppNamingTaken
+	}
+
+	if availability != 0 {
+		return availability, nil
+	}
+
+	return domain.TargetAppNamingAvailable, nil
 }
 
 func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, error) {
@@ -48,7 +138,10 @@ func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, e
 				,name
 				,vcs_url
 				,vcs_token
-				,env
+				,production_target
+				,production_vars
+				,staging_target
+				,staging_vars
 				,cleanup_requested_at
 				,cleanup_requested_by
 				,created_at
@@ -64,23 +157,23 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 		case domain.AppCreated:
 			return builder.
 				Insert("apps", builder.Values{
-					"id":         evt.ID,
-					"name":       evt.Name,
-					"created_at": evt.Created.At(),
-					"created_by": evt.Created.By(),
+					"id":                evt.ID,
+					"name":              evt.Name,
+					"production_target": evt.Production.Target(),
+					"production_vars":   evt.Production.Vars(),
+					"staging_target":    evt.Staging.Target(),
+					"staging_vars":      evt.Staging.Vars(),
+					"created_at":        evt.Created.At(),
+					"created_by":        evt.Created.By(),
 				}).
 				Exec(s.db, ctx)
 		case domain.AppEnvChanged:
+			// This is safe to interpolate the column name here since events are raised by our
+			// own code.
 			return builder.
 				Update("apps", builder.Values{
-					"env": evt.Env,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.AppEnvRemoved:
-			return builder.
-				Update("apps", builder.Values{
-					"env": nil,
+					fmt.Sprintf("%s_target", evt.Environment): evt.Config.Target(),
+					fmt.Sprintf("%s_vars", evt.Environment):   evt.Config.Vars(),
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
@@ -116,4 +209,21 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 			return nil
 		}
 	})
+}
+
+func appNameUniquenessResultMapper(s storage.Scanner) (r appNameUniquenessResult, err error) {
+	err = s.Scan(
+		&r.productionCount,
+		&r.productionTarget,
+		&r.stagingCount,
+		&r.stagingTarget,
+	)
+
+	return r, err
+}
+
+func appNameUniquenessOnTargetEnvironmentResultMapper(s storage.Scanner) (r appNameUniquenessOnTargetEnvironmentResult, err error) {
+	err = s.Scan(&r.count, &r.target)
+
+	return r, err
 }

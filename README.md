@@ -12,7 +12,7 @@ _The seelf initial public version has some limitation (only local Docker engine,
 
 Got an already working docker compose file for your project ? Just send it to your [seelf](https://github.com/YuukanOO/seelf) instance and _boom_, that's live on your own infrastructure with all services correctly deployed and exposed on nice urls as needed! See [the documentation](DOCUMENTATION.md) for more information.
 
-_Althought Docker is the only backend supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example._
+_Althought Docker is the only provider supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example._
 
 ## Prerequisites
 

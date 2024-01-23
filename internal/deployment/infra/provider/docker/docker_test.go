@@ -12,9 +12,10 @@ import (
 	"github.com/YuukanOO/seelf/cmd/config"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/compose-spec/compose-go/types"
 	"github.com/docker/cli/cli/command"
@@ -34,7 +35,7 @@ func Test_Run(t *testing.T) {
 	composeMock := &composeMockService{}
 	dockerMock := newDockerMockService()
 
-	backend := func(opts options) (*docker.Docker, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
+	sut := func(opts options) (*docker.Docker, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
 		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
@@ -46,9 +47,9 @@ func Test_Run(t *testing.T) {
 
 	t.Run("should setup the balancer correctly without SSL", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
-		dockerBackend, _, composeMock, _ := backend(opts)
+		provider, _, composeMock, _ := sut(opts)
 
-		err := dockerBackend.Setup()
+		err := provider.Setup()
 
 		testutil.IsNil(t, err)
 		project := composeMock.project
@@ -79,9 +80,9 @@ func Test_Run(t *testing.T) {
 			config.WithTestDefaults(),
 			config.WithBalancer("https://docker.localhost", "someone@example.com"),
 		)
-		dockerBackend, _, composeMock, _ := backend(opts)
+		provider, _, composeMock, _ := sut(opts)
 
-		err := dockerBackend.Setup()
+		err := provider.Setup()
 		testutil.IsNil(t, err)
 		project := composeMock.project
 		testutil.IsNotNil(t, project)
@@ -122,46 +123,49 @@ func Test_Run(t *testing.T) {
 
 	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
-		app := domain.NewApp("my-app", "uid")
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
 		depl, _ := app.NewDeployment(1, raw.Data(""), domain.Production, "uid")
-		dockerBackend, artifactManager, _, _ := backend(opts)
+		provider, artifactManager, _, _ := sut(opts)
 
 		ctx := context.Background()
-		dir, logger, err := artifactManager.PrepareBuild(ctx, depl)
+		deplCtx, err := artifactManager.PrepareBuild(ctx, depl)
 
 		testutil.IsNil(t, err)
 
-		defer logger.Close()
+		defer deplCtx.Logger().Close()
 
-		_, err = dockerBackend.Run(ctx, dir, logger, depl)
+		_, err = provider.Run(ctx, deplCtx, depl)
 
 		testutil.IsTrue(t, errors.Is(err, docker.ErrOpenComposeFileFailed))
 	})
 
 	testServices := func(t *testing.T, opts options) {
-		dockerBackend, artifactManager, composeMock, cliMock := backend(opts)
-
-		app := domain.NewApp("my-app", "uid")
-		ctx := context.Background()
+		provider, artifactManager, composeMock, cliMock := sut(opts)
 
 		dsn := "postgres://prodapp:passprod@db/app?sslmode=disable"
 		postgresUser := "prodapp"
 		postgresPassword := "passprod"
 
-		app.HasEnvironmentVariables(domain.EnvironmentsEnv{
-			domain.Production: domain.ServicesEnv{
-				"app": domain.EnvVars{
-					"DSN": dsn,
-				},
-				"db": domain.EnvVars{
-					"POSTGRES_USER":     postgresUser,
-					"POSTGRES_PASSWORD": postgresPassword,
-				},
-			},
-		})
-
+		app := must.Panic(domain.NewApp(
+			"my-app",
+			domain.
+				NewEnvironmentConfig("production-target").
+				WithEnvironmentVariables(domain.ServicesEnv{
+					"app": domain.EnvVars{
+						"DSN": dsn,
+					},
+					"db": domain.EnvVars{
+						"POSTGRES_USER":     postgresUser,
+						"POSTGRES_PASSWORD": postgresPassword,
+					},
+				}),
+			domain.NewEnvironmentConfig("staging-target"),
+			"uid",
+			domain.AppNamingAvailable,
+		))
+		ctx := context.Background()
 		src := raw.New()
-		meta, _ := src.Prepare(app, `
+		meta, _ := src.Prepare(ctx, app, `
 services:
   app:
     restart: unless-stopped
@@ -197,15 +201,15 @@ volumes:
 `)
 
 		depl, _ := app.NewDeployment(1, meta, domain.Production, "uid")
-		dir, logger, err := artifactManager.PrepareBuild(ctx, depl)
+		deplCtx, err := artifactManager.PrepareBuild(ctx, depl)
 
 		testutil.IsNil(t, err)
 
-		defer logger.Close()
+		defer deplCtx.Logger().Close()
 
-		testutil.IsNil(t, src.Fetch(ctx, dir, logger, depl))
+		testutil.IsNil(t, src.Fetch(ctx, deplCtx, depl))
 
-		services, err := dockerBackend.Run(ctx, dir, logger, depl)
+		services, err := provider.Run(ctx, deplCtx, depl)
 
 		testutil.IsNil(t, err)
 		testutil.HasLength(t, services, 3)

@@ -15,7 +15,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_app_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_app"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/backend/docker"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/archive"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/git"
@@ -43,9 +43,9 @@ func Setup(
 	appsStore := deploymentsqlite.NewAppsStore(db)
 	deploymentsStore := deploymentsqlite.NewDeploymentsStore(db)
 	deploymentQueryHandler := deploymentsqlite.NewGateway(db)
-	dockerBackend := docker.New(opts, logger)
+	dockerProvider := docker.New(opts, logger)
 
-	if err := dockerBackend.Setup(); err != nil {
+	if err := dockerProvider.Setup(); err != nil {
 		return err
 	}
 
@@ -60,10 +60,10 @@ func Setup(
 	bus.Register(b, create_app.Handler(appsStore, appsStore))
 	bus.Register(b, update_app.Handler(appsStore, appsStore))
 	bus.Register(b, queue_deployment.Handler(appsStore, deploymentsStore, deploymentsStore, sourceFacade))
-	bus.Register(b, deploy.Handler(deploymentsStore, deploymentsStore, artifactManager, sourceFacade, dockerBackend))
+	bus.Register(b, deploy.Handler(deploymentsStore, deploymentsStore, artifactManager, sourceFacade, dockerProvider))
 	bus.Register(b, fail_running_deployments.Handler(deploymentsStore, deploymentsStore))
 	bus.Register(b, request_app_cleanup.Handler(appsStore, appsStore))
-	bus.Register(b, cleanup_app.Handler(deploymentsStore, appsStore, appsStore, artifactManager, dockerBackend))
+	bus.Register(b, cleanup_app.Handler(deploymentsStore, appsStore, appsStore, artifactManager, dockerProvider))
 	bus.Register(b, get_deployment_log.Handler(deploymentsStore, artifactManager))
 	bus.Register(b, redeploy.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(b, promote.Handler(appsStore, deploymentsStore, deploymentsStore))

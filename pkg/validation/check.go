@@ -58,13 +58,40 @@ func Check(definition Of) error {
 	fieldErrs := make(map[string]error)
 
 	for f, err := range definition {
-		if err != nil {
-			fieldErrs[f] = err
+		if err = flattenNestedValidationErrors(err, fieldErrs, f); err != nil {
+			return err
 		}
 	}
 
 	if len(fieldErrs) > 0 {
 		return NewError(fieldErrs)
+	}
+
+	return nil
+}
+
+func flattenNestedValidationErrors(err error, result map[string]error, path string) error {
+	if err == nil {
+		return nil
+	}
+
+	fieldErrs, isNested := apperr.As[Error](err)
+
+	if !isNested {
+		// Not an app level error, something goes wrong, return immediately
+		if _, isAppErr := apperr.As[apperr.Error](err); !isAppErr {
+			return err
+		}
+
+		result[path] = err
+
+		return nil
+	}
+
+	for f, err := range fieldErrs.Fields {
+		if err = flattenNestedValidationErrors(err, result, fmt.Sprintf("%s.%s", path, f)); err != nil {
+			return err
+		}
 	}
 
 	return nil

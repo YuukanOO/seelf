@@ -24,7 +24,7 @@ func New() source.Source {
 func (*service) CanPrepare(payload any) bool          { return types.Is[string](payload) }
 func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
+func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (domain.SourceData, error) {
 	rawServiceFileContent, ok := payload.(string)
 
 	if !ok {
@@ -40,8 +40,9 @@ func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 	return Data(rawServiceFileContent), nil
 }
 
-func (s *service) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
-	filename := filepath.Join(dir, "compose.yml")
+func (s *service) Fetch(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) error {
+	logger := deploymentCtx.Logger()
+	filename := filepath.Join(deploymentCtx.BuildDirectory(), "compose.yml")
 
 	data, ok := depl.Source().(Data)
 

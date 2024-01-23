@@ -24,7 +24,7 @@ func Test_CreateFirstAccount(t *testing.T) {
 	}
 
 	t.Run("should do nothing if a user already exists", func(t *testing.T) {
-		usr := domain.NewUser("existing@example.com", "password", "apikey")
+		usr, _ := domain.NewUser("existing@example.com", "password", "apikey", true)
 		uc, store := sut(&usr)
 
 		uid, err := uc(ctx, create_first_account.Command{})
@@ -41,15 +41,15 @@ func Test_CreateFirstAccount(t *testing.T) {
 		uc, _ := sut()
 		uid, err := uc(ctx, create_first_account.Command{})
 
-		testutil.ErrorIs(t, domain.ErrAdminAccountRequired, err)
+		testutil.ErrorIs(t, create_first_account.ErrAdminAccountRequired, err)
 		testutil.Equals(t, "", uid)
 
 		uid, err = uc(ctx, create_first_account.Command{Email: "admin@example.com"})
-		testutil.ErrorIs(t, domain.ErrAdminAccountRequired, err)
+		testutil.ErrorIs(t, create_first_account.ErrAdminAccountRequired, err)
 		testutil.Equals(t, "", uid)
 
 		uid, err = uc(ctx, create_first_account.Command{Password: "admin"})
-		testutil.ErrorIs(t, domain.ErrAdminAccountRequired, err)
+		testutil.ErrorIs(t, create_first_account.ErrAdminAccountRequired, err)
 		testutil.Equals(t, "", uid)
 
 	})

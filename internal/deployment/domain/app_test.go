@@ -5,18 +5,37 @@ import (
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_App(t *testing.T) {
+	var (
+		appname    domain.AppName = "my-app"
+		uid        auth.UserID    = "uid"
+		production                = domain.NewEnvironmentConfig("production-target")
+		staging                   = domain.NewEnvironmentConfig("staging-target")
+	)
+
+	t.Run("should require a unique name across both target environments", func(t *testing.T) {
+		invalidAvailability := []domain.AppNamingAvailability{
+			domain.AppNamingTakenInProduction,
+			domain.AppNamingTakenInStaging,
+			domain.AppNamingProductionTargetNotFound,
+			domain.AppNamingStagingTargetNotFound,
+		}
+
+		for _, availability := range invalidAvailability {
+			_, err := domain.NewApp(appname, production, staging, uid, availability)
+
+			testutil.ErrorIs(t, domain.ErrInvalidAppNaming, err)
+		}
+	})
+
 	t.Run("should correctly creates a new app", func(t *testing.T) {
-		var (
-			name domain.UniqueAppName = "my-first-app"
-			uid  auth.UserID          = "anid"
-		)
+		app, err := domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable)
 
-		app := domain.NewApp(name, uid)
-
+		testutil.IsNil(t, err)
 		testutil.NotEquals(t, "", app.ID())
 		testutil.IsFalse(t, app.VCS().HasValue())
 
@@ -25,14 +44,14 @@ func Test_App(t *testing.T) {
 		testutil.Equals(t, app.ID(), evt.ID)
 		testutil.Equals(t, uid, evt.Created.By())
 		testutil.IsFalse(t, evt.Created.At().IsZero())
-		testutil.Equals(t, name, evt.Name)
+		testutil.Equals(t, appname, evt.Name)
 	})
 
 	t.Run("could have a vcs config attached", func(t *testing.T) {
-		url, _ := domain.UrlFrom("http://somewhere.com")
+		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
 		vcsConfig := domain.NewVCSConfig(url).Authenticated("vcskey")
 
-		app := domain.NewApp("an-app", "uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 		app.UseVersionControl(vcsConfig)
 
 		testutil.Equals(t, vcsConfig, app.VCS().MustGet())
@@ -43,8 +62,8 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("could have a vcs config removed", func(t *testing.T) {
-		url, _ := domain.UrlFrom("http://somewhere.com")
-		app := domain.NewApp("an-app", "uid")
+		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 		app.RemoveVersionControl()
 
 		testutil.HasNEvents(t, &app, 1)
@@ -57,9 +76,9 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("raise a VCS configured event only if configs are different", func(t *testing.T) {
-		url, _ := domain.UrlFrom("http://somewhere.com")
+		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
 		vcsConfig := domain.NewVCSConfig(url).Authenticated("vcskey")
-		app := domain.NewApp("an-app", "uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 		app.UseVersionControl(vcsConfig)
 		app.UseVersionControl(vcsConfig)
 
@@ -73,75 +92,60 @@ func Test_App(t *testing.T) {
 		testutil.Equals(t, otherConfig, evt.Config)
 	})
 
-	t.Run("could have environment variables configured", func(t *testing.T) {
-		envs := domain.EnvironmentsEnv{
-			domain.Production: {
-				"app": {
-					"DEBUG": "true",
-				},
-			},
-		}
+	t.Run("need the app naming to be unique when modifying configuration", func(t *testing.T) {
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 
-		app := domain.NewApp("an-app", "uid")
-		app.HasEnvironmentVariables(envs)
+		err := app.WithProductionConfig(staging, domain.TargetAppNamingTaken)
 
-		testutil.HasNEvents(t, &app, 2)
-		evt := testutil.EventIs[domain.AppEnvChanged](t, &app, 1)
-		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.DeepEquals(t, envs, evt.Env)
+		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, err)
 	})
 
-	t.Run("could have environment variables removed", func(t *testing.T) {
-		app := domain.NewApp("an-app", "uid")
-		app.RemoveEnvironmentVariables()
+	t.Run("need the app naming target id to exists when modifying configuration", func(t *testing.T) {
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 
+		err := app.WithProductionConfig(staging, domain.TargetAppNamingTargetNotFound)
+
+		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, err)
+	})
+
+	t.Run("raise an env changed event only if the new config is different", func(t *testing.T) {
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+
+		errProd := app.WithProductionConfig(production, domain.TargetAppNamingAvailable)
+		errStaging := app.WithStagingConfig(staging, domain.TargetAppNamingAvailable)
+
+		testutil.IsNil(t, errProd)
+		testutil.IsNil(t, errStaging)
 		testutil.HasNEvents(t, &app, 1)
 
-		app.HasEnvironmentVariables(domain.EnvironmentsEnv{
-			domain.Production: {
-				"app": {
-					"DEBUG": "true",
-				},
-			},
-		})
-		app.RemoveEnvironmentVariables()
+		newConfig := domain.
+			NewEnvironmentConfig("new-target").
+			WithEnvironmentVariables(domain.ServicesEnv{
+				"app": {"DEBUG": "true"},
+			})
 
+		errProd = app.WithProductionConfig(newConfig, domain.TargetAppNamingAvailable)
+		errStaging = app.WithStagingConfig(newConfig, domain.TargetAppNamingAvailable)
+
+		testutil.IsNil(t, errProd)
+		testutil.IsNil(t, errStaging)
 		testutil.HasNEvents(t, &app, 3)
-		testutil.EventIs[domain.AppEnvRemoved](t, &app, 2)
-	})
+		evt := testutil.EventIs[domain.AppEnvChanged](t, &app, 1)
 
-	t.Run("raise an env changed event only if values are different", func(t *testing.T) {
-		envs := domain.EnvironmentsEnv{
-			domain.Production: {
-				"app": {
-					"DEBUG": "true",
-				},
-			},
-		}
-
-		app := domain.NewApp("an-app", "uid")
-		app.HasEnvironmentVariables(envs)
-		app.HasEnvironmentVariables(envs)
-
-		testutil.HasNEvents(t, &app, 2)
-
-		otherEnv := domain.EnvironmentsEnv{
-			domain.Production: {
-				"app": {
-					"DEBUG": "false",
-				},
-			},
-		}
-		app.HasEnvironmentVariables(otherEnv)
-
-		testutil.HasNEvents(t, &app, 3)
-		evt := testutil.EventIs[domain.AppEnvChanged](t, &app, 2)
 		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.DeepEquals(t, otherEnv, evt.Env)
+		testutil.Equals(t, domain.Production, evt.Environment)
+		testutil.DeepEquals(t, newConfig, evt.Config)
+
+		evt = testutil.EventIs[domain.AppEnvChanged](t, &app, 2)
+
+		testutil.Equals(t, app.ID(), evt.ID)
+		testutil.Equals(t, domain.Staging, evt.Environment)
+		testutil.DeepEquals(t, newConfig, evt.Config)
 	})
 
 	t.Run("could be marked for deletion only if not already the case", func(t *testing.T) {
-		app := domain.NewApp("an-app", "uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+
 		app.RequestCleanup("uid")
 		app.RequestCleanup("uid")
 
@@ -152,7 +156,8 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("should not allow a deletion if there are running or pending deployments for this app", func(t *testing.T) {
-		app := domain.NewApp("an-app", "uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+
 		app.RequestCleanup("uid")
 
 		err := app.Delete(1)
@@ -162,7 +167,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("raise an error if delete is called for a non cleaned up app", func(t *testing.T) {
-		app := domain.NewApp("an-app", "uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 
 		err := app.Delete(0)
 
@@ -170,8 +175,9 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("could be deleted", func(t *testing.T) {
-		app := domain.NewApp("an-app", "uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 		app.RequestCleanup("uid")
+
 		err := app.Delete(0)
 
 		testutil.IsNil(t, err)

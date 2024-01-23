@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	errRequired   = errors.New("required")
-	errAlwaysFail = errors.New("always fail")
+	errRequired   = apperr.New("required")
+	errAlwaysFail = apperr.New("always fail")
 )
 
 func required(value string) error {
@@ -88,6 +88,27 @@ func Test_Check(t *testing.T) {
 		testutil.Equals(t, 2, len(validationErr.Fields))
 		testutil.ErrorIs(t, errRequired, validationErr.Fields["firstName"])
 		testutil.ErrorIs(t, errAlwaysFail, validationErr.Fields["lastName"])
+	})
+
+	t.Run("merge nested validation errors", func(t *testing.T) {
+		err := validation.Check(validation.Of{
+			"firstName": validation.Is("", required),
+			"lastName":  validation.Is("doe", required, alwaysFail),
+			"nested": validation.Check(validation.Of{
+				"firstName": validation.Is("", required),
+				"nested": validation.Check(validation.Of{
+					"firstName": validation.Is("", required),
+				}),
+			}),
+		})
+
+		validationErr, ok := apperr.As[validation.Error](err)
+		testutil.IsTrue(t, ok)
+		testutil.Equals(t, 4, len(validationErr.Fields))
+		testutil.ErrorIs(t, errRequired, validationErr.Fields["firstName"])
+		testutil.ErrorIs(t, errAlwaysFail, validationErr.Fields["lastName"])
+		testutil.ErrorIs(t, errRequired, validationErr.Fields["nested.firstName"])
+		testutil.ErrorIs(t, errRequired, validationErr.Fields["nested.nested.firstName"])
 	})
 
 	t.Run("returns nil if no error exists", func(t *testing.T) {

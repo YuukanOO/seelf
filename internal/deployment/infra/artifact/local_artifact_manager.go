@@ -56,15 +56,15 @@ func NewLocal(options LocalOptions, logger log.Logger) domain.ArtifactManager {
 func (a *localArtifactManager) PrepareBuild(
 	ctx context.Context,
 	depl domain.Deployment,
-) (buildDirectory string, logger domain.DeploymentLogger, err error) {
+) (domain.DeploymentContext, error) {
 	logfile, err := ostools.OpenAppend(a.LogPath(ctx, depl))
 
 	if err != nil {
 		a.logger.Error(err)
-		return "", nil, ErrArtifactOpenLoggerFailed
+		return domain.DeploymentContext{}, ErrArtifactOpenLoggerFailed
 	}
 
-	logger = newLogger(logfile)
+	logger := newLogger(logfile)
 
 	defer func() {
 		if err == nil {
@@ -76,17 +76,19 @@ func (a *localArtifactManager) PrepareBuild(
 		logger.Close()                               // And close the logger right now
 	}()
 
-	if buildDirectory, err = a.deploymentPath(depl); err != nil {
-		return
+	buildDirectory, err := a.deploymentPath(depl)
+
+	if err != nil {
+		return domain.DeploymentContext{}, err
 	}
 
 	logger.Infof("preparing build directory %s", buildDirectory)
 
 	if err = ostools.EmptyDir(buildDirectory); err != nil {
-		return
+		return domain.DeploymentContext{}, err
 	}
 
-	return
+	return domain.NewDeploymentContext(buildDirectory, logger), nil
 }
 
 func (a *localArtifactManager) Cleanup(ctx context.Context, app domain.App) error {

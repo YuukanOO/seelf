@@ -24,7 +24,7 @@ type (
 
 	// Represents a source which has initiated a deployment.
 	Source interface {
-		Prepare(App, any) (SourceData, error)                              // Prepare the given payload for the given application, doing any needed validation
-		Fetch(context.Context, string, DeploymentLogger, Deployment) error // Retrieve deployment data and store them in the given path before passing in to a backend
+		Prepare(context.Context, App, any) (SourceData, error)      // Prepare the given payload for the given application, doing any needed validation
+		Fetch(context.Context, DeploymentContext, Deployment) error // Retrieve deployment data and store them in the given path before passing in to a provider
 	}
 )

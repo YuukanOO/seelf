@@ -42,13 +42,17 @@ Content-Type: application/json
     "vcs": {
         "url": "https://git.voixdu.net/jleicher/go-api-example.git"
     },
-    "env": {
-        "production": {
+    "production": {
+        "target": "de",
+        "vars": {
             "app": {
                 "DEBUG": "false"
             }
-        },
-        "staging": {
+        }
+    },
+    "staging": {
+        "target": "de",
+        "vars": {
             "app": {
                 "DEBUG": "true"
             }

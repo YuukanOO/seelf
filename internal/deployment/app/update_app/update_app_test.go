@@ -11,6 +11,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validation"
 )
@@ -31,7 +32,7 @@ func Test_UpdateApp(t *testing.T) {
 	})
 
 	t.Run("should update nothing if no fields are provided", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
@@ -43,51 +44,86 @@ func Test_UpdateApp(t *testing.T) {
 		testutil.HasNEvents(t, &a, 1)
 	})
 
-	t.Run("should require valid application env variables", func(t *testing.T) {
-		uc := sut()
-		id, err := uc(ctx, update_app.Command{
-			ID: "an-app",
-			Env: monad.PatchValue(map[string]map[string]map[string]string{
-				"invalidenv": {},
-			}),
-		})
-
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
-		testutil.Equals(t, "", id)
-	})
-
 	t.Run("should remove an application env variables", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		a.HasEnvironmentVariables(domain.EnvironmentsEnv{"production": {"app": {"DEBUG": "false"}}})
-		uc := sut(&a)
+		a := must.Panic(domain.NewApp("an-app",
+			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
+			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}}),
+			"uid",
+			domain.AppNamingAvailable))
 
-		id, err := uc(ctx, update_app.Command{
-			ID:  string(a.ID()),
-			Env: monad.Nil[map[string]map[string]map[string]string](),
-		})
-
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
-		testutil.EventIs[domain.AppEnvRemoved](t, &a, 2)
-	})
-
-	t.Run("should update an application env variables", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		a.HasEnvironmentVariables(domain.EnvironmentsEnv{"production": {"app": {"DEBUG": "false"}}})
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
 			ID: string(a.ID()),
-			Env: monad.PatchValue(map[string]map[string]map[string]string{
-				"production": {"app": {"NEW": "value"}},
+			Production: monad.Value(update_app.EnvironmentConfig{
+				Target: "new-production-target",
+			}),
+			Staging: monad.Value(update_app.EnvironmentConfig{
+				Target: "new-staging-target",
 			}),
 		})
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, string(a.ID()), id)
 		testutil.HasNEvents(t, &a, 3)
-		testutil.EventIs[domain.AppEnvChanged](t, &a, 2)
+
+		evt := testutil.EventIs[domain.AppEnvChanged](t, &a, 1)
+
+		testutil.Equals(t, domain.Production, evt.Environment)
+		testutil.Equals(t, "new-production-target", evt.Config.Target())
+		testutil.IsFalse(t, evt.Config.Vars().HasValue())
+
+		evt = testutil.EventIs[domain.AppEnvChanged](t, &a, 2)
+
+		testutil.Equals(t, domain.Staging, evt.Environment)
+		testutil.Equals(t, "new-staging-target", evt.Config.Target())
+		testutil.IsFalse(t, evt.Config.Vars().HasValue())
+	})
+
+	t.Run("should update an application env variables", func(t *testing.T) {
+		a := must.Panic(domain.NewApp("an-app",
+			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
+			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}}),
+			"uid",
+			domain.AppNamingAvailable))
+
+		uc := sut(&a)
+
+		id, err := uc(ctx, update_app.Command{
+			ID: string(a.ID()),
+			Production: monad.Value(update_app.EnvironmentConfig{
+				Target: "new-production-target",
+				Vars: monad.Value(map[string]map[string]string{
+					"app": {"OTHER": "value"},
+				}),
+			}),
+			Staging: monad.Value(update_app.EnvironmentConfig{
+				Target: "new-staging-target",
+				Vars: monad.Value(map[string]map[string]string{
+					"app": {"SOMETHING": "else"},
+				}),
+			}),
+		})
+
+		testutil.IsNil(t, err)
+		testutil.Equals(t, string(a.ID()), id)
+		testutil.HasNEvents(t, &a, 3)
+
+		evt := testutil.EventIs[domain.AppEnvChanged](t, &a, 1)
+
+		testutil.Equals(t, domain.Production, evt.Environment)
+		testutil.Equals(t, "new-production-target", evt.Config.Target())
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"OTHER": "value"},
+		}, evt.Config.Vars().MustGet())
+
+		evt = testutil.EventIs[domain.AppEnvChanged](t, &a, 2)
+
+		testutil.Equals(t, domain.Staging, evt.Environment)
+		testutil.Equals(t, "new-staging-target", evt.Config.Target())
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"SOMETHING": "else"},
+		}, evt.Config.Vars().MustGet())
 	})
 
 	t.Run("should require valid vcs inputs", func(t *testing.T) {
@@ -95,7 +131,7 @@ func Test_UpdateApp(t *testing.T) {
 		id, err := uc(ctx, update_app.Command{
 			ID: "an-app",
 			VCS: monad.PatchValue(update_app.VCSConfig{
-				Url: monad.Value("invalid-url"),
+				Url: "invalid-url",
 			}),
 		})
 
@@ -104,7 +140,9 @@ func Test_UpdateApp(t *testing.T) {
 	})
 
 	t.Run("should fail if trying to add a vcs config without an url defined", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid",
+			domain.AppNamingAvailable))
+
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
@@ -112,14 +150,16 @@ func Test_UpdateApp(t *testing.T) {
 			VCS: monad.PatchValue(update_app.VCSConfig{}),
 		})
 
-		testutil.ErrorIs(t, domain.ErrVCSNotConfigured, err)
+		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
 		testutil.Equals(t, "", id)
 	})
 
-	t.Run("should remove the vcs config", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		url, _ := domain.UrlFrom("https://some.url")
+	t.Run("should remove the vcs config if nil given", func(t *testing.T) {
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid",
+			domain.AppNamingAvailable))
+		url := must.Panic(domain.UrlFrom("https://some.url"))
 		a.UseVersionControl(domain.NewVCSConfig(url))
+
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
@@ -133,34 +173,18 @@ func Test_UpdateApp(t *testing.T) {
 		testutil.EventIs[domain.AppVCSRemoved](t, &a, 2)
 	})
 
-	t.Run("should keep the vcs url", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		url, _ := domain.UrlFrom("https://some.url")
-		a.UseVersionControl(domain.NewVCSConfig(url))
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
-			VCS: monad.PatchValue(update_app.VCSConfig{
-				Url: monad.None[string](),
-			}),
-		})
-
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 2)
-	})
-
 	t.Run("should update the vcs url", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		url, _ := domain.UrlFrom("https://some.url")
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid",
+			domain.AppNamingAvailable))
+		url := must.Panic(domain.UrlFrom("https://some.url"))
 		a.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
+
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
 			ID: string(a.ID()),
 			VCS: monad.PatchValue(update_app.VCSConfig{
-				Url: monad.Value("https://some.other.url"),
+				Url: "https://some.other.url",
 			}),
 		})
 
@@ -169,18 +193,21 @@ func Test_UpdateApp(t *testing.T) {
 		testutil.HasNEvents(t, &a, 3)
 		evt := testutil.EventIs[domain.AppVCSConfigured](t, &a, 2)
 		testutil.Equals(t, "https://some.other.url", evt.Config.Url().String())
-		testutil.Equals(t, "a token", evt.Config.Token().Get(""))
+		testutil.Equals(t, "a token", evt.Config.Token().MustGet())
 	})
 
 	t.Run("should remove the vcs token", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		url, _ := domain.UrlFrom("https://some.url")
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid",
+			domain.AppNamingAvailable))
+		url := must.Panic(domain.UrlFrom("https://some.url"))
 		a.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
+
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
 			ID: string(a.ID()),
 			VCS: monad.PatchValue(update_app.VCSConfig{
+				Url:   "https://some.url",
 				Token: monad.Nil[string](),
 			}),
 		})
@@ -194,14 +221,17 @@ func Test_UpdateApp(t *testing.T) {
 	})
 
 	t.Run("should update the vcs token", func(t *testing.T) {
-		a := domain.NewApp("an-app", "uid")
-		url, _ := domain.UrlFrom("https://some.url")
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid",
+			domain.AppNamingAvailable))
+		url := must.Panic(domain.UrlFrom("https://some.url"))
 		a.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
+
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
 			ID: string(a.ID()),
 			VCS: monad.PatchValue(update_app.VCSConfig{
+				Url:   "https://some.url",
 				Token: monad.PatchValue("new token"),
 			}),
 		})

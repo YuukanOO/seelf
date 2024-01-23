@@ -30,7 +30,7 @@ func Handler(
 	reader domain.AppsReader,
 	writer domain.AppsWriter,
 	artifactManager domain.ArtifactManager,
-	backend domain.Backend,
+	provider domain.Provider,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
 		app, err := reader.GetByID(ctx, domain.AppID(cmd.ID))
@@ -50,12 +50,12 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		// Before calling the backend cleanup, make sure the application can be safely deleted.
+		// Before calling the provider cleanup, make sure the application can be safely deleted.
 		if err = app.Delete(count); err != nil {
 			return bus.Unit, err
 		}
 
-		if err = backend.Cleanup(ctx, app); err != nil {
+		if err = provider.Cleanup(ctx, app); err != nil {
 			return bus.Unit, err
 		}
 

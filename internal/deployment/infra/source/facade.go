@@ -23,22 +23,22 @@ func NewFacade(sources ...Source) domain.Source {
 	return &facade{sources}
 }
 
-func (r *facade) Prepare(app domain.App, payload any) (domain.SourceData, error) {
+func (r *facade) Prepare(ctx context.Context, app domain.App, payload any) (domain.SourceData, error) {
 	for _, src := range r.sources {
 		if src.CanPrepare(payload) {
-			return src.Prepare(app, payload)
+			return src.Prepare(ctx, app, payload)
 		}
 	}
 
 	return nil, domain.ErrNoValidSourceFound
 }
 
-func (r *facade) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
+func (r *facade) Fetch(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) error {
 	meta := depl.Source()
 
 	for _, src := range r.sources {
 		if src.CanFetch(meta) {
-			return src.Fetch(ctx, dir, logger, depl)
+			return src.Fetch(ctx, deploymentCtx, depl)
 		}
 	}
 

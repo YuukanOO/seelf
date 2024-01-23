@@ -15,7 +15,7 @@ Key aspects of seelf are:
 - Reliable
 - Easy to understand
 
-_Althought Docker is the only backend supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example._
+_Althought Docker is the only provider supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example._
 
 ## Installation
 

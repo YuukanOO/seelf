@@ -42,7 +42,7 @@ func Handler(
 			return 0, err
 		}
 
-		meta, err := source.Prepare(app, cmd.Payload)
+		meta, err := source.Prepare(ctx, app, cmd.Payload)
 
 		if err != nil {
 			return 0, err

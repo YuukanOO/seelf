@@ -50,7 +50,7 @@ func New(reader domain.AppsReader) source.Source {
 func (*service) CanPrepare(payload any) bool          { return types.Is[Request](payload) }
 func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
+func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (domain.SourceData, error) {
 	req, ok := payload.(Request)
 
 	if !ok {
@@ -73,7 +73,7 @@ func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 	}
 
 	// Retrieve the latest commit to make sure the branch exists
-	latestCommit, err := getLatestBranchCommit(vcs, req.Branch)
+	latestCommit, err := getLatestBranchCommit(ctx, vcs, req.Branch)
 
 	if err != nil {
 		return nil, validation.WrapIfAppErr(err, "branch")
@@ -82,7 +82,9 @@ func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 	return Data{req.Branch, req.Hash.Get(latestCommit)}, nil
 }
 
-func (s *service) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
+func (s *service) Fetch(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) error {
+	logger := deploymentCtx.Logger()
+
 	// Retrieve git url and token from the app
 	app, err := s.reader.GetByID(ctx, depl.ID().AppID())
 
@@ -106,7 +108,7 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 
 	logger.Stepf("cloning branch %s at %s from %s using token: %t", data.Branch, data.Hash, vcs.Url(), vcs.Token().HasValue())
 
-	r, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
+	r, err := git.PlainCloneContext(ctx, deploymentCtx.BuildDirectory(), false, &git.CloneOptions{
 		Auth:          getAuthMethod(vcs),
 		SingleBranch:  true,
 		ReferenceName: plumbing.NewBranchReferenceName(data.Branch),
@@ -155,12 +157,12 @@ func getAuthMethod(vcs domain.VCSConfig) transport.AuthMethod {
 	return nil
 }
 
-func getLatestBranchCommit(vcs domain.VCSConfig, branch string) (string, error) {
+func getLatestBranchCommit(ctx context.Context, vcs domain.VCSConfig, branch string) (string, error) {
 	branchRef := plumbing.NewBranchReferenceName(branch)
 	refs, err := git.NewRemote(nil, &config.RemoteConfig{
 		Name: "origin",
 		URLs: []string{vcs.Url().String()},
-	}).List(&git.ListOptions{
+	}).ListContext(ctx, &git.ListOptions{
 		Auth: getAuthMethod(vcs),
 	})
 

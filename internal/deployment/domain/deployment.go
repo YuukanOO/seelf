@@ -28,7 +28,7 @@ type (
 		event.Emitter
 
 		id        DeploymentID
-		config    Config
+		config    DeploymentConfig
 		state     State
 		source    SourceData
 		requested shared.Action[domain.UserID]
@@ -53,7 +53,7 @@ type (
 		bus.Notification
 
 		ID        DeploymentID
-		Config    Config
+		Config    DeploymentConfig
 		State     State
 		Source    SourceData
 		Requested shared.Action[domain.UserID]
@@ -86,9 +86,15 @@ func (a App) NewDeployment(
 		return d, ErrVCSNotConfigured
 	}
 
+	conf, err := a.ConfigSnapshotFor(env)
+
+	if err != nil {
+		return d, err
+	}
+
 	d.apply(DeploymentCreated{
 		ID:        DeploymentIDFrom(a.id, deployNumber),
-		Config:    NewConfig(a, env),
+		Config:    conf,
 		Source:    meta,
 		Requested: shared.NewAction(requestedBy),
 	})
@@ -139,7 +145,8 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&d.id.deploymentNumber,
 		&d.config.appname,
 		&d.config.environment,
-		&d.config.env,
+		&d.config.target,
+		&d.config.vars,
 		&d.state.status,
 		&d.state.errcode,
 		&d.state.services,
@@ -162,7 +169,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 }
 
 func (d Deployment) ID() DeploymentID                        { return d.id }
-func (d Deployment) Config() Config                          { return d.config }
+func (d Deployment) Config() DeploymentConfig                { return d.config }
 func (d Deployment) Source() SourceData                      { return d.source }
 func (d Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
 

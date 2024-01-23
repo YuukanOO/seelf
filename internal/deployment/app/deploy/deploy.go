@@ -29,7 +29,7 @@ func Handler(
 	writer domain.DeploymentsWriter,
 	artifactManager domain.ArtifactManager,
 	source domain.Source,
-	backend domain.Backend,
+	provider domain.Provider,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (result bus.UnitType, finalErr error) {
 		result = bus.Unit
@@ -54,9 +54,8 @@ func Handler(
 		}
 
 		var (
-			buildDirectory string
-			logger         domain.DeploymentLogger
-			services       domain.Services
+			deploymentCtx domain.DeploymentContext
+			services      domain.Services
 		)
 
 		// This one is a special case to avoid to avoid many branches
@@ -85,19 +84,19 @@ func Handler(
 		}()
 
 		// Prepare the build directory
-		if buildDirectory, logger, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
+		if deploymentCtx, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
 			return
 		}
 
-		defer logger.Close()
+		defer deploymentCtx.Logger().Close()
 
 		// Fetch deployment files
-		if finalErr = source.Fetch(ctx, buildDirectory, logger, depl); finalErr != nil {
+		if finalErr = source.Fetch(ctx, deploymentCtx, depl); finalErr != nil {
 			return
 		}
 
-		// Ask the backend to actually deploy the app
-		if services, finalErr = backend.Run(ctx, buildDirectory, logger, depl); finalErr != nil {
+		// Ask the provider to actually deploy the app
+		if services, finalErr = provider.Run(ctx, deploymentCtx, depl); finalErr != nil {
 			return
 		}
 

@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -15,21 +14,15 @@ import (
 var (
 	ErrEmailAlreadyTaken      = apperr.New("email_already_taken")
 	ErrInvalidEmailOrPassword = apperr.New("invalid_email_or_password")
-	ErrAdminAccountRequired   = errors.New(`seelf requires a default user to be created but your database looks empty.
-	Please set the SEELF_ADMIN_EMAIL and SEELF_ADMIN_PASSWORD environment variables and relaunch the command, for example:
-
-	$ SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=admin seelf serve
-
-	Please note this is a one time only action`)
 )
 
 type (
 	// VALUE OBJECTS
 
-	UserID       string
-	PasswordHash string
-	APIKey       string
-	UniqueEmail  Email
+	UserID            string
+	PasswordHash      string
+	APIKey            string
+	EmailAvailability bool // Represents the availability of an email (ie. is it unique in our system?)
 
 	// ENTITY
 
@@ -38,7 +31,7 @@ type (
 
 		id           UserID
 		password     PasswordHash
-		email        UniqueEmail
+		email        Email
 		key          APIKey
 		registeredAt time.Time
 	}
@@ -57,8 +50,7 @@ type (
 	UsersReader interface {
 		GetUsersCount(context.Context) (uint, error)
 		GetIDFromAPIKey(context.Context, APIKey) (UserID, error)
-		IsEmailUnique(context.Context, Email) (UniqueEmail, error)
-		IsEmailUniqueForUser(context.Context, UserID, Email) (UniqueEmail, error)
+		GetEmailAvailability(context.Context, Email, ...UserID) (EmailAvailability, error)
 		GetByEmail(context.Context, Email) (User, error)
 		GetByID(context.Context, UserID) (User, error)
 	}
@@ -73,7 +65,7 @@ type (
 		bus.Notification
 
 		ID           UserID
-		Email        UniqueEmail
+		Email        Email
 		Password     PasswordHash
 		Key          APIKey
 		RegisteredAt time.Time
@@ -83,7 +75,7 @@ type (
 		bus.Notification
 
 		ID    UserID
-		Email UniqueEmail
+		Email Email
 	}
 
 	UserPasswordChanged struct {
@@ -98,7 +90,11 @@ func (UserRegistered) Name_() string      { return "auth.event.user_registered" 
 func (UserEmailChanged) Name_() string    { return "auth.event.user_email_changed" }
 func (UserPasswordChanged) Name_() string { return "auth.event.user_password_changed" }
 
-func NewUser(email UniqueEmail, password PasswordHash, key APIKey) (u User) {
+func NewUser(email Email, password PasswordHash, key APIKey, available EmailAvailability) (u User, err error) {
+	if !available {
+		return u, ErrEmailAlreadyTaken
+	}
+
 	u.apply(UserRegistered{
 		ID:           id.New[UserID](),
 		Email:        email,
@@ -107,7 +103,7 @@ func NewUser(email UniqueEmail, password PasswordHash, key APIKey) (u User) {
 		Key:          key,
 	})
 
-	return u
+	return u, nil
 }
 
 // Recreates a user from a storage driver
@@ -124,15 +120,21 @@ func UserFrom(scanner storage.Scanner) (u User, err error) {
 }
 
 // Updates the user email
-func (u *User) HasEmail(email UniqueEmail) {
+func (u *User) HasEmail(email Email, available EmailAvailability) error {
 	if u.email == email {
-		return
+		return nil
+	}
+
+	if !available {
+		return ErrEmailAlreadyTaken
 	}
 
 	u.apply(UserEmailChanged{
 		ID:    u.id,
 		Email: email,
 	})
+
+	return nil
 }
 
 // Updates the user password

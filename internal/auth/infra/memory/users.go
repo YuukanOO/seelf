@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -22,7 +23,7 @@ type (
 	userData struct {
 		id    domain.UserID
 		key   domain.APIKey
-		email domain.UniqueEmail
+		email domain.Email
 		value *domain.User
 	}
 )
@@ -39,32 +40,18 @@ func (s *usersStore) GetUsersCount(ctx context.Context) (uint, error) {
 	return uint(len(s.users)), nil
 }
 
-func (s *usersStore) IsEmailUnique(ctx context.Context, email domain.Email) (domain.UniqueEmail, error) {
-	_, err := s.GetByEmail(ctx, email)
-
-	if errors.Is(err, apperr.ErrNotFound) {
-		return domain.UniqueEmail(email), nil
-	}
-
-	if err == nil {
-		return "", domain.ErrEmailAlreadyTaken
-	}
-
-	return "", err
-}
-
-func (s *usersStore) IsEmailUniqueForUser(ctx context.Context, id domain.UserID, email domain.Email) (domain.UniqueEmail, error) {
+func (s *usersStore) GetEmailAvailability(ctx context.Context, email domain.Email, excluded ...domain.UserID) (domain.EmailAvailability, error) {
 	u, err := s.GetByEmail(ctx, email)
 
-	if errors.Is(err, apperr.ErrNotFound) || u.ID() == id {
-		return domain.UniqueEmail(email), nil
+	if errors.Is(err, apperr.ErrNotFound) || slices.Contains(excluded, u.ID()) {
+		return true, nil
 	}
 
 	if err != nil {
-		return "", err
+		return false, err
 	}
 
-	return "", domain.ErrEmailAlreadyTaken
+	return false, nil
 }
 
 func (s *usersStore) GetByID(ctx context.Context, id domain.UserID) (domain.User, error) {
@@ -78,10 +65,8 @@ func (s *usersStore) GetByID(ctx context.Context, id domain.UserID) (domain.User
 }
 
 func (s *usersStore) GetByEmail(ctx context.Context, email domain.Email) (domain.User, error) {
-	unique := domain.UniqueEmail(email)
-
 	for _, u := range s.users {
-		if u.email == unique {
+		if u.email == email {
 			return *u.value, nil
 		}
 	}

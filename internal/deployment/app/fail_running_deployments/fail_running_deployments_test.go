@@ -11,12 +11,13 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_FailRunningDeployments(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	a := domain.NewApp("my-app", "some-uid")
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
 
 	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[bus.UnitType, fail_running_deployments.Command] {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)
@@ -26,16 +27,12 @@ func Test_FailRunningDeployments(t *testing.T) {
 	t.Run("should reset running deployments", func(t *testing.T) {
 		errReset := errors.New("server_reset")
 
-		started, _ := a.NewDeployment(2, raw.Data(""), domain.Production, "some-uid")
-		err := started.HasStarted()
+		started := must.Panic(app.NewDeployment(2, raw.Data(""), domain.Production, "some-uid"))
+		testutil.IsNil(t, started.HasStarted())
 
-		testutil.IsNil(t, err)
-
-		succeeded, _ := a.NewDeployment(1, raw.Data(""), domain.Production, "some-uid")
-		succeeded.HasStarted()
-		err = succeeded.HasEnded(domain.Services{}, nil)
-
-		testutil.IsNil(t, err)
+		succeeded := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "some-uid"))
+		testutil.IsNil(t, succeeded.HasStarted())
+		testutil.IsNil(t, succeeded.HasEnded(domain.Services{}, nil))
 
 		uc := sut(&started, &succeeded)
 

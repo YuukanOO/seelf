@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Services(t *testing.T) {
-	app := domain.NewApp("my-app", "uid")
-	domainUrl, _ := domain.UrlFrom("http://docker.localhost")
-	conf := domain.NewConfig(app, "production")
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), "uid", domain.AppNamingAvailable))
+	domainUrl := must.Panic(domain.UrlFrom("http://docker.localhost"))
+	conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 
 	t.Run("should be able to add a private service", func(t *testing.T) {
 		var (

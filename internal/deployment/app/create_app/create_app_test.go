@@ -10,6 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validation"
 )
@@ -30,23 +31,36 @@ func Test_CreateApp(t *testing.T) {
 	})
 
 	t.Run("should fail if the name is already taken", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
+		a := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), "uid", domain.AppNamingAvailable))
 		uc := sut(&a)
 
 		id, err := uc(ctx, create_app.Command{
 			Name: "my-app",
+			Production: create_app.EnvironmentConfig{
+				Target: "production-target",
+			},
+			Staging: create_app.EnvironmentConfig{
+				Target: "staging-target",
+			},
 		})
 
 		validationErr, ok := apperr.As[validation.Error](err)
 		testutil.IsTrue(t, ok)
 		testutil.Equals(t, "", id)
-		testutil.ErrorIs(t, domain.ErrAppNameAlreadyTaken, validationErr.Fields["name"])
+		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr.Fields["production.target"])
+		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr.Fields["staging.target"])
 	})
 
 	t.Run("should create a new app if everything is good", func(t *testing.T) {
 		uc := sut()
 		id, err := uc(ctx, create_app.Command{
 			Name: "my-app",
+			Production: create_app.EnvironmentConfig{
+				Target: "production-target",
+			},
+			Staging: create_app.EnvironmentConfig{
+				Target: "staging-target",
+			},
 		})
 
 		testutil.IsNil(t, err)

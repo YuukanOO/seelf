@@ -11,14 +11,15 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validation"
 )
 
 func Test_QueueDeployment(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	a := domain.NewApp("my-app", "some-uid")
-	appsStore := memory.NewAppsStore(&a)
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
+	appsStore := memory.NewAppsStore(&app)
 
 	sut := func() bus.RequestHandler[int, queue_deployment.Command] {
 		deploymentsStore := memory.NewDeploymentsStore()
@@ -28,7 +29,7 @@ func Test_QueueDeployment(t *testing.T) {
 	t.Run("should fail if payload is empty", func(t *testing.T) {
 		uc := sut()
 		num, err := uc(ctx, queue_deployment.Command{
-			AppID:       string(a.ID()),
+			AppID:       string(app.ID()),
 			Environment: "production",
 		})
 
@@ -39,7 +40,7 @@ func Test_QueueDeployment(t *testing.T) {
 	t.Run("should fail if no environment has been given", func(t *testing.T) {
 		uc := sut()
 		num, err := uc(ctx, queue_deployment.Command{
-			AppID: string(a.ID()),
+			AppID: string(app.ID()),
 		})
 
 		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
@@ -64,7 +65,7 @@ func Test_QueueDeployment(t *testing.T) {
 	t.Run("should succeed if everything is good", func(t *testing.T) {
 		uc := sut()
 		num, err := uc(ctx, queue_deployment.Command{
-			AppID:       string(a.ID()),
+			AppID:       string(app.ID()),
 			Environment: "production",
 			Payload:     "some-payload",
 		})

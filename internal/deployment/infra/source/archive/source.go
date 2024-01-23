@@ -35,7 +35,7 @@ func New() source.Source {
 func (*service) CanPrepare(payload any) bool          { return types.Is[*multipart.FileHeader](payload) }
 func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (t *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
+func (t *service) Prepare(ctx context.Context, app domain.App, payload any) (domain.SourceData, error) {
 	file, ok := payload.(*multipart.FileHeader)
 
 	if !ok {
@@ -65,12 +65,15 @@ func (t *service) Prepare(app domain.App, payload any) (domain.SourceData, error
 	return Data(tmpfile.Name()), nil
 }
 
-func (t *service) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
+func (t *service) Fetch(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) error {
 	data, ok := depl.Source().(Data)
 
 	if !ok {
 		return domain.ErrInvalidSourcePayload
 	}
+
+	dir := deploymentCtx.BuildDirectory()
+	logger := deploymentCtx.Logger()
 
 	logger.Stepf("extracting archive %s into %s", data, dir)
 

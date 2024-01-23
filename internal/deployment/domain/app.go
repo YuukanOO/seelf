@@ -15,18 +15,37 @@ import (
 )
 
 var (
-	ErrAppNameAlreadyTaken               = apperr.New("app_name_already_taken")
+	ErrInvalidAppNaming                  = apperr.New("invalid_app_naming")
 	ErrVCSNotConfigured                  = apperr.New("vcs_not_configured")
 	ErrAppCleanupNeeded                  = apperr.New("app_cleanup_needed")
 	ErrAppCleanupRequested               = apperr.New("app_cleanup_requested")
 	ErrAppHasRunningOrPendingDeployments = apperr.New("app_has_running_or_pending_deployments")
 )
 
+const (
+	AppNamingProductionTargetNotFound AppNamingAvailability = 1 << iota
+	AppNamingStagingTargetNotFound
+	AppNamingTakenInProduction
+	AppNamingTakenInStaging
+	AppNamingAvailable
+)
+
+const (
+	TargetAppNamingTargetNotFound TargetAppNamingAvailability = 1 << iota
+	TargetAppNamingTaken
+	TargetAppNamingAvailable
+)
+
 type (
 	// VALUE OBJECTS
+	AppID string
 
-	AppID         string
-	UniqueAppName AppName // Represents the unique name of an app and will be used as a subdomain.
+	// Represents a naming availability. This one is represented with flags because
+	// there can be many reasons for a name to be unavailable and I want to represents
+	// all of them so the application layer could be clearer with the user.
+	AppNamingAvailability uint8
+
+	TargetAppNamingAvailability uint8 // Same as the AppNamingAvailability but for a specific target environment
 
 	// ENTITY
 
@@ -34,9 +53,10 @@ type (
 		event.Emitter
 
 		id               AppID
-		name             UniqueAppName
+		name             AppName
 		vcs              monad.Maybe[VCSConfig]
-		env              monad.Maybe[EnvironmentsEnv]
+		production       EnvironmentConfig
+		staging          EnvironmentConfig
 		cleanupRequested monad.Maybe[shared.Action[domain.UserID]]
 		created          shared.Action[domain.UserID]
 	}
@@ -44,7 +64,8 @@ type (
 	// RELATED SERVICES
 
 	AppsReader interface {
-		IsNameUnique(context.Context, AppName) (UniqueAppName, error)
+		GetAppNamingAvailability(context.Context, AppName, TargetID, TargetID) (AppNamingAvailability, error)
+		GetTargetAppNamingAvailability(context.Context, AppID, Environment, TargetID) (TargetAppNamingAvailability, error)
 		GetByID(context.Context, AppID) (App, error)
 	}
 
@@ -57,22 +78,19 @@ type (
 	AppCreated struct {
 		bus.Notification
 
-		ID      AppID
-		Name    UniqueAppName
-		Created shared.Action[domain.UserID]
+		ID         AppID
+		Name       AppName
+		Production EnvironmentConfig
+		Staging    EnvironmentConfig
+		Created    shared.Action[domain.UserID]
 	}
 
 	AppEnvChanged struct {
 		bus.Notification
 
-		ID  AppID
-		Env EnvironmentsEnv
-	}
-
-	AppEnvRemoved struct {
-		bus.Notification
-
-		ID AppID
+		ID          AppID
+		Environment Environment
+		Config      EnvironmentConfig
 	}
 
 	AppVCSConfigured struct {
@@ -104,20 +122,33 @@ type (
 
 func (AppCreated) Name_() string          { return "deployment.event.app_created" }
 func (AppEnvChanged) Name_() string       { return "deployment.event.app_env_changed" }
-func (AppEnvRemoved) Name_() string       { return "deployment.event.app_env_removed" }
 func (AppVCSConfigured) Name_() string    { return "deployment.event.app_vcs_configured" }
 func (AppVCSRemoved) Name_() string       { return "deployment.event.app_vcs_removed" }
 func (AppCleanupRequested) Name_() string { return "deployment.event.app_cleanup_requested" }
 func (AppDeleted) Name_() string          { return "deployment.event.app_deleted" }
 
 // Instantiates a new App.
-func NewApp(name UniqueAppName, createdBy domain.UserID) (app App) {
+func NewApp(
+	name AppName,
+	production EnvironmentConfig,
+	staging EnvironmentConfig,
+	createdBy domain.UserID,
+	available AppNamingAvailability,
+) (app App, err error) {
+	// Naming availability failed, let's check why
+	if available != AppNamingAvailable {
+		return app, ErrInvalidAppNaming
+	}
+
 	app.apply(AppCreated{
-		ID:      id.New[AppID](),
-		Name:    name,
-		Created: shared.NewAction(createdBy),
+		ID:         id.New[AppID](),
+		Name:       name,
+		Production: production,
+		Staging:    staging,
+		Created:    shared.NewAction(createdBy),
 	})
-	return app
+
+	return app, nil
 }
 
 // Recreates an app from the persistent storage.
@@ -136,7 +167,10 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		&a.name,
 		&url,
 		&token,
-		&a.env,
+		&a.production.target,
+		&a.production.vars,
+		&a.staging.target,
+		&a.staging.vars,
 		&cleanupRequestedAt,
 		&cleanupRequestedBy,
 		&createdAt,
@@ -188,30 +222,17 @@ func (a *App) RemoveVersionControl() {
 	})
 }
 
-// Store environement variables per env and per services for this application.
-func (a *App) HasEnvironmentVariables(vars EnvironmentsEnv) {
-	if existing, isSet := a.env.TryGet(); isSet && vars.Equals(existing) {
-		return
-	}
-
-	a.apply(AppEnvChanged{
-		ID:  a.id,
-		Env: vars,
-	})
+// Updates the production configuration for this application.
+func (a *App) WithProductionConfig(config EnvironmentConfig, available TargetAppNamingAvailability) error {
+	return a.tryUpdateEnvironmentConfig(Production, config, available)
 }
 
-// Removes all environment variables for this application.
-func (a *App) RemoveEnvironmentVariables() {
-	if !a.env.HasValue() {
-		return
-	}
-
-	a.apply(AppEnvRemoved{
-		ID: a.id,
-	})
+// Updates the staging configuration for this application.
+func (a *App) WithStagingConfig(config EnvironmentConfig, available TargetAppNamingAvailability) error {
+	return a.tryUpdateEnvironmentConfig(Staging, config, available)
 }
 
-// Request backend cleaning for this application. This marks the application for deletion.
+// Request cleaning for this application. This marks the application for deletion.
 func (a *App) RequestCleanup(requestedBy domain.UserID) {
 	if a.cleanupRequested.HasValue() {
 		return
@@ -244,21 +265,40 @@ func (a *App) Delete(deployments RunningOrPendingAppDeploymentsCount) error {
 func (a App) ID() AppID                   { return a.id }
 func (a App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
 
-// Retrieve environments variables per service for the given deployment environment
-func (a App) envFor(e Environment) (m monad.Maybe[ServicesEnv]) {
-	env, isSet := a.env.TryGet()
+func (a *App) tryUpdateEnvironmentConfig(
+	env Environment,
+	updatedConfig EnvironmentConfig,
+	available TargetAppNamingAvailability,
+) error {
+	var existingConfig EnvironmentConfig
 
-	if !isSet {
-		return m
+	switch env {
+	case Production:
+		existingConfig = a.production
+	case Staging:
+		existingConfig = a.staging
+	default:
+		return ErrInvalidEnvironmentName
 	}
 
-	vars, exists := env[e]
-
-	if !exists {
-		return m
+	// Same configuration, returns
+	if updatedConfig.Equals(existingConfig) {
+		return nil
 	}
 
-	return m.WithValue(vars)
+	// Target different, let's check naming uniqueness
+	if existingConfig.target != updatedConfig.target &&
+		available != TargetAppNamingAvailable {
+		return ErrInvalidAppNaming
+	}
+
+	a.apply(AppEnvChanged{
+		ID:          a.id,
+		Environment: env,
+		Config:      updatedConfig,
+	})
+
+	return nil
 }
 
 func (a *App) apply(e event.Event) {
@@ -266,11 +306,16 @@ func (a *App) apply(e event.Event) {
 	case AppCreated:
 		a.id = evt.ID
 		a.name = evt.Name
+		a.production = evt.Production
+		a.staging = evt.Staging
 		a.created = evt.Created
 	case AppEnvChanged:
-		a.env = a.env.WithValue(evt.Env)
-	case AppEnvRemoved:
-		a.env = a.env.None()
+		switch evt.Environment {
+		case Production:
+			a.production = evt.Config
+		case Staging:
+			a.staging = evt.Config
+		}
 	case AppVCSConfigured:
 		a.vcs = a.vcs.WithValue(evt.Config)
 	case AppVCSRemoved:

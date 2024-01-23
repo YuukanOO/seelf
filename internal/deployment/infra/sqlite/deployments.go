@@ -32,7 +32,8 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 				,deployment_number
 				,config_appname
 				,config_environment
-				,config_env
+				,config_target
+				,config_vars
 				,state_status
 				,state_errcode
 				,state_services
@@ -69,7 +70,8 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 			,deployment_number
 			,config_appname
 			,config_environment
-			,config_env
+			,config_target
+			,config_vars
 			,state_status
 			,state_errcode
 			,state_services
@@ -85,13 +87,19 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 }
 
 func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appID domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
-	return builder.
+	count, err := builder.
 		Query[domain.RunningOrPendingAppDeploymentsCount](`
 		SELECT COUNT(*)
 		FROM deployments
 		WHERE app_id = ? AND state_status IN (?, ?)`,
 		appID, domain.DeploymentStatusRunning, domain.DeploymentStatusPending).
 		Extract(s.db, ctx)
+
+	if err != nil {
+		return count, err
+	}
+
+	return count, nil
 }
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {
@@ -104,7 +112,8 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 					"deployment_number":    evt.ID.DeploymentNumber(),
 					"config_appname":       evt.Config.AppName(),
 					"config_environment":   evt.Config.Environment(),
-					"config_env":           evt.Config.Env(),
+					"config_target":        evt.Config.Target(),
+					"config_vars":          evt.Config.Vars(),
 					"state_status":         evt.State.Status(),
 					"state_errcode":        evt.State.ErrCode(),
 					"state_services":       evt.State.Services(),

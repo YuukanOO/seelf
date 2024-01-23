@@ -24,7 +24,7 @@ type (
 	}
 )
 
-func newService(conf Config, name, image string, url monad.Maybe[Url]) (s Service) {
+func newService(conf DeploymentConfig, name, image string, url monad.Maybe[Url]) (s Service) {
 	s.name = name
 
 	// Empty image name, let's build it based on the given configuration
@@ -46,7 +46,7 @@ func (s Service) IsExposed() bool       { return s.url.HasValue() }
 func (s Service) QualifiedName() string { return s.qualifiedName } // Returns the service qualified name which identifies it uniquely
 
 // Append a new service (not exposed to the outside world) to the current services array.
-func (s Services) Internal(conf Config, name, image string) (Services, Service) {
+func (s Services) Internal(conf DeploymentConfig, name, image string) (Services, Service) {
 	service := newService(conf, name, image, monad.None[Url]())
 	return append(s, service), service
 }
@@ -54,7 +54,7 @@ func (s Services) Internal(conf Config, name, image string) (Services, Service) 
 // Append a new exposed service to the current array.
 // Given a base url and a deployment config, it will generate the correct URL for the provided
 // service name.
-func (s Services) Public(baseUrl Url, conf Config, name, image string) (Services, Service) {
+func (s Services) Public(baseUrl Url, conf DeploymentConfig, name, image string) (Services, Service) {
 	subdomain := conf.SubDomain()
 
 	// If the default domain has already been taken by another app, build a

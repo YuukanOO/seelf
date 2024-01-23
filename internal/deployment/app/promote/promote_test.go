@@ -11,13 +11,14 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Promote(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	a := domain.NewApp("my-app", "some-uid")
-	appsStore := memory.NewAppsStore(&a)
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
+	appsStore := memory.NewAppsStore(&app)
 
 	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[int, promote.Command] {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)
@@ -37,7 +38,7 @@ func Test_Promote(t *testing.T) {
 	t.Run("should fail if source deployment does not exist", func(t *testing.T) {
 		uc := sut()
 		num, err := uc(ctx, promote.Command{
-			AppID:            string(a.ID()),
+			AppID:            string(app.ID()),
 			DeploymentNumber: 1,
 		})
 
@@ -46,7 +47,7 @@ func Test_Promote(t *testing.T) {
 	})
 
 	t.Run("should correctly creates a new deployment based on the provided one", func(t *testing.T) {
-		dpl, _ := a.NewDeployment(1, raw.Data(""), domain.Staging, "some-uid")
+		dpl, _ := app.NewDeployment(1, raw.Data(""), domain.Staging, "some-uid")
 		uc := sut(&dpl)
 
 		number, err := uc(ctx, promote.Command{

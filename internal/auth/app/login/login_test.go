@@ -10,13 +10,15 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validation"
 )
 
 func Test_Login(t *testing.T) {
 	hasher := crypto.NewBCryptHasher()
-	password, _ := hasher.Hash("password") // Sample password hash for the string "password" for tests
+	password := must.Panic(hasher.Hash("password")) // Sample password hash for the string "password" for tests
+	existingUser := must.Panic(domain.NewUser("existing@example.com", password, "apikey", true))
 
 	sut := func(existingUsers ...*domain.User) bus.RequestHandler[string, login.Command] {
 		store := memory.NewUsersStore(existingUsers...)
@@ -44,8 +46,7 @@ func Test_Login(t *testing.T) {
 	})
 
 	t.Run("should complains if password does not match", func(t *testing.T) {
-		usr := domain.NewUser("existing@example.com", password, "apikey")
-		uc := sut(&usr)
+		uc := sut(&existingUser)
 		_, err := uc(context.Background(), login.Command{
 			Email:    "existing@example.com",
 			Password: "nobodycares",
@@ -58,7 +59,6 @@ func Test_Login(t *testing.T) {
 	})
 
 	t.Run("should returns a valid user id if it succeeds", func(t *testing.T) {
-		existingUser := domain.NewUser("existing@example.com", password, "apikey")
 		uc := sut(&existingUser)
 		uid, err := uc(context.Background(), login.Command{
 			Email:    "existing@example.com",

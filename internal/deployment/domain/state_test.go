@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
@@ -57,10 +58,10 @@ func Test_State(t *testing.T) {
 			services domain.Services
 		)
 
-		app := domain.NewApp("app1", "uid")
-		conf := domain.NewConfig(app, domain.Production)
+		app := must.Panic(domain.NewApp("app1", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), "uid", domain.AppNamingAvailable))
+		conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 		services, _ = services.Internal(conf, "name1", "image1")
-		state, _ = state.Started()
+		state = must.Panic(state.Started())
 
 		state, err = state.Succeeded(services)
 
@@ -74,7 +75,7 @@ func Test_State(t *testing.T) {
 	})
 
 	t.Run("should err if trying to start but not in pending state", func(t *testing.T) {
-		state, _ := domain.State{}.Started()
+		state := must.Panic(domain.State{}.Started())
 
 		_, err := state.Started()
 

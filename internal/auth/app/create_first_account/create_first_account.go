@@ -2,12 +2,20 @@ package create_first_account
 
 import (
 	"context"
+	"errors"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/validation"
 	"github.com/YuukanOO/seelf/pkg/validation/strings"
 )
+
+var ErrAdminAccountRequired = errors.New(`seelf requires a default user to be created but your database looks empty.
+	Please set the SEELF_ADMIN_EMAIL and SEELF_ADMIN_PASSWORD environment variables and relaunch the command, for example:
+
+	$ SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=admin seelf serve
+
+	Please note this is a one time only action`)
 
 // Creates the first user account if no one exists yet.
 // If an account has been created, its id is returned.
@@ -40,7 +48,7 @@ func Handler(
 
 		// Some are empty, that's an error!
 		if strings.Required(cmd.Email) != nil || strings.Required(cmd.Password) != nil {
-			return "", domain.ErrAdminAccountRequired
+			return "", ErrAdminAccountRequired
 		}
 
 		var email domain.Email
@@ -49,13 +57,6 @@ func Handler(
 			"email":    validation.Value(cmd.Email, &email, domain.EmailFrom),
 			"password": validation.Is(cmd.Password, strings.Required),
 		}); err != nil {
-			return "", err
-		}
-
-		// Here this line is not mandatory since we are already checking for the count of users.
-		uniqueEmail, err := reader.IsEmailUnique(ctx, email)
-
-		if err != nil {
 			return "", err
 		}
 
@@ -71,7 +72,12 @@ func Handler(
 			return "", err
 		}
 
-		user := domain.NewUser(uniqueEmail, password, key)
+		// Here the email uniqueness is guaranteed to be true since we check for the user counts above.
+		user, err := domain.NewUser(email, password, key, true)
+
+		if err != nil {
+			return "", err
+		}
 
 		if err = writer.Write(ctx, &user); err != nil {
 			return "", err

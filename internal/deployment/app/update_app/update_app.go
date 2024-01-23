@@ -3,6 +3,7 @@ package update_app
 import (
 	"context"
 
+	"github.com/YuukanOO/seelf/internal/deployment/app/create_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -15,13 +16,16 @@ type (
 	Command struct {
 		bus.Command[string]
 
-		ID  string                                               `json:"-"`
-		VCS monad.Patch[VCSConfig]                               `json:"vcs"`
-		Env monad.Patch[map[string]map[string]map[string]string] `json:"env"`
+		ID         string                         `json:"-"`
+		VCS        monad.Patch[VCSConfig]         `json:"vcs"`
+		Production monad.Maybe[EnvironmentConfig] `json:"production"`
+		Staging    monad.Maybe[EnvironmentConfig] `json:"staging"`
 	}
 
+	EnvironmentConfig create_app.EnvironmentConfig
+
 	VCSConfig struct {
-		Url   monad.Maybe[string] `json:"url"`
+		Url   string              `json:"url"`
 		Token monad.Patch[string] `json:"token"`
 	}
 )
@@ -33,22 +37,24 @@ func Handler(
 	writer domain.AppsWriter,
 ) bus.RequestHandler[string, Command] {
 	return func(ctx context.Context, cmd Command) (string, error) {
-		var (
-			envs domain.EnvironmentsEnv
-			url  domain.Url
-		)
+		var url domain.Url
 
 		if err := validation.Check(validation.Of{
 			"vcs": validation.Patch(cmd.VCS, func(config VCSConfig) error {
 				return validation.Check(validation.Of{
-					"url": validation.Maybe(config.Url, func(urlValue string) error {
-						return validation.Value(urlValue, &url, domain.UrlFrom)
-					}),
+					"url":   validation.Value(config.Url, &url, domain.UrlFrom),
 					"token": validation.Patch(config.Token, strings.Required),
 				})
 			}),
-			"env": validation.Patch(cmd.Env, func(envmap map[string]map[string]map[string]string) error {
-				return validation.Value(envmap, &envs, domain.EnvironmentsEnvFrom)
+			"production": validation.Maybe(cmd.Production, func(conf EnvironmentConfig) error {
+				return validation.Check(validation.Of{
+					"target": validation.Is(conf.Target, strings.Required),
+				})
+			}),
+			"staging": validation.Maybe(cmd.Staging, func(conf EnvironmentConfig) error {
+				return validation.Check(validation.Of{
+					"target": validation.Is(conf.Target, strings.Required),
+				})
 			}),
 		}); err != nil {
 			return "", err
@@ -62,16 +68,8 @@ func Handler(
 
 		if vcsPatch, isSet := cmd.VCS.TryGet(); isSet {
 			if vcsUpdate, hasValue := vcsPatch.TryGet(); hasValue {
-				// No VCS configured on the app and no url given
-				if !app.VCS().HasValue() && !vcsUpdate.Url.HasValue() {
-					return "", domain.ErrVCSNotConfigured
-				}
-
-				vcs := app.VCS().Get(domain.NewVCSConfig(url))
-
-				if vcsUpdate.Url.HasValue() {
-					vcs = vcs.WithUrl(url)
-				}
+				// Take the existing vcs as a reference so the token is not modified if not provided at all
+				vcs := app.VCS().Get(domain.NewVCSConfig(url)).WithUrl(url)
 
 				if tokenPatch, isSet := vcsUpdate.Token.TryGet(); isSet {
 					if token, hasValue := tokenPatch.TryGet(); hasValue {
@@ -87,11 +85,31 @@ func Handler(
 			}
 		}
 
-		if cmd.Env.IsSet() {
-			if cmd.Env.IsNil() {
-				app.RemoveEnvironmentVariables()
-			} else {
-				app.HasEnvironmentVariables(envs)
+		if conf, isSet := cmd.Production.TryGet(); isSet {
+			target := domain.TargetID(conf.Target)
+
+			availability, err := reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Production, target)
+
+			if err != nil {
+				return "", err
+			}
+
+			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {
+				return "", err
+			}
+		}
+
+		if conf, isSet := cmd.Staging.TryGet(); isSet {
+			target := domain.TargetID(conf.Target)
+
+			availability, err := reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Staging, target)
+
+			if err != nil {
+				return "", err
+			}
+
+			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {
+				return "", err
 			}
 		}
 

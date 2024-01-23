@@ -6,36 +6,45 @@ import (
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Deployment(t *testing.T) {
 	var (
+		appname    domain.AppName          = "my-app"
+		production                         = domain.NewEnvironmentConfig("production-target")
+		staging                            = domain.NewEnvironmentConfig("staging-target")
 		uid        auth.UserID             = "uid"
 		number     domain.DeploymentNumber = 1
 		vcsMeta                            = meta{true}
 		nonVcsMeta                         = meta{false}
+		app                                = must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 	)
 
 	t.Run("should require a version control config to be defined on the app for vcs managed source", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
 		_, err := app.NewDeployment(number, vcsMeta, domain.Production, uid)
 
 		testutil.ErrorIs(t, domain.ErrVCSNotConfigured, err)
 	})
 
 	t.Run("should require an app without cleanup requested", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-		app.RequestCleanup("uid")
+		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app.RequestCleanup(uid)
 
 		_, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 
 		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, err)
 	})
 
+	t.Run("should fail for an invalid environment", func(t *testing.T) {
+		_, err := app.NewDeployment(number, nonVcsMeta, "doesnotexist", uid)
+
+		testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, err)
+	})
+
 	t.Run("should be created from a valid app", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
 		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		conf := dpl.Config()
 
@@ -44,6 +53,8 @@ func Test_Deployment(t *testing.T) {
 		testutil.Equals(t, nonVcsMeta, dpl.Source().(meta))
 		testutil.Equals(t, "my-app", conf.AppName())
 		testutil.Equals(t, domain.Production, conf.Environment())
+		testutil.Equals(t, production.Target(), conf.Target())
+		testutil.DeepEquals(t, production.Vars(), conf.Vars())
 
 		testutil.HasNEvents(t, &dpl, 1)
 		evt := testutil.EventIs[domain.DeploymentCreated](t, &dpl, 0)
@@ -58,7 +69,6 @@ func Test_Deployment(t *testing.T) {
 	t.Run("could be marked has started", func(t *testing.T) {
 		var err error
 
-		app := domain.NewApp("my-app", uid)
 		dpl, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 
 		testutil.IsNil(t, err)
@@ -79,8 +89,7 @@ func Test_Deployment(t *testing.T) {
 			services domain.Services
 		)
 
-		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
+		dpl := must.Panic(app.NewDeployment(number, nonVcsMeta, domain.Production, uid))
 		services, _ = services.Internal(dpl.Config(), "aservice", "an/image")
 		dpl.HasStarted()
 
@@ -98,7 +107,6 @@ func Test_Deployment(t *testing.T) {
 	t.Run("should default to a deployment without services if has ended without services nor error", func(t *testing.T) {
 		var err error
 
-		app := domain.NewApp("my-app", uid)
 		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		dpl.HasStarted()
 
@@ -119,7 +127,6 @@ func Test_Deployment(t *testing.T) {
 			reason = errors.New("failed reason")
 		)
 
-		app := domain.NewApp("my-app", uid)
 		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
 		dpl.HasStarted()
 
@@ -136,8 +143,7 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("could be redeployed", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
+		dpl := must.Panic(app.NewDeployment(number, nonVcsMeta, domain.Production, uid))
 
 		redpl, err := app.Redeploy(dpl, 2, "another-user")
 
@@ -147,16 +153,15 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("should err if trying to redeploy a deployment on the wrong app", func(t *testing.T) {
-		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, nonVcsMeta, domain.Production, uid)
+		source := must.Panic(app.NewDeployment(1, nonVcsMeta, domain.Production, uid))
 
-		_, err := domain.NewApp("my-app", uid).Redeploy(source, 2, "uid")
+		_, err := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable)).Redeploy(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
 
 	t.Run("could not promote an already in production deployment", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
+		dpl := must.Panic(app.NewDeployment(number, nonVcsMeta, domain.Production, uid))
 
 		_, err := app.Promote(dpl, 2, "another-user")
 
@@ -164,16 +169,15 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("should err if trying to promote a deployment on the wrong app", func(t *testing.T) {
-		source, _ := domain.NewApp("an-app", uid).NewDeployment(1, nonVcsMeta, domain.Staging, uid)
+		source := must.Panic(app.NewDeployment(1, nonVcsMeta, domain.Staging, uid))
 
-		_, err := domain.NewApp("my-app", uid).Promote(source, 2, "uid")
+		_, err := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable)).Promote(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
 
 	t.Run("could promote a staging deployment", func(t *testing.T) {
-		app := domain.NewApp("my-app", uid)
-		dpl, _ := app.NewDeployment(number, nonVcsMeta, domain.Staging, uid)
+		dpl := must.Panic(app.NewDeployment(number, nonVcsMeta, domain.Staging, uid))
 
 		promoted, err := app.Promote(dpl, 2, "another-user")
 

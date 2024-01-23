@@ -258,6 +258,10 @@ func (q *queryBuilder[T]) One(
 		return result, apperr.ErrNotFound
 	}
 
+	if err != nil {
+		return result, err
+	}
+
 	if len(loaders) > 0 {
 		kr := KeyedResult[T]{
 			data: []T{result},

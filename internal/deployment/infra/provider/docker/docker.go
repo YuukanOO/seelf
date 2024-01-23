@@ -32,7 +32,7 @@ var (
 	ErrOpenComposeFileFailed = errors.New("compose_file_open_failed")
 	ErrComposeFailed         = errors.New("compose_failed")
 
-	_ domain.Backend = (*Docker)(nil) // Make sure docker implements the Backend interface
+	_ domain.Provider = (*Docker)(nil) // Make sure docker implements the Provider interface
 )
 
 const (
@@ -61,7 +61,7 @@ type (
 	}
 )
 
-// Creates a docker backend with given options. The configuration is mostly used to
+// Creates a docker provider with given options. The configuration is mostly used to
 // ease the testing of some internals.
 func New(options Options, logger log.Logger, configuration ...DockerOptions) *Docker {
 	d := &Docker{
@@ -160,7 +160,12 @@ func (d *Docker) Setup() error {
 	})
 }
 
-func (d *Docker) Run(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) (domain.Services, error) {
+func (d *Docker) Prepare(ctx context.Context, payload any) (domain.ProviderConfig, error) {
+	return nil, nil
+}
+
+func (d *Docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) (domain.Services, error) {
+	logger := deploymentCtx.Logger()
 	cli, compose, err := d.instantiateClientAndCompose(logger)
 
 	if err != nil {
@@ -171,7 +176,7 @@ func (d *Docker) Run(ctx context.Context, dir string, logger domain.DeploymentLo
 
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
-	project, services, err := d.generateProject(depl, dir, logger)
+	project, services, err := d.generateProject(depl, deploymentCtx.BuildDirectory(), logger)
 
 	if err != nil {
 		return nil, err

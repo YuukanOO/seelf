@@ -52,64 +52,94 @@ func Test_Environment(t *testing.T) {
 	})
 }
 
-func Test_EnvironmentsEnv(t *testing.T) {
-	t.Run("should require valid environment names", func(t *testing.T) {
-		rawEnvs := map[string]map[string]map[string]string{
-			"production":      {"app": {}},
-			"not a valid env": {"app": {}},
-		}
-
-		r, err := domain.EnvironmentsEnvFrom(rawEnvs)
-
-		testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, err)
-		testutil.DeepEquals(t, domain.EnvironmentsEnv{}, r)
-	})
-
+func Test_ServicesEnv(t *testing.T) {
 	t.Run("should builds a map from a raw one", func(t *testing.T) {
-		rawEnvs := map[string]map[string]map[string]string{
-			"production": {"app": {"DEBUG": "false"}},
-			"staging":    {"app": {"DEBUG": "true"}},
+		rawEnvs := map[string]map[string]string{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
 		}
 
-		r, err := domain.EnvironmentsEnvFrom(rawEnvs)
+		r := domain.ServicesEnvFrom(rawEnvs)
 
-		testutil.IsNil(t, err)
-		testutil.DeepEquals(t, domain.EnvironmentsEnv{
-			"production": {"app": {"DEBUG": "false"}},
-			"staging":    {"app": {"DEBUG": "true"}},
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
 		}, r)
 	})
 
-	t.Run("should be able to compare itself with another envs map", func(t *testing.T) {
+	t.Run("should returns an empty map if the raw one is nil", func(t *testing.T) {
+		r := domain.ServicesEnvFrom(nil)
+
+		testutil.DeepEquals(t, domain.ServicesEnv{}, r)
+	})
+
+	t.Run("should skip nil environment variables values", func(t *testing.T) {
+		rawEnvs := map[string]map[string]string{
+			"app": {"DEBUG": "false"},
+			"db":  nil,
+		}
+
+		r := domain.ServicesEnvFrom(rawEnvs)
+
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+		}, r)
+	})
+}
+
+func Test_EnvironmentConfig(t *testing.T) {
+	t.Run("should be able to build a new environment config", func(t *testing.T) {
+		target := domain.TargetID("target")
+
+		r := domain.NewEnvironmentConfig(target)
+
+		testutil.Equals(t, target, r.Target())
+		testutil.IsFalse(t, r.Vars().HasValue())
+	})
+
+	t.Run("should be able to configure environment variables", func(t *testing.T) {
+		target := domain.TargetID("target")
+		vars := domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
+		}
+
+		r := domain.NewEnvironmentConfig(target).WithEnvironmentVariables(vars)
+
+		testutil.Equals(t, target, r.Target())
+		testutil.IsTrue(t, r.Vars().HasValue())
+		testutil.DeepEquals(t, vars, r.Vars().MustGet())
+	})
+
+	t.Run("should be able to compare itself with another config", func(t *testing.T) {
 		tests := []struct {
-			a        domain.EnvironmentsEnv
-			b        domain.EnvironmentsEnv
+			a        domain.EnvironmentConfig
+			b        domain.EnvironmentConfig
 			expected bool
 		}{
-			{nil, nil, true},
 			{
-				a:        nil,
-				b:        domain.EnvironmentsEnv{},
-				expected: false,
-			},
-			{
-				a:        domain.EnvironmentsEnv{"production": {}},
-				b:        domain.EnvironmentsEnv{"production": {}},
+				a:        domain.NewEnvironmentConfig("1"),
+				b:        domain.NewEnvironmentConfig("1"),
 				expected: true,
 			},
 			{
-				a:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
-				b:        domain.EnvironmentsEnv{"production": {}},
+				a:        domain.NewEnvironmentConfig("1"),
+				b:        domain.NewEnvironmentConfig("2"),
 				expected: false,
 			},
 			{
-				a:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
-				b:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
+				a:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
+				b:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
 				expected: true,
 			},
 			{
-				a:        domain.EnvironmentsEnv{"production": {"another": {"level": "hey"}}},
-				b:        domain.EnvironmentsEnv{"production": {"another": {"level": "nope"}}},
+				a:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
+				b:        domain.NewEnvironmentConfig("1"),
+				expected: false,
+			},
+			{
+				a:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
+				b:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}}),
 				expected: false,
 			},
 		}

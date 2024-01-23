@@ -20,6 +20,8 @@ func Test_AppNameFrom(t *testing.T) {
 			{"My app", false},
 			{"some-app-1337", true},
 			{"my-app", true},
+			{"some-app-stagin", true},
+			{"some-app-staging", false},
 		}
 
 		for _, test := range tests {

@@ -66,3 +66,14 @@ func As[T error](err error) (T, bool) {
 	ok := errors.As(err, &target)
 	return target, ok
 }
+
+// Returns the first non nil error
+func Any(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

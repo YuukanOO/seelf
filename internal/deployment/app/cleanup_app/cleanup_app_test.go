@@ -13,6 +13,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
@@ -35,7 +36,7 @@ func Test_CleanupApp(t *testing.T) {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return cleanup_app.Handler(deploymentsStore, appsStore, appsStore, artifactManager, &dummyBackend{})
+		return cleanup_app.Handler(deploymentsStore, appsStore, appsStore, artifactManager, &dummyProvider{})
 	}
 
 	t.Run("should returns no error if the application does not exist", func(t *testing.T) {
@@ -50,13 +51,13 @@ func Test_CleanupApp(t *testing.T) {
 	})
 
 	t.Run("should fail if the application cleanup as not been requested", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
 		uc := sut(initialData{
-			existingApps: []*domain.App{&a},
+			existingApps: []*domain.App{&app},
 		})
 
 		r, err := uc(ctx, cleanup_app.Command{
-			ID: string(a.ID()),
+			ID: string(app.ID()),
 		})
 
 		testutil.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
@@ -64,17 +65,17 @@ func Test_CleanupApp(t *testing.T) {
 	})
 
 	t.Run("should fail if there are still pending or running deployments", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
-		depl, _ := a.NewDeployment(1, raw.Data(""), domain.Production, "uid")
-		a.RequestCleanup("uid")
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
+		depl := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
+		app.RequestCleanup("uid")
 
 		uc := sut(initialData{
-			existingApps:        []*domain.App{&a},
+			existingApps:        []*domain.App{&app},
 			existingDeployments: []*domain.Deployment{&depl},
 		})
 
 		r, err := uc(ctx, cleanup_app.Command{
-			ID: string(a.ID()),
+			ID: string(app.ID()),
 		})
 
 		testutil.ErrorIs(t, domain.ErrAppHasRunningOrPendingDeployments, err)
@@ -82,27 +83,27 @@ func Test_CleanupApp(t *testing.T) {
 	})
 
 	t.Run("should succeed if everything is good", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
-		a.RequestCleanup("uid")
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
+		app.RequestCleanup("uid")
 
 		uc := sut(initialData{
-			existingApps: []*domain.App{&a},
+			existingApps: []*domain.App{&app},
 		})
 
 		r, err := uc(ctx, cleanup_app.Command{
-			ID: string(a.ID()),
+			ID: string(app.ID()),
 		})
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
-		testutil.EventIs[domain.AppDeleted](t, &a, 2)
+		testutil.EventIs[domain.AppDeleted](t, &app, 2)
 	})
 }
 
-type dummyBackend struct {
-	domain.Backend
+type dummyProvider struct {
+	domain.Provider
 }
 
-func (d *dummyBackend) Cleanup(ctx context.Context, app domain.App) error {
+func (d *dummyProvider) Cleanup(ctx context.Context, app domain.App) error {
 	return nil
 }

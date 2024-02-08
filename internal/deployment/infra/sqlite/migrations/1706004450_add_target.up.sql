@@ -1,7 +1,4 @@
-/**
- * target fields are mandatory but since SQLite doesn't support altering that NULL
- * constraint, keep it nullable...
- */
+-- Since sqlite does not support adding constraints afterward, use temp tables to migrate data
 
 CREATE TABLE targets (
     id TEXT NOT NULL,
@@ -16,47 +13,149 @@ CREATE TABLE targets (
     CONSTRAINT pk_targets PRIMARY KEY(id),
     CONSTRAINT fk_targets_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT unique_targets_url UNIQUE(url), -- unique domain among all targets
-    CONSTRAINT unique_targets_provider_fingerprint UNIQUE(provider_fingerprint) -- and one unique provider fingerpint (same host and so on)
+    CONSTRAINT unique_targets_provider_fingerprint UNIQUE(provider_fingerprint) -- and one unique provider fingerprint (same host and so on)
 );
-
-ALTER TABLE deployments RENAME COLUMN config_env TO config_vars;
-ALTER TABLE deployments ADD config_target TEXT NULL; -- No FK on config_target because we don't want to deal with a target deletion.
-
-ALTER TABLE apps DROP COLUMN env;
-
--- Add FK on targets because we don't want to delete a target if it's used by an app.
-ALTER TABLE apps ADD production_target TEXT NULL CONSTRAINT fk_apps_production_target REFERENCES targets(id) ON DELETE RESTRICT;
-ALTER TABLE apps ADD production_vars TEXT NULL;
-ALTER TABLE apps ADD staging_target TEXT NULL CONSTRAINT fk_apps_production_target REFERENCES targets(id) ON DELETE RESTRICT;
-ALTER TABLE apps ADD staging_vars TEXT NULL;
 
 -- Creates a default target if at least one app exists, else do nothing
 INSERT INTO targets (id, name, url, provider_kind, provider_fingerprint, provider, created_at, created_by)
-SELECT '2bRUdQnyRELMqyh9gFLQV1s0cqv', 'local', 'http://docker.localhost', 'docker', '', '{}', DATETIME() , (SELECT id FROM users LIMIT 1) FROM apps LIMIT 1;
+SELECT 
+    '2bRUdQnyRELMqyh9gFLQV1s0cqv'
+    ,'local'
+    ,'http://docker.localhost'
+    ,'docker'
+    ,''
+    ,'{}'
+    ,DATETIME()
+    ,(SELECT id FROM users LIMIT 1)
+FROM apps LIMIT 1;
 
--- Update all deployments to point to the default target
-UPDATE deployments SET config_target = (SELECT id FROM targets LIMIT 1);
+-- Rename the old apps table since it will be recreated with proper NOT NULL columns
+ALTER TABLE apps RENAME TO tmp_apps;
 
--- Try to populate new vars fields with the latest deployment queued and update apps targets
-UPDATE apps
-SET
-    production_target = (SELECT id FROM targets LIMIT 1)
-    ,staging_target = (SELECT id FROM targets LIMIT 1)
-	,production_vars = (
-        SELECT config_vars
+-- Create the new apps table with proper columns
+CREATE TABLE apps (
+    id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    vcs_url TEXT NULL,
+    vcs_token TEXT NULL,
+    production_target TEXT NOT NULL,
+    production_vars TEXT NULL,
+    staging_target TEXT NOT NULL,
+    staging_vars TEXT NULL,
+    created_at DATETIME NOT NULL,
+    created_by TEXT NOT NULL,
+    cleanup_requested_at DATETIME NULL,
+    cleanup_requested_by TEXT NULL,
+
+    CONSTRAINT pk_apps PRIMARY KEY(id),
+    CONSTRAINT unique_apps_name_production_target UNIQUE(name, production_target),
+    CONSTRAINT unique_apps_name_staging_target UNIQUE(name, staging_target),    
+    CONSTRAINT fk_apps_production_target FOREIGN KEY(production_target) REFERENCES targets(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_apps_staging_target FOREIGN KEY(staging_target) REFERENCES targets(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_apps_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_apps_cleanup_requested_by FOREIGN KEY (cleanup_requested_by) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- Transfer old apps data into the new structure, trying to retrieve old configuration in the meantime
+INSERT INTO apps (
+    id
+    ,name
+    ,vcs_url
+    ,vcs_token
+    ,production_target
+    ,production_vars
+    ,staging_target
+    ,staging_vars
+    ,created_at
+    ,created_by
+    ,cleanup_requested_at
+    ,cleanup_requested_by
+)
+SELECT
+    id
+	,name
+	,vcs_url
+	,vcs_token
+	,'2bRUdQnyRELMqyh9gFLQV1s0cqv'
+	,(
+        SELECT config_env
         FROM deployments d
-        WHERE d.app_id = id AND d.config_environment = 'production'
+        WHERE d.app_id = tmp_apps.id AND d.config_environment = 'production'
         ORDER BY d.requested_at DESC LIMIT 1
     )
-	,staging_vars = (
-        SELECT config_vars
+	,'2bRUdQnyRELMqyh9gFLQV1s0cqv'
+	,(
+        SELECT config_env
         FROM deployments d
-        WHERE d.app_id = id AND d.config_environment = 'staging'
+        WHERE d.app_id = tmp_apps.id AND d.config_environment = 'staging'
         ORDER BY d.requested_at DESC LIMIT 1
-    );
+    )
+	,created_at
+    ,created_by 
+	,cleanup_requested_at
+	,cleanup_requested_by
+FROM tmp_apps;
 
--- Create unique indexes on the couple (name, target) for both environments
-CREATE UNIQUE INDEX unique_apps_name_production_target ON apps(name, production_target);
-CREATE UNIQUE INDEX unique_apps_name_staging_target ON apps(name, staging_target);
+-- Do the same for deployments
+ALTER TABLE deployments RENAME TO tmp_deployments;
 
-DROP INDEX IF EXISTS unique_apps_name;
+CREATE TABLE deployments (
+    app_id TEXT NOT NULL,
+    deployment_number INTEGER NOT NULL,
+    config_appname TEXT NOT NULL,
+    config_environment TEXT NOT NULL,
+    config_target TEXT NOT NULL, -- No FK on config_target because we don't want to deal with a target deletion.
+    config_vars TEXT NULL,
+    state_status INTEGER NOT NULL,
+    state_errcode TEXT NULL,
+    state_services TEXT NULL,
+    state_started_at DATETIME NULL,
+    state_finished_at DATETIME NULL,
+    source_discriminator TEXT NOT NULL,
+    source TEXT NOT NULL,
+    requested_at DATETIME NOT NULL,
+    requested_by TEXT NOT NULL,
+
+    CONSTRAINT pk_deployments PRIMARY KEY(app_id, deployment_number),
+    CONSTRAINT fk_deployments_app_id FOREIGN KEY(app_id) REFERENCES apps(id) ON DELETE CASCADE,
+    CONSTRAINT fk_deployments_requested_by FOREIGN KEY(requested_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+INSERT INTO deployments (
+    app_id
+    ,deployment_number
+    ,config_appname
+    ,config_environment
+    ,config_target
+    ,config_vars
+    ,state_status
+    ,state_errcode
+    ,state_services
+    ,state_started_at
+    ,state_finished_at
+    ,source_discriminator
+    ,source
+    ,requested_at
+    ,requested_by
+)
+SELECT
+    app_id
+	,deployment_number
+	,config_appname
+	,config_environment
+	,'2bRUdQnyRELMqyh9gFLQV1s0cqv'
+	,config_env
+	,state_status
+	,state_errcode
+	,state_services
+	,state_started_at
+	,state_finished_at
+	,source_discriminator
+	,source
+	,requested_at
+	,requested_by
+FROM tmp_deployments;
+
+-- Remove old tables
+DROP TABLE tmp_apps;
+DROP TABLE tmp_deployments;

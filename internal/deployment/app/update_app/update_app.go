@@ -94,6 +94,10 @@ func Handler(
 				return "", err
 			}
 
+			if err = availability.Error(); err != nil {
+				return "", validation.WrapIfAppErr(err, "production.target")
+			}
+
 			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {
 				return "", err
 			}
@@ -106,6 +110,10 @@ func Handler(
 
 			if err != nil {
 				return "", err
+			}
+
+			if err = availability.Error(); err != nil {
+				return "", validation.WrapIfAppErr(err, "staging.target")
 			}
 
 			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {

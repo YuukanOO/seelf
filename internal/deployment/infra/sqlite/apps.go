@@ -20,18 +20,6 @@ type (
 	appsStore struct {
 		db *sqlite.Database
 	}
-
-	appNameUniquenessResult struct {
-		productionCount  uint
-		productionTarget bool
-		stagingCount     uint
-		stagingTarget    bool
-	}
-
-	appNameUniquenessOnTargetEnvironmentResult struct {
-		count  uint
-		target bool
-	}
 )
 
 func NewAppsStore(db *sqlite.Database) AppsStore {
@@ -47,19 +35,13 @@ func (s *appsStore) GetAppNamingAvailability(
 	var availability domain.AppNamingAvailability
 
 	r, err := builder.
-		Query[appNameUniquenessResult](`
-		SELECT
-			COUNT(CASE WHEN apps.production_target = ? THEN 1 END) AS production_count
-			,MAX(CASE WHEN targets.id = ? THEN true ELSE false END) AS production_target_exists
-			,COUNT(CASE WHEN apps.staging_target = ? THEN 1 END) AS staging_count
-			,MAX(CASE WHEN targets.id = ? THEN true ELSE false END) AS staging_target_exists
-		FROM
-			targets
-		LEFT JOIN apps ON apps.production_target = targets.id OR apps.staging_target = targets.id
-		WHERE 
-			targets.id IN (?, ?)
-			AND (apps.name = ? OR apps.name IS NULL)
-		`, production, production, staging, staging, production, staging, name).
+		Query[appNamingResult](`
+			SELECT
+				(SELECT COUNT(id) FROM apps WHERE name = ? AND production_target = ?) AS production_count
+				,(SELECT COUNT(id) FROM targets WHERE id = ?) AS production_target_exists
+				,(SELECT COUNT(id) FROM apps WHERE name = ? AND staging_target = ?) AS staging_count
+				,(SELECT COUNT(id) FROM targets WHERE id = ?) AS staging_target_exists
+		`, name, production, production, name, staging, staging).
 		One(s.db, ctx, appNameUniquenessResultMapper)
 
 	if err != nil {
@@ -98,17 +80,13 @@ func (s *appsStore) GetTargetAppNamingAvailability(
 	var availability domain.TargetAppNamingAvailability
 
 	r, err := builder.
-		Query[appNameUniquenessOnTargetEnvironmentResult](fmt.Sprintf(`
-		SELECT
-			COUNT(apps.id) AS count
-			,MAX(CASE WHEN targets.id = ? THEN true ELSE false END) AS exists
-		FROM
-			targets
-		LEFT JOIN apps ON apps.%s_target = targets.id
-		WHERE
-			targets.id = ?
-			AND apps.name = (SELECT name FROM apps WHERE apps.id = ?)
-			AND apps.id != ?`, env), target, target, id, id).
+		Query[targetAppNamingResult](fmt.Sprintf(`
+			SELECT
+				(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.%s_target = ?) AS count
+				,(SELECT COUNT(id) FROM targets WHERE id = ?) AS target
+			FROM apps src
+			WHERE src.id = ?
+		`, env), target, target, id).
 		One(s.db, ctx, appNameUniquenessOnTargetEnvironmentResultMapper)
 
 	if err != nil {
@@ -211,7 +189,21 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 	})
 }
 
-func appNameUniquenessResultMapper(s storage.Scanner) (r appNameUniquenessResult, err error) {
+type (
+	appNamingResult struct {
+		productionCount  uint
+		productionTarget bool
+		stagingCount     uint
+		stagingTarget    bool
+	}
+
+	targetAppNamingResult struct {
+		count  uint
+		target bool
+	}
+)
+
+func appNameUniquenessResultMapper(s storage.Scanner) (r appNamingResult, err error) {
 	err = s.Scan(
 		&r.productionCount,
 		&r.productionTarget,
@@ -222,7 +214,7 @@ func appNameUniquenessResultMapper(s storage.Scanner) (r appNameUniquenessResult
 	return r, err
 }
 
-func appNameUniquenessOnTargetEnvironmentResultMapper(s storage.Scanner) (r appNameUniquenessOnTargetEnvironmentResult, err error) {
+func appNameUniquenessOnTargetEnvironmentResultMapper(s storage.Scanner) (r targetAppNamingResult, err error) {
 	err = s.Scan(&r.count, &r.target)
 
 	return r, err

@@ -9,6 +9,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/flag"
 	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -135,7 +136,6 @@ func NewApp(
 	createdBy domain.UserID,
 	available AppNamingAvailability,
 ) (app App, err error) {
-	// Naming availability failed, let's check why
 	if available != AppNamingAvailable {
 		return app, ErrInvalidAppNaming
 	}
@@ -325,4 +325,41 @@ func (a *App) apply(e event.Event) {
 	}
 
 	event.Store(a, e)
+}
+
+// Converts the AppNamingAvailability to a more detailed error.
+func (a AppNamingAvailability) Error(env Environment) error {
+	switch env {
+	case Production:
+		if flag.IsSet(a, AppNamingProductionTargetNotFound) {
+			return apperr.ErrNotFound
+		}
+
+		if flag.IsSet(a, AppNamingTakenInProduction) {
+			return ErrInvalidAppNaming
+		}
+	case Staging:
+		if flag.IsSet(a, AppNamingStagingTargetNotFound) {
+			return apperr.ErrNotFound
+		}
+
+		if flag.IsSet(a, AppNamingTakenInStaging) {
+			return ErrInvalidAppNaming
+		}
+	}
+
+	return nil
+}
+
+// Converts the TargetAppNamingAvailability to a more detailed error.
+func (a TargetAppNamingAvailability) Error() error {
+	if flag.IsSet(a, TargetAppNamingTargetNotFound) {
+		return apperr.ErrNotFound
+	}
+
+	if flag.IsSet(a, TargetAppNamingTaken) {
+		return ErrInvalidAppNaming
+	}
+
+	return nil
 }

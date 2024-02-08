@@ -1,10 +1,12 @@
 package domain_test
 
 import (
+	"fmt"
 	"testing"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
@@ -184,5 +186,49 @@ func Test_App(t *testing.T) {
 		testutil.HasNEvents(t, &app, 3)
 		evt := testutil.EventIs[domain.AppDeleted](t, &app, 2)
 		testutil.Equals(t, app.ID(), evt.ID)
+	})
+}
+
+func Test_AppNamingAvailability(t *testing.T) {
+	t.Run("should be able to return a detailed error", func(t *testing.T) {
+		tests := []struct {
+			availability domain.AppNamingAvailability
+			production   error
+			staging      error
+		}{
+			{domain.AppNamingProductionTargetNotFound, apperr.ErrNotFound, nil},
+			{domain.AppNamingStagingTargetNotFound, nil, apperr.ErrNotFound},
+			{domain.AppNamingTakenInProduction, domain.ErrInvalidAppNaming, nil},
+			{domain.AppNamingTakenInStaging, nil, domain.ErrInvalidAppNaming},
+			{domain.AppNamingProductionTargetNotFound | domain.AppNamingTakenInStaging, apperr.ErrNotFound, domain.ErrInvalidAppNaming},
+			{domain.AppNamingAvailable, nil, nil},
+		}
+
+		for _, test := range tests {
+			t.Run(fmt.Sprintf("availability %d", test.availability), func(t *testing.T) {
+				testutil.ErrorIs(t, test.production, test.availability.Error(domain.Production))
+				testutil.ErrorIs(t, test.staging, test.availability.Error(domain.Staging))
+			})
+		}
+	})
+}
+
+func Test_TargetAppNamingAvailability(t *testing.T) {
+	t.Run("should be able to return a detailed error", func(t *testing.T) {
+		tests := []struct {
+			availability domain.TargetAppNamingAvailability
+			expected     error
+		}{
+			{domain.TargetAppNamingTargetNotFound, apperr.ErrNotFound},
+			{domain.TargetAppNamingTaken, domain.ErrInvalidAppNaming},
+			{domain.TargetAppNamingTargetNotFound | domain.TargetAppNamingTaken, apperr.ErrNotFound},
+			{domain.TargetAppNamingAvailable, nil},
+		}
+
+		for _, test := range tests {
+			t.Run(fmt.Sprintf("availability %d", test.availability), func(t *testing.T) {
+				testutil.ErrorIs(t, test.expected, test.availability.Error())
+			})
+		}
 	})
 }

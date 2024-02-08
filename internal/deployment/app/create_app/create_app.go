@@ -71,13 +71,14 @@ func Handler(
 			return "", err
 		}
 
-		// // Returns early if the application name is not unique on both targets.
-		// if err = validation.Check(validation.Of{
-		// 	"production.target": requirement.Production().Error(),
-		// 	"staging.target":    requirement.Staging().Error(),
-		// }); err != nil {
-		// 	return "", err
-		// }
+		// Returns early if the application name is not unique on both targets.
+		// Convert the AppNaming flag to a user friendly error.
+		if err = validation.Check(validation.Of{
+			"production.target": requirement.Error(domain.Production),
+			"staging.target":    requirement.Error(domain.Staging),
+		}); err != nil {
+			return "", err
+		}
 
 		app, err := domain.NewApp(
 			appname,

@@ -20,8 +20,8 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/ostools"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/numbers"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/numbers"
 )
 
 var (
@@ -222,18 +222,18 @@ func (c configuration) ListenAddress() string {
 func (c *configuration) PostLoad() error {
 	var (
 		acmeEmail    auth.Email
-		domainUrlErr = validation.Value(c.Balancer.Domain, &c.domain, domain.UrlFrom)
+		domainUrlErr = validate.Value(c.Balancer.Domain, &c.domain, domain.UrlFrom)
 	)
 
-	return validation.Check(validation.Of{
-		"log.level":                    validation.Value(c.Log.Level, &c.logLevel, log.ParseLevel),
-		"log.format":                   validation.Value(c.Log.Format, &c.logFormat, log.ParseFormat),
-		"data.deployment_dir_template": validation.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
-		"runners.poll_interval":        validation.Value(c.Runners.PollInterval, &c.pollInterval, time.ParseDuration),
-		"runners.deployment":           validation.Is(c.Runners.Deployment, numbers.Min(1)),
+	return validate.Struct(validate.Of{
+		"log.level":                    validate.Value(c.Log.Level, &c.logLevel, log.ParseLevel),
+		"log.format":                   validate.Value(c.Log.Format, &c.logFormat, log.ParseFormat),
+		"data.deployment_dir_template": validate.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
+		"runners.poll_interval":        validate.Value(c.Runners.PollInterval, &c.pollInterval, time.ParseDuration),
+		"runners.deployment":           validate.Field(c.Runners.Deployment, numbers.Min(1)),
 		"balancer.domain":              domainUrlErr,
-		"balancer.acme.email": validation.If(domainUrlErr == nil && c.domain.UseSSL(), func() error {
-			return validation.Value(c.AcmeEmail(), &acmeEmail, auth.EmailFrom)
+		"balancer.acme.email": validate.If(domainUrlErr == nil && c.domain.UseSSL(), func() error {
+			return validate.Value(c.AcmeEmail(), &acmeEmail, auth.EmailFrom)
 		}),
 	})
 }

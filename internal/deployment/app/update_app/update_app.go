@@ -7,8 +7,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 type (
@@ -39,21 +39,21 @@ func Handler(
 	return func(ctx context.Context, cmd Command) (string, error) {
 		var url domain.Url
 
-		if err := validation.Check(validation.Of{
-			"vcs": validation.Patch(cmd.VCS, func(config VCSConfig) error {
-				return validation.Check(validation.Of{
-					"url":   validation.Value(config.Url, &url, domain.UrlFrom),
-					"token": validation.Patch(config.Token, strings.Required),
+		if err := validate.Struct(validate.Of{
+			"vcs": validate.Patch(cmd.VCS, func(config VCSConfig) error {
+				return validate.Struct(validate.Of{
+					"url":   validate.Value(config.Url, &url, domain.UrlFrom),
+					"token": validate.Patch(config.Token, strings.Required),
 				})
 			}),
-			"production": validation.Maybe(cmd.Production, func(conf EnvironmentConfig) error {
-				return validation.Check(validation.Of{
-					"target": validation.Is(conf.Target, strings.Required),
+			"production": validate.Maybe(cmd.Production, func(conf EnvironmentConfig) error {
+				return validate.Struct(validate.Of{
+					"target": validate.Field(conf.Target, strings.Required),
 				})
 			}),
-			"staging": validation.Maybe(cmd.Staging, func(conf EnvironmentConfig) error {
-				return validation.Check(validation.Of{
-					"target": validation.Is(conf.Target, strings.Required),
+			"staging": validate.Maybe(cmd.Staging, func(conf EnvironmentConfig) error {
+				return validate.Struct(validate.Of{
+					"target": validate.Field(conf.Target, strings.Required),
 				})
 			}),
 		}); err != nil {
@@ -95,7 +95,7 @@ func Handler(
 			}
 
 			if err = availability.Error(); err != nil {
-				return "", validation.WrapIfAppErr(err, "production.target")
+				return "", validate.WrapIfAppErr(err, "production.target")
 			}
 
 			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {
@@ -113,7 +113,7 @@ func Handler(
 			}
 
 			if err = availability.Error(); err != nil {
-				return "", validation.WrapIfAppErr(err, "staging.target")
+				return "", validate.WrapIfAppErr(err, "staging.target")
 			}
 
 			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {

@@ -10,7 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_CreateFirstAccount(t *testing.T) {
@@ -61,7 +61,7 @@ func Test_CreateFirstAccount(t *testing.T) {
 			Password: "admin",
 		})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		testutil.Equals(t, "", uid)
 
 	})

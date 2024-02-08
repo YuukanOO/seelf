@@ -13,7 +13,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_UpdateUser(t *testing.T) {
@@ -43,7 +43,7 @@ func Test_UpdateUser(t *testing.T) {
 			Email: monad.Value("jane@doe.com"),
 		})
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.Error](err)
 		testutil.IsTrue(t, ok)
 		testutil.ErrorIs(t, domain.ErrEmailAlreadyTaken, validationErr.Fields["email"])
 	})

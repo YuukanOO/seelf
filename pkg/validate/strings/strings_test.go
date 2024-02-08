@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 func Test_Required(t *testing.T) {

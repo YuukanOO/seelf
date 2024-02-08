@@ -6,8 +6,8 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 var ErrAdminAccountRequired = errors.New(`seelf requires a default user to be created but your database looks empty.
@@ -53,9 +53,9 @@ func Handler(
 
 		var email domain.Email
 
-		if err := validation.Check(validation.Of{
-			"email":    validation.Value(cmd.Email, &email, domain.EmailFrom),
-			"password": validation.Is(cmd.Password, strings.Required),
+		if err := validate.Struct(validate.Of{
+			"email":    validate.Value(cmd.Email, &email, domain.EmailFrom),
+			"password": validate.Field(cmd.Password, strings.Required),
 		}); err != nil {
 			return "", err
 		}

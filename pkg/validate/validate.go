@@ -1,4 +1,4 @@
-package validation
+package validate
 
 import (
 	"fmt"
@@ -15,6 +15,7 @@ type (
 	Of               map[string]error // Tiny shorthand to define a map of validators
 
 	// Validation errors struct containing field related errors
+	// TODO: directly use a map[string]error implementing the error interface to avoid the nested fields
 	Error struct {
 		Fields map[string]error `json:"fields"`
 	}
@@ -52,9 +53,8 @@ func WrapIfAppErr(err error, field string, additionalFields ...string) error {
 	return NewError(fieldErrs)
 }
 
-// Checks a map of label / errors and returns a validation error which contains
-// every errors as needed.
-func Check(definition Of) error {
+// Validates a struct by applying the given validators to its fields.
+func Struct(definition Of) error {
 	fieldErrs := make(map[string]error)
 
 	for f, err := range definition {
@@ -70,6 +70,7 @@ func Check(definition Of) error {
 	return nil
 }
 
+// TODO: do better...
 func flattenNestedValidationErrors(err error, result map[string]error, path string) error {
 	if err == nil {
 		return nil
@@ -78,11 +79,6 @@ func flattenNestedValidationErrors(err error, result map[string]error, path stri
 	fieldErrs, isNested := apperr.As[Error](err)
 
 	if !isNested {
-		// Not an app level error, something goes wrong, return immediately
-		if _, isAppErr := apperr.As[apperr.Error](err); !isAppErr {
-			return err
-		}
-
 		result[path] = err
 
 		return nil
@@ -98,7 +94,7 @@ func flattenNestedValidationErrors(err error, result map[string]error, path stri
 }
 
 // In many cases, this will be sufficient to apply many validators to one value.
-func Is[T any](value T, validators ...Validator[T]) error {
+func Field[T any](value T, validators ...Validator[T]) error {
 	for _, validator := range validators {
 		if err := validator(value); err != nil {
 			return err

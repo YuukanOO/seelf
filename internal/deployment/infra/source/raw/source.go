@@ -9,8 +9,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source"
 	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/types"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 var ErrWriteComposeFailed = errors.New("write_compose_failed")
@@ -31,8 +31,8 @@ func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (dom
 		return nil, domain.ErrInvalidSourcePayload
 	}
 
-	if err := validation.Check(validation.Of{
-		"content": validation.Is(rawServiceFileContent, strings.Required),
+	if err := validate.Struct(validate.Of{
+		"content": validate.Field(rawServiceFileContent, strings.Required),
 	}); err != nil {
 		return nil, err
 	}

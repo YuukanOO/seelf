@@ -13,7 +13,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_QueueDeployment(t *testing.T) {
@@ -43,10 +43,10 @@ func Test_QueueDeployment(t *testing.T) {
 			AppID: string(app.ID()),
 		})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		testutil.Equals(t, 0, num)
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.Error](err)
 		testutil.IsTrue(t, ok)
 		testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, validationErr.Fields["environment"])
 	})

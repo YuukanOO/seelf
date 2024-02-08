@@ -12,7 +12,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_Login(t *testing.T) {
@@ -29,7 +29,7 @@ func Test_Login(t *testing.T) {
 		uc := sut()
 		_, err := uc(context.Background(), login.Command{})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 	})
 
 	t.Run("should complains if email does not exists", func(t *testing.T) {
@@ -39,7 +39,7 @@ func Test_Login(t *testing.T) {
 			Password: "nobodycares",
 		})
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.Error](err)
 		testutil.IsTrue(t, ok)
 		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["email"])
 		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["password"])
@@ -52,7 +52,7 @@ func Test_Login(t *testing.T) {
 			Password: "nobodycares",
 		})
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.Error](err)
 		testutil.IsTrue(t, ok)
 		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["email"])
 		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["password"])

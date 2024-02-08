@@ -7,8 +7,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 type (
@@ -47,19 +47,19 @@ func Handler(
 			stagingTarget    domain.TargetID = domain.TargetID(cmd.Staging.Target)
 		)
 
-		if err := validation.Check(validation.Of{
-			"name": validation.Value(cmd.Name, &appname, domain.AppNameFrom),
-			"vcs": validation.Maybe(cmd.VCS, func(config VCSConfig) error {
-				return validation.Check(validation.Of{
-					"url":   validation.Value(config.Url, &url, domain.UrlFrom),
-					"token": validation.Maybe(config.Token, strings.Required),
+		if err := validate.Struct(validate.Of{
+			"name": validate.Value(cmd.Name, &appname, domain.AppNameFrom),
+			"vcs": validate.Maybe(cmd.VCS, func(config VCSConfig) error {
+				return validate.Struct(validate.Of{
+					"url":   validate.Value(config.Url, &url, domain.UrlFrom),
+					"token": validate.Maybe(config.Token, strings.Required),
 				})
 			}),
-			"production": validation.Check(validation.Of{
-				"target": validation.Is(cmd.Production.Target, strings.Required),
+			"production": validate.Struct(validate.Of{
+				"target": validate.Field(cmd.Production.Target, strings.Required),
 			}),
-			"staging": validation.Check(validation.Of{
-				"target": validation.Is(cmd.Staging.Target, strings.Required),
+			"staging": validate.Struct(validate.Of{
+				"target": validate.Field(cmd.Staging.Target, strings.Required),
 			}),
 		}); err != nil {
 			return "", err
@@ -73,7 +73,7 @@ func Handler(
 
 		// Returns early if the application name is not unique on both targets.
 		// Convert the AppNaming flag to a user friendly error.
-		if err = validation.Check(validation.Of{
+		if err = validate.Struct(validate.Of{
 			"production.target": requirement.Error(domain.Production),
 			"staging.target":    requirement.Error(domain.Staging),
 		}); err != nil {

@@ -11,8 +11,8 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/types"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
@@ -57,10 +57,10 @@ func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (dom
 		return nil, domain.ErrInvalidSourcePayload
 	}
 
-	if err := validation.Check(validation.Of{
-		"branch": validation.Is(req.Branch, strings.Required),
-		"hash": validation.Maybe(req.Hash, func(hash string) error {
-			return validation.Is(hash, strings.Required)
+	if err := validate.Struct(validate.Of{
+		"branch": validate.Field(req.Branch, strings.Required),
+		"hash": validate.Maybe(req.Hash, func(hash string) error {
+			return validate.Field(hash, strings.Required)
 		}),
 	}); err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (dom
 	latestCommit, err := getLatestBranchCommit(ctx, vcs, req.Branch)
 
 	if err != nil {
-		return nil, validation.WrapIfAppErr(err, "branch")
+		return nil, validate.WrapIfAppErr(err, "branch")
 	}
 
 	return Data{req.Branch, req.Hash.Get(latestCommit)}, nil

@@ -12,7 +12,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_CreateApp(t *testing.T) {
@@ -26,7 +26,7 @@ func Test_CreateApp(t *testing.T) {
 		uc := sut()
 		id, err := uc(ctx, create_app.Command{})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		testutil.Equals(t, "", id)
 	})
 
@@ -44,7 +44,7 @@ func Test_CreateApp(t *testing.T) {
 			},
 		})
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.Error](err)
 		testutil.IsTrue(t, ok)
 		testutil.Equals(t, "", id)
 		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr.Fields["production.target"])

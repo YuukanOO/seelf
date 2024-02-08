@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 var (
@@ -24,7 +24,7 @@ func Required(value string) error {
 	return nil
 }
 
-func Match(expr *regexp.Regexp) validation.Validator[string] {
+func Match(expr *regexp.Regexp) validate.Validator[string] {
 	return func(value string) error {
 		if !expr.MatchString(value) {
 			return ErrFormat
@@ -34,7 +34,7 @@ func Match(expr *regexp.Regexp) validation.Validator[string] {
 	}
 }
 
-func Min(length int) validation.Validator[string] {
+func Min(length int) validate.Validator[string] {
 	return func(value string) error {
 		if utf8.RuneCountInString(value) < length {
 			return ErrMinLength
@@ -44,7 +44,7 @@ func Min(length int) validation.Validator[string] {
 	}
 }
 
-func Max(length int) validation.Validator[string] {
+func Max(length int) validate.Validator[string] {
 	return func(value string) error {
 		if utf8.RuneCountInString(value) > length {
 			return ErrMaxLength

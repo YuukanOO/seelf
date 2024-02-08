@@ -13,7 +13,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_UpdateApp(t *testing.T) {
@@ -135,7 +135,7 @@ func Test_UpdateApp(t *testing.T) {
 			}),
 		})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		testutil.Equals(t, "", id)
 	})
 
@@ -150,7 +150,7 @@ func Test_UpdateApp(t *testing.T) {
 			VCS: monad.PatchValue(update_app.VCSConfig{}),
 		})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		testutil.Equals(t, "", id)
 	})
 

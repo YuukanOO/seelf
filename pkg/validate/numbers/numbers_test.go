@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation/numbers"
+	"github.com/YuukanOO/seelf/pkg/validate/numbers"
 )
 
 func Test_Min(t *testing.T) {

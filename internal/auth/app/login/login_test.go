@@ -39,10 +39,10 @@ func Test_Login(t *testing.T) {
 			Password: "nobodycares",
 		})
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["email"])
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["password"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["email"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["password"])
 	})
 
 	t.Run("should complains if password does not match", func(t *testing.T) {
@@ -52,10 +52,10 @@ func Test_Login(t *testing.T) {
 			Password: "nobodycares",
 		})
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["email"])
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["password"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["email"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["password"])
 	})
 
 	t.Run("should returns a valid user id if it succeeds", func(t *testing.T) {

@@ -83,11 +83,11 @@ func Test_Struct(t *testing.T) {
 		testutil.Contains(t, "firstName: required", err.Error())
 		testutil.Contains(t, "lastName: always fail", err.Error())
 		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.Equals(t, 2, len(validationErr.Fields))
-		testutil.ErrorIs(t, errRequired, validationErr.Fields["firstName"])
-		testutil.ErrorIs(t, errAlwaysFail, validationErr.Fields["lastName"])
+		testutil.Equals(t, 2, len(validationErr))
+		testutil.ErrorIs(t, errRequired, validationErr["firstName"])
+		testutil.ErrorIs(t, errAlwaysFail, validationErr["lastName"])
 	})
 
 	t.Run("merge nested validation errors", func(t *testing.T) {
@@ -102,13 +102,13 @@ func Test_Struct(t *testing.T) {
 			}),
 		})
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.Equals(t, 4, len(validationErr.Fields))
-		testutil.ErrorIs(t, errRequired, validationErr.Fields["firstName"])
-		testutil.ErrorIs(t, errAlwaysFail, validationErr.Fields["lastName"])
-		testutil.ErrorIs(t, errRequired, validationErr.Fields["nested.firstName"])
-		testutil.ErrorIs(t, errRequired, validationErr.Fields["nested.nested.firstName"])
+		testutil.Equals(t, 4, len(validationErr))
+		testutil.ErrorIs(t, errRequired, validationErr["firstName"])
+		testutil.ErrorIs(t, errAlwaysFail, validationErr["lastName"])
+		testutil.ErrorIs(t, errRequired, validationErr["nested.firstName"])
+		testutil.ErrorIs(t, errRequired, validationErr["nested.nested.firstName"])
 	})
 
 	t.Run("returns nil if no error exists", func(t *testing.T) {
@@ -130,10 +130,10 @@ func Test_If(t *testing.T) {
 
 		testutil.Equals(t, `validation_failed:
 	lastName: required`, err.Error())
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.Equals(t, 1, len(validationErr.Fields))
-		testutil.ErrorIs(t, errRequired, validationErr.Fields["lastName"])
+		testutil.Equals(t, 1, len(validationErr))
+		testutil.ErrorIs(t, errRequired, validationErr["lastName"])
 	})
 }
 
@@ -189,17 +189,42 @@ func Test_WrapIfAppErr(t *testing.T) {
 		testutil.IsTrue(t, validate.WrapIfAppErr(nil, "one", "two") == nil)
 	})
 
+	t.Run("returns nil if no err is given", func(t *testing.T) {
+		testutil.IsNil(t, validate.WrapIfAppErr(nil, "one", "two"))
+	})
+
 	t.Run("wrap the application error for the specified fields", func(t *testing.T) {
 		appErr := apperr.New("application level error")
 		err := validate.WrapIfAppErr(appErr, "one", "two")
 
 		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		fmt.Println(validationErr.Error())
 		testutil.IsTrue(t, ok)
-		testutil.Equals(t, 2, len(validationErr.Fields))
-		testutil.ErrorIs(t, appErr, validationErr.Fields["one"])
-		testutil.ErrorIs(t, appErr, validationErr.Fields["two"])
+		testutil.Equals(t, 2, len(validationErr))
+		testutil.ErrorIs(t, appErr, validationErr["one"])
+		testutil.ErrorIs(t, appErr, validationErr["two"])
+	})
+}
+
+func Test_FieldErrors(t *testing.T) {
+	t.Run("could be flattened", func(t *testing.T) {
+		flattened := validate.FieldErrors{
+			"1": errRequired,
+			"2": validate.FieldErrors{
+				"1": errAlwaysFail,
+			},
+			"3": validate.NewError(validate.FieldErrors{
+				"1": errRequired,
+			}),
+			"4": nil,
+		}.Flatten()
+
+		testutil.DeepEquals(t, validate.FieldErrors{
+			"1":   errRequired,
+			"2.1": errAlwaysFail,
+			"3.1": errRequired,
+		}, flattened)
 	})
 }

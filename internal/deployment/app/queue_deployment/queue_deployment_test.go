@@ -46,9 +46,9 @@ func Test_QueueDeployment(t *testing.T) {
 		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		testutil.Equals(t, 0, num)
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, validationErr.Fields["environment"])
+		testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, validationErr["environment"])
 	})
 
 	t.Run("should fail if the app does not exist", func(t *testing.T) {

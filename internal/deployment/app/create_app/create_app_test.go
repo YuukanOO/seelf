@@ -44,11 +44,11 @@ func Test_CreateApp(t *testing.T) {
 			},
 		})
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
 		testutil.Equals(t, "", id)
-		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr.Fields["production.target"])
-		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr.Fields["staging.target"])
+		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr["production.target"])
+		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, validationErr["staging.target"])
 	})
 
 	t.Run("should create a new app if everything is good", func(t *testing.T) {

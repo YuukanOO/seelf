@@ -13,38 +13,46 @@ var ErrValidationFailed = apperr.New("validation_failed")
 type (
 	Validator[T any] func(T) error    // Represents a validator for a specific type
 	Of               map[string]error // Tiny shorthand to define a map of validators
-
-	// Validation errors struct containing field related errors
-	// TODO: directly use a map[string]error implementing the error interface to avoid the nested fields
-	Error struct {
-		Fields map[string]error `json:"fields"`
-	}
+	FieldErrors      map[string]error // Represents validation errors tied to fields
 )
 
-func (e Error) Error() string {
+func (e FieldErrors) Error() string {
 	var builder strings.Builder
 
-	for name, err := range e.Fields {
+	for name, err := range e {
 		builder.WriteString(fmt.Sprintf("\n\t%s: %s", name, err))
 	}
 
 	return builder.String()
 }
 
-// Builds a new validation error with given invalid fields
-func NewError(fieldErrs map[string]error) error {
-	return apperr.Wrap(ErrValidationFailed, Error{fieldErrs})
+// Flatten nested FieldErrors if any and merge the appropriate field names.
+// It also removes nil values.
+func (e FieldErrors) Flatten() FieldErrors {
+	result := make(FieldErrors, len(e))
+	flatten(result, e, "")
+	return result
+}
+
+// Builds a new validation error with given invalid fields.
+// Wraps the FieldErrors inside the ErrValidationFailed.
+func NewError(fieldErrs FieldErrors) error {
+	return apperr.Wrap(ErrValidationFailed, fieldErrs)
 }
 
 // Wraps the given error in a new validation error for the specified fields only if
 // it is an app level error. If an infrastructure error is given, it will return
 // immediately without touching it.
 func WrapIfAppErr(err error, field string, additionalFields ...string) error {
+	if err == nil {
+		return nil
+	}
+
 	if _, isAppErr := apperr.As[apperr.Error](err); !isAppErr {
 		return err
 	}
 
-	fieldErrs := map[string]error{field: err}
+	fieldErrs := FieldErrors{field: err}
 
 	for _, f := range additionalFields {
 		fieldErrs[f] = err
@@ -55,39 +63,10 @@ func WrapIfAppErr(err error, field string, additionalFields ...string) error {
 
 // Validates a struct by applying the given validators to its fields.
 func Struct(definition Of) error {
-	fieldErrs := make(map[string]error)
-
-	for f, err := range definition {
-		if err = flattenNestedValidationErrors(err, fieldErrs, f); err != nil {
-			return err
-		}
-	}
+	fieldErrs := FieldErrors(definition).Flatten()
 
 	if len(fieldErrs) > 0 {
 		return NewError(fieldErrs)
-	}
-
-	return nil
-}
-
-// TODO: do better...
-func flattenNestedValidationErrors(err error, result map[string]error, path string) error {
-	if err == nil {
-		return nil
-	}
-
-	fieldErrs, isNested := apperr.As[Error](err)
-
-	if !isNested {
-		result[path] = err
-
-		return nil
-	}
-
-	for f, err := range fieldErrs.Fields {
-		if err = flattenNestedValidationErrors(err, result, fmt.Sprintf("%s.%s", path, f)); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -149,4 +128,25 @@ func Patch[T any](p monad.Patch[T], fn func(T) error) error {
 	}
 
 	return nil
+}
+
+func flatten(target FieldErrors, current FieldErrors, prefix string) {
+	if prefix != "" {
+		prefix = prefix + "."
+	}
+
+	for field, err := range current {
+		if err == nil {
+			continue
+		}
+
+		nested, isNested := apperr.As[FieldErrors](err)
+
+		if !isNested {
+			target[prefix+field] = err
+			continue
+		}
+
+		flatten(target, nested, prefix+field)
+	}
 }

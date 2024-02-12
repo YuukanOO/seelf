@@ -43,9 +43,9 @@ func Test_UpdateUser(t *testing.T) {
 			Email: monad.Value("jane@doe.com"),
 		})
 
-		validationErr, ok := apperr.As[validate.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrEmailAlreadyTaken, validationErr.Fields["email"])
+		testutil.ErrorIs(t, domain.ErrEmailAlreadyTaken, validationErr["email"])
 	})
 
 	t.Run("should succeed if values are the same", func(t *testing.T) {

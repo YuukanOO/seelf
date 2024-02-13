@@ -258,27 +258,27 @@ func (q *queryBuilder[T]) One(
 		return result, apperr.ErrNotFound
 	}
 
-	if err != nil {
+	if err != nil || len(loaders) == 0 {
 		return result, err
 	}
 
-	if len(loaders) > 0 {
-		kr := KeyedResult[T]{
-			data: []T{result},
+	kr := KeyedResult[T]{
+		data: []T{result},
+	}
+
+	for _, loader := range loaders {
+		kr.indexByKeys = KeysMapping{
+			loader.ExtractKey(result): 0,
 		}
 
-		for _, loader := range loaders {
-			kr.indexByKeys = KeysMapping{
-				loader.ExtractKey(result): 0,
-			}
-
-			if err = loader.Fetch(ex, ctx, kr); err != nil {
-				return result, err
-			}
+		if err = loader.Fetch(ex, ctx, kr); err != nil {
+			return result, err
 		}
 	}
 
-	return result, err
+	// Return the element that has been merged when fetching dataloaders
+	return kr.data[0], err
+
 }
 
 func (q *queryBuilder[T]) Extract(ex Executor, ctx context.Context) (T, error) {

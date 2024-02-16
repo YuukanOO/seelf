@@ -28,14 +28,14 @@ func Test_App(t *testing.T) {
 		}
 
 		for _, availability := range invalidAvailability {
-			_, err := domain.NewApp(appname, production, staging, uid, availability)
+			_, err := domain.NewApp(appname, production, staging, availability, uid)
 
 			testutil.ErrorIs(t, domain.ErrInvalidAppNaming, err)
 		}
 	})
 
 	t.Run("should correctly creates a new app", func(t *testing.T) {
-		app, err := domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable)
+		app, err := domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid)
 
 		testutil.IsNil(t, err)
 		testutil.NotEquals(t, "", app.ID())
@@ -44,7 +44,7 @@ func Test_App(t *testing.T) {
 		evt := testutil.EventIs[domain.AppCreated](t, &app, 0)
 
 		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.Equals(t, uid, evt.Created.By())
+		testutil.Equals(t, evt.Created.By(), uid)
 		testutil.IsFalse(t, evt.Created.At().IsZero())
 		testutil.Equals(t, appname, evt.Name)
 	})
@@ -53,7 +53,7 @@ func Test_App(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
 		vcsConfig := domain.NewVCSConfig(url).Authenticated("vcskey")
 
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.UseVersionControl(vcsConfig)
 
 		testutil.Equals(t, vcsConfig, app.VCS().MustGet())
@@ -65,7 +65,7 @@ func Test_App(t *testing.T) {
 
 	t.Run("could have a vcs config removed", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.RemoveVersionControl()
 
 		testutil.HasNEvents(t, &app, 1)
@@ -80,7 +80,7 @@ func Test_App(t *testing.T) {
 	t.Run("raise a VCS configured event only if configs are different", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
 		vcsConfig := domain.NewVCSConfig(url).Authenticated("vcskey")
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.UseVersionControl(vcsConfig)
 		app.UseVersionControl(vcsConfig)
 
@@ -95,7 +95,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("need the app naming to be unique when modifying configuration", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
 		err := app.WithProductionConfig(staging, domain.TargetAppNamingTaken)
 
@@ -103,7 +103,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("need the app naming target id to exists when modifying configuration", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
 		err := app.WithProductionConfig(staging, domain.TargetAppNamingTargetNotFound)
 
@@ -111,7 +111,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("raise an env changed event only if the new config is different", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
 		errProd := app.WithProductionConfig(production, domain.TargetAppNamingAvailable)
 		errStaging := app.WithStagingConfig(staging, domain.TargetAppNamingAvailable)
@@ -146,7 +146,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("could be marked for deletion only if not already the case", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
 		app.RequestCleanup("uid")
 		app.RequestCleanup("uid")
@@ -158,7 +158,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("should not allow a deletion if there are running or pending deployments for this app", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
 		app.RequestCleanup("uid")
 
@@ -169,7 +169,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("raise an error if delete is called for a non cleaned up app", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
 		err := app.Delete(0)
 
@@ -177,7 +177,7 @@ func Test_App(t *testing.T) {
 	})
 
 	t.Run("could be deleted", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.RequestCleanup("uid")
 
 		err := app.Delete(0)

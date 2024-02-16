@@ -85,6 +85,29 @@ func Test_ServicesEnv(t *testing.T) {
 			"app": {"DEBUG": "false"},
 		}, r)
 	})
+
+	t.Run("should implement the Valuer interface", func(t *testing.T) {
+		str, err := domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
+		}.Value()
+
+		testutil.IsNil(t, err)
+
+		testutil.Equals(t, `{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`, str)
+	})
+
+	t.Run("should implement the Scanner interface", func(t *testing.T) {
+		var r domain.ServicesEnv
+
+		err := r.Scan(`{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`)
+
+		testutil.IsNil(t, err)
+		testutil.DeepEquals(t, domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+			"db":  {"USERNAME": "admin"},
+		}, r)
+	})
 }
 
 func Test_EnvironmentConfig(t *testing.T) {

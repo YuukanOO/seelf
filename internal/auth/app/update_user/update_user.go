@@ -54,7 +54,7 @@ func Handler(
 			}
 
 			if err = user.HasEmail(email, availability); err != nil {
-				return "", validate.WrapIfAppErr(err, "email")
+				return "", validate.Wrap(err, "email")
 			}
 		}
 

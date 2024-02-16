@@ -33,8 +33,8 @@ func Test_UpdateUser(t *testing.T) {
 	})
 
 	t.Run("should fail if the email is taken by another user", func(t *testing.T) {
-		john := must.Panic(domain.NewUser("john@doe.com", passwordHash, "anapikey", true))
-		jane := must.Panic(domain.NewUser("jane@doe.com", passwordHash, "anapikey", true))
+		john := must.Panic(domain.NewUser("john@doe.com", true, passwordHash, "anapikey"))
+		jane := must.Panic(domain.NewUser("jane@doe.com", true, passwordHash, "anapikey"))
 
 		uc := sut(&john, &jane)
 
@@ -49,7 +49,7 @@ func Test_UpdateUser(t *testing.T) {
 	})
 
 	t.Run("should succeed if values are the same", func(t *testing.T) {
-		john := must.Panic(domain.NewUser("john@doe.com", passwordHash, "anapikey", true))
+		john := must.Panic(domain.NewUser("john@doe.com", true, passwordHash, "anapikey"))
 		uc := sut(&john)
 
 		id, err := uc(context.Background(), update_user.Command{
@@ -65,7 +65,7 @@ func Test_UpdateUser(t *testing.T) {
 	})
 
 	t.Run("should update user if everything is good", func(t *testing.T) {
-		john := must.Panic(domain.NewUser("john@doe.com", "apassword", "anapikey", true))
+		john := must.Panic(domain.NewUser("john@doe.com", true, "apassword", "anapikey"))
 		uc := sut(&john)
 
 		id, err := uc(context.Background(), update_user.Command{

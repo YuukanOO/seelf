@@ -16,7 +16,7 @@ type Command struct {
 
 	AppID       string `json:"-"`
 	Environment string `json:"-"`
-	Payload     any    `json:"-"`
+	Source      any    `json:"-"`
 }
 
 func (Command) Name_() string { return "deployment.command.queue_deployment" }
@@ -42,7 +42,7 @@ func Handler(
 			return 0, err
 		}
 
-		meta, err := source.Prepare(ctx, app, cmd.Payload)
+		meta, err := source.Prepare(ctx, app, cmd.Source)
 
 		if err != nil {
 			return 0, err

@@ -73,7 +73,7 @@ func Handler(
 		}
 
 		// Here the email uniqueness is guaranteed to be true since we check for the user counts above.
-		user, err := domain.NewUser(email, password, key, true)
+		user, err := domain.NewUser(email, true, password, key)
 
 		if err != nil {
 			return "", err

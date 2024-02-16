@@ -17,7 +17,7 @@ import (
 
 func Test_Promote(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "some-uid"))
 	appsStore := memory.NewAppsStore(&app)
 
 	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[int, promote.Command] {

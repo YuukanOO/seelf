@@ -133,8 +133,8 @@ func NewApp(
 	name AppName,
 	production EnvironmentConfig,
 	staging EnvironmentConfig,
-	createdBy domain.UserID,
 	available AppNamingAvailability,
+	createdBy domain.UserID,
 ) (app App, err error) {
 	if available != AppNamingAvailable {
 		return app, ErrInvalidAppNaming

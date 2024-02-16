@@ -18,12 +18,17 @@ func Test_Target(t *testing.T) {
 	)
 
 	t.Run("should fail if the url is not unique", func(t *testing.T) {
-		_, err := domain.NewTarget(name, targetUrl, config, uid, false)
-		testutil.Equals(t, domain.ErrUrlAlreadyTaken, err)
+		_, err := domain.NewTarget(name, targetUrl, false, config, true, uid)
+		testutil.Equals(t, domain.ErrDomainAlreadyTaken, err)
+	})
+
+	t.Run("should fail if the config is not unique", func(t *testing.T) {
+		_, err := domain.NewTarget(name, targetUrl, true, config, false, uid)
+		testutil.Equals(t, domain.ErrConfigAlreadyTaken, err)
 	})
 
 	t.Run("should be instantiable", func(t *testing.T) {
-		target, err := domain.NewTarget(name, targetUrl, config, uid, true)
+		target, err := domain.NewTarget(name, targetUrl, true, config, true, uid)
 
 		testutil.IsNil(t, err)
 		testutil.HasNEvents(t, &target, 1)
@@ -31,7 +36,7 @@ func Test_Target(t *testing.T) {
 
 		testutil.NotEquals(t, "", evt.ID)
 		testutil.Equals(t, name, evt.Name)
-		testutil.Equals(t, targetUrl, evt.Url)
+		testutil.Equals(t, targetUrl, evt.Domain)
 		testutil.Equals(t, config, evt.Provider)
 		testutil.Equals(t, uid, evt.Created.By())
 	})

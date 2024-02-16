@@ -39,14 +39,14 @@ func Handler(
 
 		if err != nil {
 			if errors.Is(err, apperr.ErrNotFound) {
-				return "", validate.WrapIfAppErr(domain.ErrInvalidEmailOrPassword, "email", "password")
+				return "", validate.Wrap(domain.ErrInvalidEmailOrPassword, "email", "password")
 			}
 
 			return "", err
 		}
 
 		if err = hasher.Compare(cmd.Password, user.Password()); err != nil {
-			return "", validate.WrapIfAppErr(domain.ErrInvalidEmailOrPassword, "email", "password")
+			return "", validate.Wrap(domain.ErrInvalidEmailOrPassword, "email", "password")
 		}
 
 		return string(user.ID()), nil

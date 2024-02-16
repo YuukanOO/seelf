@@ -8,6 +8,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_app_detail"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_apps"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_target"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_targets"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -122,6 +124,41 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Quer
 		LEFT JOIN targets ON targets.id = deployments.config_target
 		WHERE deployments.app_id = ? AND deployments.deployment_number = ?`, cmd.AppID, cmd.DeploymentNumber).
 		One(s.db, ctx, deploymentMapper)
+}
+
+func (s *gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]get_target.Target, error) {
+	return builder.
+		Query[get_target.Target](`
+		SELECT
+			targets.id
+			,targets.name
+			,targets.domain
+			,targets.provider_kind
+			,targets.provider
+			,targets.created_at
+			,users.id
+			,users.email
+		FROM targets
+		INNER JOIN users ON users.id = targets.created_by`).
+		All(s.db, ctx, targetMapper)
+}
+
+func (s *gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_target.Target, error) {
+	return builder.
+		Query[get_target.Target](`
+		SELECT
+			targets.id
+			,targets.name
+			,targets.domain
+			,targets.provider_kind
+			,targets.provider
+			,targets.created_at
+			,users.id
+			,users.email
+		FROM targets
+		INNER JOIN users ON users.id = targets.created_by
+		WHERE targets.id = ?`, cmd.ID).
+		One(s.db, ctx, targetMapper)
 }
 
 // Specific case because the deployments dataloader can be use to fill the App and AppDetail
@@ -326,4 +363,27 @@ func deploymentMapper(scanner storage.Scanner) (d get_deployment.Deployment, err
 	d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
 
 	return d, err
+}
+
+func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
+	var providerData string
+
+	err = scanner.Scan(
+		&t.ID,
+		&t.Name,
+		&t.Domain,
+		&t.Provider.Kind,
+		&providerData,
+		&t.CreatedAt,
+		&t.CreatedBy.ID,
+		&t.CreatedBy.Email,
+	)
+
+	if err != nil {
+		return t, err
+	}
+
+	t.Provider.Data, err = get_target.ProviderConfigTypes.From(t.Provider.Kind, providerData)
+
+	return t, err
 }

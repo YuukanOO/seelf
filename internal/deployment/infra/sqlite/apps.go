@@ -36,11 +36,11 @@ func (s *appsStore) GetAppNamingAvailability(
 
 	r, err := builder.
 		Query[appNamingResult](`
-			SELECT
-				(SELECT COUNT(id) FROM apps WHERE name = ? AND production_target = ?) AS production_count
-				,(SELECT COUNT(id) FROM targets WHERE id = ?) AS production_target_exists
-				,(SELECT COUNT(id) FROM apps WHERE name = ? AND staging_target = ?) AS staging_count
-				,(SELECT COUNT(id) FROM targets WHERE id = ?) AS staging_target_exists
+		SELECT
+			(SELECT COUNT(id) FROM apps WHERE name = ? AND production_target = ?) AS production_count
+			,(SELECT COUNT(id) FROM targets WHERE id = ?) AS production_target_exists
+			,(SELECT COUNT(id) FROM apps WHERE name = ? AND staging_target = ?) AS staging_count
+			,(SELECT COUNT(id) FROM targets WHERE id = ?) AS staging_target_exists
 		`, name, production, production, name, staging, staging).
 		One(s.db, ctx, appNameUniquenessResultMapper)
 
@@ -81,11 +81,11 @@ func (s *appsStore) GetTargetAppNamingAvailability(
 
 	r, err := builder.
 		Query[targetAppNamingResult](fmt.Sprintf(`
-			SELECT
-				(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.%s_target = ?) AS count
-				,(SELECT COUNT(id) FROM targets WHERE id = ?) AS target
-			FROM apps src
-			WHERE src.id = ?
+		SELECT
+			(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.%s_target = ?) AS count
+			,(SELECT COUNT(id) FROM targets WHERE id = ?) AS target
+		FROM apps src
+		WHERE src.id = ?
 		`, env), target, target, id).
 		One(s.db, ctx, appNameUniquenessOnTargetEnvironmentResultMapper)
 
@@ -111,21 +111,21 @@ func (s *appsStore) GetTargetAppNamingAvailability(
 func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, error) {
 	return builder.
 		Query[domain.App](`
-			SELECT
-				id
-				,name
-				,vcs_url
-				,vcs_token
-				,production_target
-				,production_vars
-				,staging_target
-				,staging_vars
-				,cleanup_requested_at
-				,cleanup_requested_by
-				,created_at
-				,created_by
-			FROM apps
-			WHERE id = ?`, id).
+		SELECT
+			id
+			,name
+			,vcs_url
+			,vcs_token
+			,production_target
+			,production_vars
+			,staging_target
+			,staging_vars
+			,cleanup_requested_at
+			,cleanup_requested_by
+			,created_at
+			,created_by
+		FROM apps
+		WHERE id = ?`, id).
 		One(s.db, ctx, domain.AppFrom)
 }
 

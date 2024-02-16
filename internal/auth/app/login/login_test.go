@@ -18,7 +18,7 @@ import (
 func Test_Login(t *testing.T) {
 	hasher := crypto.NewBCryptHasher()
 	password := must.Panic(hasher.Hash("password")) // Sample password hash for the string "password" for tests
-	existingUser := must.Panic(domain.NewUser("existing@example.com", password, "apikey", true))
+	existingUser := must.Panic(domain.NewUser("existing@example.com", true, password, "apikey"))
 
 	sut := func(existingUsers ...*domain.User) bus.RequestHandler[string, login.Command] {
 		store := memory.NewUsersStore(existingUsers...)

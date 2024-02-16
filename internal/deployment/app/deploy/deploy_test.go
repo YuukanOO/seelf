@@ -22,7 +22,7 @@ import (
 
 func Test_Deploy(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	a := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
+	a := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "some-uid"))
 	logger, _ := log.NewLogger()
 
 	sut := func(

@@ -20,10 +20,10 @@ import (
 // Specific body for the queue deployment endpoint. Will resolve to the appropriate payload
 // based on the provided fields.
 type queueDeploymentBody struct {
-	Environment string                   `json:"environment" form:"environment"`
-	Raw         monad.Maybe[string]      `json:"raw"`
-	Archive     *multipart.FileHeader    `form:"archive"`
-	Git         monad.Maybe[git.Request] `json:"git"`
+	Environment string                `json:"environment" form:"environment"`
+	Raw         monad.Maybe[string]   `json:"raw"`
+	Archive     *multipart.FileHeader `form:"archive"`
+	Git         monad.Maybe[git.Body] `json:"git"`
 }
 
 func (s *server) queueDeploymentHandler() gin.HandlerFunc {
@@ -46,7 +46,7 @@ func (s *server) queueDeploymentHandler() gin.HandlerFunc {
 		number, err := bus.Send(s.bus, context, queue_deployment.Command{
 			AppID:       appid,
 			Environment: body.Environment,
-			Payload:     payload,
+			Source:      payload,
 		})
 
 		if err != nil {

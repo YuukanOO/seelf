@@ -86,7 +86,7 @@ func (s *appsStore) GetTargetAppNamingAvailability(
 
 	// And check if an app on the target and env already exists
 	for _, app := range s.apps {
-		if app.name != name {
+		if app.id == id || app.name != name {
 			continue
 		}
 

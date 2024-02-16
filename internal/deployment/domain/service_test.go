@@ -9,7 +9,7 @@ import (
 )
 
 func Test_Services(t *testing.T) {
-	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), "uid", domain.AppNamingAvailable))
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingAvailable, "uid"))
 	domainUrl := must.Panic(domain.UrlFrom("http://docker.localhost"))
 	conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 

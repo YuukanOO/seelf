@@ -32,7 +32,7 @@ func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (dom
 	}
 
 	if err := validate.Struct(validate.Of{
-		"content": validate.Field(rawServiceFileContent, strings.Required),
+		"raw.content": validate.Field(rawServiceFileContent, strings.Required),
 	}); err != nil {
 		return nil, err
 	}

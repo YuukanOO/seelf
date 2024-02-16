@@ -17,7 +17,7 @@ func Test_Config(t *testing.T) {
 		})
 
 	staging := domain.NewEnvironmentConfig("staging-target")
-	app := must.Panic(domain.NewApp("my-app", production, staging, "uid", domain.AppNamingAvailable))
+	app := must.Panic(domain.NewApp("my-app", production, staging, domain.AppNamingAvailable, "uid"))
 
 	t.Run("could be created from an app", func(t *testing.T) {
 		conf, err := app.ConfigSnapshotFor(domain.Production)

@@ -32,7 +32,7 @@ const basicAuthUser = "seelf"
 
 type (
 	// Public request to trigger a git deployment
-	Request struct {
+	Body struct {
 		Branch string              `json:"branch"`
 		Hash   monad.Maybe[string] `json:"hash"`
 	}
@@ -47,19 +47,19 @@ func New(reader domain.AppsReader) source.Source {
 	return &service{reader}
 }
 
-func (*service) CanPrepare(payload any) bool          { return types.Is[Request](payload) }
+func (*service) CanPrepare(payload any) bool          { return types.Is[Body](payload) }
 func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
 func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (domain.SourceData, error) {
-	req, ok := payload.(Request)
+	req, ok := payload.(Body)
 
 	if !ok {
 		return nil, domain.ErrInvalidSourcePayload
 	}
 
 	if err := validate.Struct(validate.Of{
-		"branch": validate.Field(req.Branch, strings.Required),
-		"hash": validate.Maybe(req.Hash, func(hash string) error {
+		"git.branch": validate.Field(req.Branch, strings.Required),
+		"git.hash": validate.Maybe(req.Hash, func(hash string) error {
 			return validate.Field(hash, strings.Required)
 		}),
 	}); err != nil {
@@ -76,7 +76,7 @@ func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (dom
 	latestCommit, err := getLatestBranchCommit(ctx, vcs, req.Branch)
 
 	if err != nil {
-		return nil, validate.WrapIfAppErr(err, "branch")
+		return nil, validate.Wrap(err, "git.branch")
 	}
 
 	return Data{req.Branch, req.Hash.Get(latestCommit)}, nil

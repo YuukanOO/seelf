@@ -41,9 +41,9 @@ func NewError(fieldErrs FieldErrors) error {
 }
 
 // Wraps the given error in a new validation error for the specified fields only if
-// it is an app level error. If an infrastructure error is given, it will return
+// it is an app level error. If an infrastructure error is given (ie. not an apperr.Error), it will return
 // immediately without touching it.
-func WrapIfAppErr(err error, field string, additionalFields ...string) error {
+func Wrap(err error, field string, additionalFields ...string) error {
 	if err == nil {
 		return nil
 	}
@@ -58,7 +58,7 @@ func WrapIfAppErr(err error, field string, additionalFields ...string) error {
 		fieldErrs[f] = err
 	}
 
-	return NewError(fieldErrs)
+	return NewError(fieldErrs.Flatten())
 }
 
 // Validates a struct by applying the given validators to its fields.

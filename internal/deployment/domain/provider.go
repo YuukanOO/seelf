@@ -2,6 +2,16 @@ package domain
 
 import (
 	"context"
+
+	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/storage"
+)
+
+var (
+	ErrNoValidProviderFound   = apperr.New("no_valid_provider_found")
+	ErrInvalidProviderPayload = apperr.New("invalid_provider_payload")
+
+	ProviderConfigTypes = storage.NewDiscriminatedMapper(func(c ProviderConfig) string { return c.Kind() })
 )
 
 type (

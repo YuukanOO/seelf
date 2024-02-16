@@ -65,7 +65,7 @@ func Handler(
 			return "", err
 		}
 
-		requirement, err := reader.GetAppNamingAvailability(ctx, appname, productionTarget, stagingTarget)
+		availability, err := reader.GetAppNamingAvailability(ctx, appname, productionTarget, stagingTarget)
 
 		if err != nil {
 			return "", err
@@ -74,8 +74,8 @@ func Handler(
 		// Returns early if the application name is not unique on both targets.
 		// Convert the AppNaming flag to a user friendly error.
 		if err = validate.Struct(validate.Of{
-			"production.target": requirement.Error(domain.Production),
-			"staging.target":    requirement.Error(domain.Staging),
+			"production.target": availability.Error(domain.Production),
+			"staging.target":    availability.Error(domain.Staging),
 		}); err != nil {
 			return "", err
 		}
@@ -84,8 +84,8 @@ func Handler(
 			appname,
 			BuildEnvironmentConfig(productionTarget, cmd.Production.Vars),
 			BuildEnvironmentConfig(stagingTarget, cmd.Staging.Vars),
+			availability,
 			auth.CurrentUser(ctx).MustGet(),
-			requirement,
 		)
 
 		if err != nil {

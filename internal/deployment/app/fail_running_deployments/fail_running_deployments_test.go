@@ -17,7 +17,7 @@ import (
 
 func Test_FailRunningDeployments(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "some-uid"))
 
 	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[bus.UnitType, fail_running_deployments.Command] {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)

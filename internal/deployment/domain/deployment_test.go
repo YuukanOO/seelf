@@ -19,18 +19,18 @@ func Test_Deployment(t *testing.T) {
 		number     domain.DeploymentNumber = 1
 		vcsMeta                            = meta{true}
 		nonVcsMeta                         = meta{false}
-		app                                = must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app                                = must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 	)
 
 	t.Run("should require a version control config to be defined on the app for vcs managed source", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		_, err := app.NewDeployment(number, vcsMeta, domain.Production, uid)
 
 		testutil.ErrorIs(t, domain.ErrVCSNotConfigured, err)
 	})
 
 	t.Run("should require an app without cleanup requested", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.RequestCleanup(uid)
 
 		_, err := app.NewDeployment(number, nonVcsMeta, domain.Production, uid)
@@ -155,7 +155,7 @@ func Test_Deployment(t *testing.T) {
 	t.Run("should err if trying to redeploy a deployment on the wrong app", func(t *testing.T) {
 		source := must.Panic(app.NewDeployment(1, nonVcsMeta, domain.Production, uid))
 
-		_, err := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable)).Redeploy(source, 2, "uid")
+		_, err := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid)).Redeploy(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
@@ -171,7 +171,7 @@ func Test_Deployment(t *testing.T) {
 	t.Run("should err if trying to promote a deployment on the wrong app", func(t *testing.T) {
 		source := must.Panic(app.NewDeployment(1, nonVcsMeta, domain.Staging, uid))
 
-		_, err := must.Panic(domain.NewApp(appname, production, staging, uid, domain.AppNamingAvailable)).Promote(source, 2, "uid")
+		_, err := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid)).Promote(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})

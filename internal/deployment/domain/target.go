@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/YuukanOO/seelf/internal/auth/domain"
+	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
@@ -14,15 +14,16 @@ import (
 )
 
 var (
-	ErrUrlAlreadyTaken  = apperr.New("url_already_taken")
-	ProviderConfigTypes = storage.NewDiscriminatedMapper(func(c ProviderConfig) string { return c.Kind() })
+	ErrDomainAlreadyTaken = apperr.New("domain_already_taken")
+	ErrConfigAlreadyTaken = apperr.New("config_already_taken")
 )
 
 type (
 	// VALUE OBJECTS
 
-	TargetID              string
-	TargetUrlAvailability bool // Represents the availability of an url (ie. is it unique in our system?)
+	TargetID                 string
+	TargetDomainAvailability bool // Represents the availability of a domain (ie. is it unique in our system?)
+	TargetConfigAvailability bool // Represents the availability of a target configuration
 
 	// ENTITY
 
@@ -32,15 +33,16 @@ type (
 
 		id       TargetID
 		name     string
-		url      Url
+		domain   Url
 		provider ProviderConfig
-		created  shared.Action[domain.UserID]
+		created  shared.Action[auth.UserID]
 	}
 
 	// RELATED SERVICES
 
 	TargetsReader interface {
-		GetUrlAvailability(context.Context, Url, ...TargetID) (TargetUrlAvailability, error)
+		GetDomainAvailability(context.Context, Url, ...TargetID) (TargetDomainAvailability, error)
+		GetConfigAvailability(context.Context, ProviderConfig, ...TargetID) (TargetConfigAvailability, error)
 		GetByID(context.Context, TargetID) (Target, error)
 	}
 
@@ -55,9 +57,9 @@ type (
 
 		ID       TargetID
 		Name     string
-		Url      Url
+		Domain   Url
 		Provider ProviderConfig
-		Created  shared.Action[domain.UserID]
+		Created  shared.Action[auth.UserID]
 	}
 )
 
@@ -66,19 +68,24 @@ func (TargetCreated) Name_() string { return "deployment.event.target_created" }
 // Builds a new deployment target.
 func NewTarget(
 	name string,
-	url Url,
+	domain Url,
+	available TargetDomainAvailability,
 	provider ProviderConfig,
-	createdBy domain.UserID,
-	available TargetUrlAvailability,
+	configAvailable TargetConfigAvailability,
+	createdBy auth.UserID,
 ) (t Target, err error) {
 	if !available {
-		return t, ErrUrlAlreadyTaken
+		return t, ErrDomainAlreadyTaken
+	}
+
+	if !configAvailable {
+		return t, ErrConfigAlreadyTaken
 	}
 
 	t.apply(TargetCreated{
 		ID:       id.New[TargetID](),
 		Name:     name,
-		Url:      url,
+		Domain:   domain,
 		Provider: provider,
 		Created:  shared.NewAction(createdBy),
 	})
@@ -89,7 +96,7 @@ func NewTarget(
 func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	var (
 		createdAt             time.Time
-		createdBy             domain.UserID
+		createdBy             auth.UserID
 		providerDiscriminator string
 		providerData          string
 	)
@@ -97,7 +104,7 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	err = scanner.Scan(
 		&t.id,
 		&t.name,
-		&t.url,
+		&t.domain,
 		&providerDiscriminator,
 		&providerData,
 		&createdAt,
@@ -114,15 +121,34 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	return t, err
 }
 
+func (t Target) ID() TargetID             { return t.id }
+func (t Target) Provider() ProviderConfig { return t.provider }
+
 func (t *Target) apply(e event.Event) {
 	switch evt := e.(type) {
 	case TargetCreated:
 		t.id = evt.ID
 		t.name = evt.Name
-		t.url = evt.Url
+		t.domain = evt.Domain
 		t.provider = evt.Provider
 		t.created = evt.Created
 	}
 
 	event.Store(t, e)
+}
+
+func (a TargetConfigAvailability) Error() error {
+	if !a {
+		return ErrConfigAlreadyTaken
+	}
+
+	return nil
+}
+
+func (a TargetDomainAvailability) Error() error {
+	if !a {
+		return ErrDomainAlreadyTaken
+	}
+
+	return nil
 }

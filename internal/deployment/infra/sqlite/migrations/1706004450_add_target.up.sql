@@ -3,7 +3,7 @@
 CREATE TABLE targets (
     id TEXT NOT NULL,
     name TEXT NOT NULL,
-    url TEXT NOT NULL,
+    domain TEXT NOT NULL,
     provider_kind TEXT NOT NULL,
     provider_fingerprint TEXT NOT NULL,
     provider TEXT NOT NULL,
@@ -12,12 +12,12 @@ CREATE TABLE targets (
 
     CONSTRAINT pk_targets PRIMARY KEY(id),
     CONSTRAINT fk_targets_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT unique_targets_url UNIQUE(url), -- unique domain among all targets
-    CONSTRAINT unique_targets_provider_fingerprint UNIQUE(provider_fingerprint) -- and one unique provider fingerprint (same host and so on)
+    CONSTRAINT unique_targets_domain UNIQUE(domain), -- unique domain among all targets
+    CONSTRAINT unique_targets_provider_fingerprint UNIQUE(provider_fingerprint) -- unique provider fingerprint
 );
 
 -- Creates a default target if at least one app exists, else do nothing
-INSERT INTO targets (id, name, url, provider_kind, provider_fingerprint, provider, created_at, created_by)
+INSERT INTO targets (id, name, domain, provider_kind, provider_fingerprint, provider, created_at, created_by)
 SELECT 
     '2bRUdQnyRELMqyh9gFLQV1s0cqv'
     ,'local'

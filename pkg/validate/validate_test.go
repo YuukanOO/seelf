@@ -181,21 +181,21 @@ func Test_Patch(t *testing.T) {
 	})
 }
 
-func Test_WrapIfAppErr(t *testing.T) {
+func Test_Wrap(t *testing.T) {
 	t.Run("returns the error if it's not an application level error", func(t *testing.T) {
 		infrastructureErr := errors.New("an infrastructure error")
 
-		testutil.IsTrue(t, validate.WrapIfAppErr(infrastructureErr, "one", "two") == infrastructureErr)
-		testutil.IsTrue(t, validate.WrapIfAppErr(nil, "one", "two") == nil)
+		testutil.IsTrue(t, validate.Wrap(infrastructureErr, "one", "two") == infrastructureErr)
+		testutil.IsTrue(t, validate.Wrap(nil, "one", "two") == nil)
 	})
 
 	t.Run("returns nil if no err is given", func(t *testing.T) {
-		testutil.IsNil(t, validate.WrapIfAppErr(nil, "one", "two"))
+		testutil.IsNil(t, validate.Wrap(nil, "one", "two"))
 	})
 
 	t.Run("wrap the application error for the specified fields", func(t *testing.T) {
 		appErr := apperr.New("application level error")
-		err := validate.WrapIfAppErr(appErr, "one", "two")
+		err := validate.Wrap(appErr, "one", "two")
 
 		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 
@@ -205,6 +205,24 @@ func Test_WrapIfAppErr(t *testing.T) {
 		testutil.Equals(t, 2, len(validationErr))
 		testutil.ErrorIs(t, appErr, validationErr["one"])
 		testutil.ErrorIs(t, appErr, validationErr["two"])
+	})
+
+	t.Run("flatten nested validation errors", func(t *testing.T) {
+		appErr := validate.Struct(validate.Of{
+			"firstName": validate.Field("", required),
+			"lastName":  validate.Field("", alwaysFail),
+		})
+
+		err := validate.Wrap(appErr, "one", "two")
+
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
+		testutil.IsTrue(t, ok)
+		testutil.Equals(t, 4, len(validationErr))
+		testutil.ErrorIs(t, errRequired, validationErr["one.firstName"])
+		testutil.ErrorIs(t, errAlwaysFail, validationErr["one.lastName"])
+		testutil.ErrorIs(t, errRequired, validationErr["two.firstName"])
+		testutil.ErrorIs(t, errAlwaysFail, validationErr["two.lastName"])
 	})
 }
 

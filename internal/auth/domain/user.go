@@ -90,7 +90,7 @@ func (UserRegistered) Name_() string      { return "auth.event.user_registered" 
 func (UserEmailChanged) Name_() string    { return "auth.event.user_email_changed" }
 func (UserPasswordChanged) Name_() string { return "auth.event.user_password_changed" }
 
-func NewUser(email Email, password PasswordHash, key APIKey, available EmailAvailability) (u User, err error) {
+func NewUser(email Email, available EmailAvailability, password PasswordHash, key APIKey) (u User, err error) {
 	if !available {
 		return u, ErrEmailAlreadyTaken
 	}

@@ -31,7 +31,7 @@ func Test_CreateApp(t *testing.T) {
 	})
 
 	t.Run("should fail if the name is already taken", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), "uid", domain.AppNamingAvailable))
+		a := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingAvailable, "uid"))
 		uc := sut(&a)
 
 		id, err := uc(ctx, create_app.Command{

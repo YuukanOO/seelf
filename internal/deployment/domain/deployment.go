@@ -102,36 +102,6 @@ func (a App) NewDeployment(
 	return d, nil
 }
 
-// Redeploy the given deployment.
-func (a App) Redeploy(
-	source Deployment,
-	deployNumber DeploymentNumber,
-	requestedBy domain.UserID,
-) (d Deployment, err error) {
-	if source.id.appID != a.id {
-		return d, ErrInvalidSourceDeployment
-	}
-
-	return a.NewDeployment(deployNumber, source.source, source.config.environment, requestedBy)
-}
-
-// Promote the given deployment to the production environment
-func (a App) Promote(
-	source Deployment,
-	deployNumber DeploymentNumber,
-	requestedBy domain.UserID,
-) (d Deployment, err error) {
-	if source.config.environment.IsProduction() {
-		return d, ErrCouldNotPromoteProductionDeployment
-	}
-
-	if source.id.appID != a.id {
-		return d, ErrInvalidSourceDeployment
-	}
-
-	return a.NewDeployment(deployNumber, source.source, Production, requestedBy)
-}
-
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	var (
 		requestedAt             time.Time
@@ -166,6 +136,36 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	d.requested = shared.ActionFrom(requestedBy, requestedAt)
 
 	return d, err
+}
+
+// Redeploy the given deployment.
+func (a App) Redeploy(
+	source Deployment,
+	deployNumber DeploymentNumber,
+	requestedBy domain.UserID,
+) (d Deployment, err error) {
+	if source.id.appID != a.id {
+		return d, ErrInvalidSourceDeployment
+	}
+
+	return a.NewDeployment(deployNumber, source.source, source.config.environment, requestedBy)
+}
+
+// Promote the given deployment to the production environment
+func (a App) Promote(
+	source Deployment,
+	deployNumber DeploymentNumber,
+	requestedBy domain.UserID,
+) (d Deployment, err error) {
+	if source.config.environment.IsProduction() {
+		return d, ErrCouldNotPromoteProductionDeployment
+	}
+
+	if source.id.appID != a.id {
+		return d, ErrInvalidSourceDeployment
+	}
+
+	return a.NewDeployment(deployNumber, source.source, Production, requestedBy)
 }
 
 func (d Deployment) ID() DeploymentID                        { return d.id }

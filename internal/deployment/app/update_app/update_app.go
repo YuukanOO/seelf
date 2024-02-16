@@ -66,6 +66,46 @@ func Handler(
 			return "", err
 		}
 
+		// Check availability of new targets if set to report errors early
+		var (
+			hasProductionConfigUpdate    bool
+			productionConfigUpdate       EnvironmentConfig
+			productionTarget             domain.TargetID
+			productionTargetAvailability domain.TargetAppNamingAvailability
+		)
+
+		if productionConfigUpdate, hasProductionConfigUpdate = cmd.Production.TryGet(); hasProductionConfigUpdate {
+			productionTarget = domain.TargetID(productionConfigUpdate.Target)
+			productionTargetAvailability, err = reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Production, productionTarget)
+
+			if err != nil {
+				return "", err
+			}
+		}
+
+		var (
+			stagingTarget             domain.TargetID
+			hasStagingConfigUpdate    bool
+			stagingConfigUpdate       EnvironmentConfig
+			stagingTargetAvailability domain.TargetAppNamingAvailability
+		)
+
+		if stagingConfigUpdate, hasStagingConfigUpdate = cmd.Staging.TryGet(); hasStagingConfigUpdate {
+			stagingTarget = domain.TargetID(stagingConfigUpdate.Target)
+			stagingTargetAvailability, err = reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Staging, stagingTarget)
+
+			if err != nil {
+				return "", err
+			}
+		}
+
+		if err = validate.Struct(validate.Of{
+			"production.target": productionTargetAvailability.Error(),
+			"staging.target":    stagingTargetAvailability.Error(),
+		}); err != nil {
+			return "", err
+		}
+
 		if vcsPatch, isSet := cmd.VCS.TryGet(); isSet {
 			if vcsUpdate, hasValue := vcsPatch.TryGet(); hasValue {
 				// Take the existing vcs as a reference so the token is not modified if not provided at all
@@ -85,38 +125,14 @@ func Handler(
 			}
 		}
 
-		if conf, isSet := cmd.Production.TryGet(); isSet {
-			target := domain.TargetID(conf.Target)
-
-			availability, err := reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Production, target)
-
-			if err != nil {
-				return "", err
-			}
-
-			if err = availability.Error(); err != nil {
-				return "", validate.WrapIfAppErr(err, "production.target")
-			}
-
-			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {
+		if hasProductionConfigUpdate {
+			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(productionTarget, productionConfigUpdate.Vars), productionTargetAvailability); err != nil {
 				return "", err
 			}
 		}
 
-		if conf, isSet := cmd.Staging.TryGet(); isSet {
-			target := domain.TargetID(conf.Target)
-
-			availability, err := reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Staging, target)
-
-			if err != nil {
-				return "", err
-			}
-
-			if err = availability.Error(); err != nil {
-				return "", validate.WrapIfAppErr(err, "staging.target")
-			}
-
-			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(target, conf.Vars), availability); err != nil {
+		if hasStagingConfigUpdate {
+			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(stagingTarget, stagingConfigUpdate.Vars), stagingTargetAvailability); err != nil {
 				return "", err
 			}
 		}

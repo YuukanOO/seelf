@@ -83,4 +83,4 @@ func ServicesEnvFrom(raw map[string]map[string]string) ServicesEnv {
 }
 
 func (e ServicesEnv) Value() (driver.Value, error) { return storage.ValueJSON(e) }
-func (e *ServicesEnv) Scan(value any) error        { return storage.ScanJSON(value, &e) }
+func (e *ServicesEnv) Scan(value any) error        { return storage.ScanJSON(value, e) }

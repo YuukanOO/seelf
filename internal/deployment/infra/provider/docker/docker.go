@@ -13,7 +13,11 @@ import (
 	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/infra/provider"
 	"github.com/YuukanOO/seelf/pkg/log"
+	ptypes "github.com/YuukanOO/seelf/pkg/types"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	vstrings "github.com/YuukanOO/seelf/pkg/validate/strings"
 	"github.com/compose-spec/compose-go/cli"
 	"github.com/compose-spec/compose-go/loader"
 	"github.com/compose-spec/compose-go/types"
@@ -32,7 +36,7 @@ var (
 	ErrOpenComposeFileFailed = errors.New("compose_file_open_failed")
 	ErrComposeFailed         = errors.New("compose_failed")
 
-	_ domain.Provider = (*Docker)(nil) // Make sure docker implements the Provider interface
+	_ provider.Provider = (*Docker)(nil) // Make sure docker implements the Provider interface
 )
 
 const (
@@ -82,6 +86,11 @@ func WithDockerAndCompose(cli command.Cli, composeService api.Service) DockerOpt
 		d.cli = cli
 		d.compose = composeService
 	}
+}
+
+func (d *Docker) CanPrepare(payload any) bool { return ptypes.Is[Body](payload) }
+func (d *Docker) CanHandle(config domain.ProviderConfig) bool {
+	return ptypes.Is[Data](config)
 }
 
 func (d *Docker) Setup() error {
@@ -161,7 +170,43 @@ func (d *Docker) Setup() error {
 }
 
 func (d *Docker) Prepare(ctx context.Context, payload any) (domain.ProviderConfig, error) {
-	return nil, nil
+	config, ok := payload.(Body)
+
+	if !ok {
+		return nil, domain.ErrInvalidProviderPayload
+	}
+
+	var (
+		host    Host
+		privKey PrivateKey
+	)
+
+	if err := validate.Struct(validate.Of{
+		"docker.host": validate.Maybe(config.Host, func(s string) error {
+			return validate.Value(s, &host, HostFrom)
+		}),
+		"docker.user": validate.Maybe(config.User, vstrings.Required),
+		"docker.private_key": validate.Patch(config.PrivateKey, func(s string) error {
+			return validate.Value(s, &privKey, PrivateKeyFrom)
+		}),
+	}); err != nil {
+		return nil, err
+	}
+
+	data := Data{
+		Port: config.Port,
+		User: config.User,
+	}
+
+	if config.Host.HasValue() {
+		data.Host = data.Host.WithValue(host)
+	}
+
+	if config.PrivateKey.HasValue() {
+		data.PrivateKey = data.PrivateKey.WithValue(privKey)
+	}
+
+	return data, nil
 }
 
 func (d *Docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) (domain.Services, error) {

@@ -51,7 +51,7 @@ func Test_CleanupApp(t *testing.T) {
 	})
 
 	t.Run("should fail if the application cleanup as not been requested", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "uid"))
 		uc := sut(initialData{
 			existingApps: []*domain.App{&app},
 		})
@@ -65,7 +65,7 @@ func Test_CleanupApp(t *testing.T) {
 	})
 
 	t.Run("should fail if there are still pending or running deployments", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "uid"))
 		depl := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
 		app.RequestCleanup("uid")
 
@@ -83,7 +83,7 @@ func Test_CleanupApp(t *testing.T) {
 	})
 
 	t.Run("should succeed if everything is good", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "uid", domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "uid"))
 		app.RequestCleanup("uid")
 
 		uc := sut(initialData{

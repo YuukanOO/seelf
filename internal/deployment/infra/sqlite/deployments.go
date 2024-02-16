@@ -27,24 +27,24 @@ func NewDeploymentsStore(db *sqlite.Database) DeploymentsStore {
 func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) (domain.Deployment, error) {
 	return builder.
 		Query[domain.Deployment](`
-			SELECT
-				app_id
-				,deployment_number
-				,config_appname
-				,config_environment
-				,config_target
-				,config_vars
-				,state_status
-				,state_errcode
-				,state_services
-				,state_started_at
-				,state_finished_at
-				,source_discriminator
-				,source
-				,requested_at
-				,requested_by
-			FROM deployments
-			WHERE app_id = ? AND deployment_number = ?`, id.AppID(), id.DeploymentNumber()).
+		SELECT
+			app_id
+			,deployment_number
+			,config_appname
+			,config_environment
+			,config_target
+			,config_vars
+			,state_status
+			,state_errcode
+			,state_services
+			,state_started_at
+			,state_finished_at
+			,source_discriminator
+			,source
+			,requested_at
+			,requested_by
+		FROM deployments
+		WHERE app_id = ? AND deployment_number = ?`, id.AppID(), id.DeploymentNumber()).
 		One(s.db, ctx, domain.DeploymentFrom)
 }
 
@@ -65,33 +65,33 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID do
 func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.Deployment, error) {
 	return builder.
 		Query[domain.Deployment](`
-			SELECT
-				app_id
-				,deployment_number
-				,config_appname
-				,config_environment
-				,config_target
-				,config_vars
-				,state_status
-				,state_errcode
-				,state_services
-				,state_started_at
-				,state_finished_at
-				,source_discriminator
-				,source
-				,requested_at
-				,requested_by
-			FROM deployments
-			WHERE state_status = ?`, domain.DeploymentStatusRunning).
+		SELECT
+			app_id
+			,deployment_number
+			,config_appname
+			,config_environment
+			,config_target
+			,config_vars
+			,state_status
+			,state_errcode
+			,state_services
+			,state_started_at
+			,state_finished_at
+			,source_discriminator
+			,source
+			,requested_at
+			,requested_by
+		FROM deployments
+		WHERE state_status = ?`, domain.DeploymentStatusRunning).
 		All(s.db, ctx, domain.DeploymentFrom)
 }
 
 func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appID domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
 	count, err := builder.
 		Query[domain.RunningOrPendingAppDeploymentsCount](`
-			SELECT COUNT(*)
-			FROM deployments
-			WHERE app_id = ? AND state_status IN (?, ?)`,
+		SELECT COUNT(*)
+		FROM deployments
+		WHERE app_id = ? AND state_status IN (?, ?)`,
 		appID, domain.DeploymentStatusRunning, domain.DeploymentStatusPending).
 		Extract(s.db, ctx)
 

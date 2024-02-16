@@ -24,14 +24,32 @@ func NewTargetsStore(db *sqlite.Database) TargetsStore {
 	return &targetsStore{db}
 }
 
-func (s *targetsStore) GetUrlAvailability(ctx context.Context, url domain.Url, excluded ...domain.TargetID) (domain.TargetUrlAvailability, error) {
+func (s *targetsStore) GetDomainAvailability(ctx context.Context, url domain.Url, excluded ...domain.TargetID) (domain.TargetDomainAvailability, error) {
 	count, err := builder.
 		Query[uint](`
 		SELECT
-			COUNT(url)
+			COUNT(domain)
 		FROM targets
 		WHERE
-			url = ?`, url).
+			domain = ?`, url).
+		S(builder.Array("AND id NOT IN", excluded)).
+		Extract(s.db, ctx)
+
+	if err != nil {
+		return false, err
+	}
+
+	return count == 0, nil
+}
+
+func (s *targetsStore) GetConfigAvailability(ctx context.Context, config domain.ProviderConfig, excluded ...domain.TargetID) (domain.TargetConfigAvailability, error) {
+	count, err := builder.
+		Query[uint](`
+		SELECT
+			COUNT(provider_fingerprint)
+		FROM targets
+		WHERE
+			provider_fingerprint = ?`, config.Fingerprint()).
 		S(builder.Array("AND id NOT IN", excluded)).
 		Extract(s.db, ctx)
 
@@ -45,16 +63,16 @@ func (s *targetsStore) GetUrlAvailability(ctx context.Context, url domain.Url, e
 func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.Target, error) {
 	return builder.
 		Query[domain.Target](`
-			SELECT
-				id
-				,name
-				,url
-				,provider_kind
-				,provider
-				,created_at
-				,created_by
-			FROM apps
-			WHERE id = ?`, id).
+		SELECT
+			id
+			,name
+			,domain
+			,provider_kind
+			,provider
+			,created_at
+			,created_by
+		FROM apps
+		WHERE id = ?`, id).
 		One(s.db, ctx, domain.TargetFrom)
 }
 
@@ -66,7 +84,7 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 				Insert("targets", builder.Values{
 					"id":                   evt.ID,
 					"name":                 evt.Name,
-					"url":                  evt.Url,
+					"domain":               evt.Domain,
 					"provider_kind":        evt.Provider.Kind(),
 					"provider_fingerprint": evt.Provider.Fingerprint(),
 					"provider":             evt.Provider,

@@ -18,7 +18,7 @@ import (
 
 func Test_QueueDeployment(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), "some-uid", domain.AppNamingAvailable))
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "some-uid"))
 	appsStore := memory.NewAppsStore(&app)
 
 	sut := func() bus.RequestHandler[int, queue_deployment.Command] {
@@ -67,7 +67,7 @@ func Test_QueueDeployment(t *testing.T) {
 		num, err := uc(ctx, queue_deployment.Command{
 			AppID:       string(app.ID()),
 			Environment: "production",
-			Payload:     "some-payload",
+			Source:      "some-payload",
 		})
 
 		testutil.IsNil(t, err)

@@ -2,14 +2,14 @@ package domain
 
 import (
 	"context"
-	"errors"
 
+	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 var (
-	ErrNoValidSourceFound   = errors.New("no_valid_source_found")
-	ErrInvalidSourcePayload = errors.New("invalid_source_payload")
+	ErrNoValidSourceFound   = apperr.New("no_valid_source_found")
+	ErrInvalidSourcePayload = apperr.New("invalid_source_payload")
 
 	SourceDataTypes = storage.NewDiscriminatedMapper(func(sd SourceData) string { return sd.Kind() })
 )

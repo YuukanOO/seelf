@@ -58,7 +58,7 @@ func Test_State(t *testing.T) {
 			services domain.Services
 		)
 
-		app := must.Panic(domain.NewApp("app1", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), "uid", domain.AppNamingAvailable))
+		app := must.Panic(domain.NewApp("app1", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingAvailable, "uid"))
 		conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 		services, _ = services.Internal(conf, "name1", "image1")
 		state = must.Panic(state.Started())

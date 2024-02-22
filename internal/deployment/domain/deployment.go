@@ -72,7 +72,7 @@ func (DeploymentStateChanged) Name_() string { return "deployment.event.deployme
 
 // Creates a new deployment for this app. This method acts as a factory for the deployment
 // entity to make sure a new deployment can be created for an app.
-func (a App) NewDeployment(
+func (a *App) NewDeployment(
 	deployNumber DeploymentNumber,
 	meta SourceData,
 	env Environment,
@@ -139,7 +139,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 }
 
 // Redeploy the given deployment.
-func (a App) Redeploy(
+func (a *App) Redeploy(
 	source Deployment,
 	deployNumber DeploymentNumber,
 	requestedBy domain.UserID,
@@ -152,7 +152,7 @@ func (a App) Redeploy(
 }
 
 // Promote the given deployment to the production environment
-func (a App) Promote(
+func (a *App) Promote(
 	source Deployment,
 	deployNumber DeploymentNumber,
 	requestedBy domain.UserID,
@@ -168,20 +168,20 @@ func (a App) Promote(
 	return a.NewDeployment(deployNumber, source.source, Production, requestedBy)
 }
 
-func (d Deployment) ID() DeploymentID                        { return d.id }
-func (d Deployment) Config() DeploymentConfig                { return d.config }
-func (d Deployment) Source() SourceData                      { return d.source }
-func (d Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
+func (d *Deployment) ID() DeploymentID                        { return d.id }
+func (d *Deployment) Config() DeploymentConfig                { return d.config }
+func (d *Deployment) Source() SourceData                      { return d.source }
+func (d *Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
 
 // Mark a deployment has started.
 func (d *Deployment) HasStarted() error {
-	state, err := d.state.Started()
+	err := d.state.Started()
 
 	if err != nil {
 		return err
 	}
 
-	d.stateChanged(state)
+	d.stateChanged()
 
 	return nil
 }
@@ -194,30 +194,27 @@ func (d *Deployment) HasEnded(services Services, deploymentErr error) error {
 		services = Services{}
 	}
 
-	var (
-		err      error
-		newState State
-	)
+	var err error
 
 	if deploymentErr != nil {
-		newState, err = d.state.Failed(deploymentErr)
+		err = d.state.Failed(deploymentErr)
 	} else {
-		newState, err = d.state.Succeeded(services)
+		err = d.state.Succeeded(services)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	d.stateChanged(newState)
+	d.stateChanged()
 
 	return nil
 }
 
-func (d *Deployment) stateChanged(newState State) {
+func (d *Deployment) stateChanged() {
 	d.apply(DeploymentStateChanged{
 		ID:    d.id,
-		State: newState,
+		State: d.state,
 	})
 }
 

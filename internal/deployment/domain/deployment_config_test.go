@@ -9,12 +9,11 @@ import (
 )
 
 func Test_Config(t *testing.T) {
-	production := domain.
-		NewEnvironmentConfig("production-target").
-		WithEnvironmentVariables(domain.ServicesEnv{
-			"app": {"DEBUG": "false"},
-			"db":  {"USERNAME": "prodadmin"},
-		})
+	production := domain.NewEnvironmentConfig("production-target")
+	production.HasEnvironmentVariables(domain.ServicesEnv{
+		"app": {"DEBUG": "false"},
+		"db":  {"USERNAME": "prodadmin"},
+	})
 
 	staging := domain.NewEnvironmentConfig("staging-target")
 	app := must.Panic(domain.NewApp("my-app", production, staging, domain.AppNamingAvailable, "uid"))

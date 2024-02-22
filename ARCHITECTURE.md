@@ -30,9 +30,13 @@ Value objects regroup multiple properties that operate together into one [immuta
 
 The **rule of thumbs** in this project **regarding struct creation** is to **always pass by a constructor function** if any. I could have enforced the valid creation by hiding struct behind an interface but that's a lot of additional complexity.
 
-## Immutability
+## Immutability and pointer vs value receivers
 
-For entities, mutation is allowed because that's the most reasonnable way to think about them, that's why mutating methods operates on a pointer receiver whereas Value Objects are immutable and always manipulate struct by values.
+Entities are mutable and always use pointer receivers. That's because they may hold a lot of data and that's the most reasonable way to think about them.
+
+In DDD, value objects _should_ be immutable. But in Go, everything is pass by value by default hence a copy is done. This is why value objects in seelf are mutable (use pointer receiver for mutation methods). Since an entity always exposes its value objects as values, no harm could be done.
+
+To make calls chainable, getters on value objects use a value receiver instead (mixing pointer and value receivers against Go recommendations... but I favor usability here).
 
 ## Persistence
 

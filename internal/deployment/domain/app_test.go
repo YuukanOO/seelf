@@ -51,7 +51,8 @@ func Test_App(t *testing.T) {
 
 	t.Run("could have a vcs config attached", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		vcsConfig := domain.NewVCSConfig(url).Authenticated("vcskey")
+		vcsConfig := domain.NewVCSConfig(url)
+		vcsConfig.Authenticated("vcskey")
 
 		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.UseVersionControl(vcsConfig)
@@ -79,7 +80,8 @@ func Test_App(t *testing.T) {
 
 	t.Run("raise a VCS configured event only if configs are different", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		vcsConfig := domain.NewVCSConfig(url).Authenticated("vcskey")
+		vcsConfig := domain.NewVCSConfig(url)
+		vcsConfig.Authenticated("vcskey")
 		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 		app.UseVersionControl(vcsConfig)
 		app.UseVersionControl(vcsConfig)
@@ -120,11 +122,10 @@ func Test_App(t *testing.T) {
 		testutil.IsNil(t, errStaging)
 		testutil.HasNEvents(t, &app, 1)
 
-		newConfig := domain.
-			NewEnvironmentConfig("new-target").
-			WithEnvironmentVariables(domain.ServicesEnv{
-				"app": {"DEBUG": "true"},
-			})
+		newConfig := domain.NewEnvironmentConfig("new-target")
+		newConfig.HasEnvironmentVariables(domain.ServicesEnv{
+			"app": {"DEBUG": "true"},
+		})
 
 		errProd = app.WithProductionConfig(newConfig, domain.TargetAppNamingAvailable)
 		errStaging = app.WithStagingConfig(newConfig, domain.TargetAppNamingAvailable)

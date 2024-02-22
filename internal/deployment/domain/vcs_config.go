@@ -18,21 +18,18 @@ func NewVCSConfig(url Url) VCSConfig {
 }
 
 // If this repository needs authentication, use the provided token.
-func (c VCSConfig) Authenticated(token string) VCSConfig {
+func (c *VCSConfig) Authenticated(token string) {
 	c.token.Set(token)
-	return c
 }
 
-// Returns a new VCS Config without the token.
-func (c VCSConfig) Public() VCSConfig {
+// Mark this repository as public (no authentication needed).
+func (c *VCSConfig) Public() {
 	c.token.Unset()
-	return c
 }
 
-// Updates the VCS Config with the provided url.
-func (c VCSConfig) WithUrl(url Url) VCSConfig {
+// Updates the vcs url.
+func (c *VCSConfig) HasUrl(url Url) {
 	c.url = url
-	return c
 }
 
 func (c VCSConfig) Url() Url                   { return c.url }

@@ -17,7 +17,7 @@ type DeploymentConfig struct {
 }
 
 // Builds a new config snapshot for the given environment.
-func (a App) ConfigSnapshotFor(env Environment) (DeploymentConfig, error) {
+func (a *App) ConfigSnapshotFor(env Environment) (DeploymentConfig, error) {
 	var (
 		conf     EnvironmentConfig
 		snapshot DeploymentConfig

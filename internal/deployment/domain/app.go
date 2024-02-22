@@ -190,7 +190,7 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		vcs := NewVCSConfig(u)
 
 		if tok, isSet := token.TryGet(); isSet {
-			vcs = vcs.Authenticated(tok)
+			vcs.Authenticated(tok)
 		}
 
 		a.vcs.Set(vcs)
@@ -262,8 +262,8 @@ func (a *App) Delete(deployments RunningOrPendingAppDeploymentsCount) error {
 	return nil
 }
 
-func (a App) ID() AppID                   { return a.id }
-func (a App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
+func (a *App) ID() AppID                   { return a.id }
+func (a *App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
 
 func (a *App) tryUpdateEnvironmentConfig(
 	env Environment,

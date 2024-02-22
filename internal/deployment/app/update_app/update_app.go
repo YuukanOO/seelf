@@ -109,13 +109,14 @@ func Handler(
 		if vcsPatch, isSet := cmd.VCS.TryGet(); isSet {
 			if vcsUpdate, hasValue := vcsPatch.TryGet(); hasValue {
 				// Take the existing vcs as a reference so the token is not modified if not provided at all
-				vcs := app.VCS().Get(domain.NewVCSConfig(url)).WithUrl(url)
+				vcs := app.VCS().Get(domain.NewVCSConfig(url))
+				vcs.HasUrl(url)
 
 				if tokenPatch, isSet := vcsUpdate.Token.TryGet(); isSet {
 					if token, hasValue := tokenPatch.TryGet(); hasValue {
-						vcs = vcs.Authenticated(token)
+						vcs.Authenticated(token)
 					} else {
-						vcs = vcs.Public()
+						vcs.Public()
 					}
 				}
 

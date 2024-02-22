@@ -55,9 +55,8 @@ func NewEnvironmentConfig(target TargetID) EnvironmentConfig {
 }
 
 // Add the given environment variables per service to this configuration.
-func (e EnvironmentConfig) WithEnvironmentVariables(vars ServicesEnv) EnvironmentConfig {
+func (e *EnvironmentConfig) HasEnvironmentVariables(vars ServicesEnv) {
 	e.vars.Set(vars)
-	return e
 }
 
 func (e EnvironmentConfig) Equals(other EnvironmentConfig) bool {

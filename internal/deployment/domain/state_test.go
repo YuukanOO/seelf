@@ -26,7 +26,7 @@ func Test_State(t *testing.T) {
 			err   error
 		)
 
-		state, err = state.Started()
+		err = state.Started()
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.DeploymentStatusRunning, state.Status())
@@ -40,9 +40,9 @@ func Test_State(t *testing.T) {
 			err   error
 		)
 
-		state, _ = state.Started()
+		testutil.IsNil(t, state.Started())
 
-		state, err = state.Failed(errors.New("some error"))
+		err = state.Failed(errors.New("some error"))
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.DeploymentStatusFailed, state.Status())
@@ -61,9 +61,9 @@ func Test_State(t *testing.T) {
 		app := must.Panic(domain.NewApp("app1", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingAvailable, "uid"))
 		conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 		services, _ = services.Internal(conf, "name1", "image1")
-		state = must.Panic(state.Started())
+		testutil.IsNil(t, state.Started())
 
-		state, err = state.Succeeded(services)
+		err = state.Succeeded(services)
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.DeploymentStatusSucceeded, state.Status())
@@ -75,9 +75,10 @@ func Test_State(t *testing.T) {
 	})
 
 	t.Run("should err if trying to start but not in pending state", func(t *testing.T) {
-		state := must.Panic(domain.State{}.Started())
+		var state domain.State
+		testutil.IsNil(t, state.Started())
 
-		_, err := state.Started()
+		err := state.Started()
 
 		testutil.ErrorIs(t, domain.ErrNotInPendingState, err)
 	})
@@ -85,7 +86,7 @@ func Test_State(t *testing.T) {
 	t.Run("should err if trying to fail but not in runing state", func(t *testing.T) {
 		var state domain.State
 
-		_, err := state.Failed(errors.New("an error"))
+		err := state.Failed(errors.New("an error"))
 
 		testutil.ErrorIs(t, domain.ErrNotInRunningState, err)
 	})
@@ -93,7 +94,7 @@ func Test_State(t *testing.T) {
 	t.Run("should err if trying to succeed but not in runing state", func(t *testing.T) {
 		var state domain.State
 
-		_, err := state.Succeeded(domain.Services{})
+		err := state.Succeeded(domain.Services{})
 
 		testutil.ErrorIs(t, domain.ErrNotInRunningState, err)
 	})

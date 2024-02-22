@@ -96,7 +96,7 @@ func Handler(
 			vcs := domain.NewVCSConfig(url)
 
 			if token, isSet := cmdVCS.Token.TryGet(); isSet {
-				vcs = vcs.Authenticated(token)
+				vcs.Authenticated(token)
 			}
 
 			app.UseVersionControl(vcs)
@@ -115,7 +115,7 @@ func BuildEnvironmentConfig(target domain.TargetID, env monad.Maybe[map[string]m
 	config := domain.NewEnvironmentConfig(target)
 
 	if vars, hasVars := env.TryGet(); hasVars {
-		config = config.WithEnvironmentVariables(domain.ServicesEnvFrom(vars))
+		config.HasEnvironmentVariables(domain.ServicesEnvFrom(vars))
 	}
 
 	return config

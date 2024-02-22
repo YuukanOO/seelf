@@ -146,19 +146,20 @@ func Test_Run(t *testing.T) {
 		postgresUser := "prodapp"
 		postgresPassword := "passprod"
 
+		config := domain.NewEnvironmentConfig("production-target")
+		config.HasEnvironmentVariables(domain.ServicesEnv{
+			"app": domain.EnvVars{
+				"DSN": dsn,
+			},
+			"db": domain.EnvVars{
+				"POSTGRES_USER":     postgresUser,
+				"POSTGRES_PASSWORD": postgresPassword,
+			},
+		})
+
 		app := must.Panic(domain.NewApp(
 			"my-app",
-			domain.
-				NewEnvironmentConfig("production-target").
-				WithEnvironmentVariables(domain.ServicesEnv{
-					"app": domain.EnvVars{
-						"DSN": dsn,
-					},
-					"db": domain.EnvVars{
-						"POSTGRES_USER":     postgresUser,
-						"POSTGRES_PASSWORD": postgresPassword,
-					},
-				}),
+			config,
 			domain.NewEnvironmentConfig("staging-target"),
 			domain.AppNamingAvailable,
 			"uid",

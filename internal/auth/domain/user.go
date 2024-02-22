@@ -149,8 +149,8 @@ func (u *User) HasPassword(password PasswordHash) {
 	})
 }
 
-func (u User) ID() UserID             { return u.id }
-func (u User) Password() PasswordHash { return u.password }
+func (u *User) ID() UserID             { return u.id }
+func (u *User) Password() PasswordHash { return u.password }
 
 func (u *User) apply(e event.Event) {
 	switch evt := e.(type) {

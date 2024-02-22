@@ -121,8 +121,8 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	return t, err
 }
 
-func (t Target) ID() TargetID             { return t.id }
-func (t Target) Provider() ProviderConfig { return t.provider }
+func (t *Target) ID() TargetID             { return t.id }
+func (t *Target) Provider() ProviderConfig { return t.provider }
 
 func (t *Target) apply(e event.Event) {
 	switch evt := e.(type) {

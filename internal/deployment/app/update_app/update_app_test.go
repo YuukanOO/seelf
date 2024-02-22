@@ -17,7 +17,12 @@ import (
 )
 
 func Test_UpdateApp(t *testing.T) {
+	production := domain.NewEnvironmentConfig("1")
+	production.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+	staging := domain.NewEnvironmentConfig("1")
+	staging.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
 	ctx := auth.WithUserID(context.Background(), "some-uid")
+
 	sut := func(existingApps ...*domain.App) bus.RequestHandler[string, update_app.Command] {
 		store := memory.NewAppsStore(existingApps...)
 		return update_app.Handler(store, store)
@@ -68,8 +73,8 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should remove an application env variables", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
-			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}}),
+			production,
+			staging,
 			domain.AppNamingAvailable,
 			"uid",
 		))
@@ -105,8 +110,8 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should update an application env variables", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
-			domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}}),
+			production,
+			staging,
 			domain.AppNamingAvailable,
 			"uid",
 		))
@@ -201,7 +206,9 @@ func Test_UpdateApp(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
 			domain.AppNamingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
-		a.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
+		vcs := domain.NewVCSConfig(url)
+		vcs.Authenticated("a token")
+		a.UseVersionControl(vcs)
 
 		uc := sut(&a)
 
@@ -224,7 +231,9 @@ func Test_UpdateApp(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
 			domain.AppNamingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
-		a.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
+		vcs := domain.NewVCSConfig(url)
+		vcs.Authenticated("a token")
+		a.UseVersionControl(vcs)
 
 		uc := sut(&a)
 
@@ -248,7 +257,9 @@ func Test_UpdateApp(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
 			domain.AppNamingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
-		a.UseVersionControl(domain.NewVCSConfig(url).Authenticated("a token"))
+		vcs := domain.NewVCSConfig(url)
+		vcs.Authenticated("a token")
+		a.UseVersionControl(vcs)
 
 		uc := sut(&a)
 

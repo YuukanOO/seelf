@@ -34,39 +34,39 @@ type (
 	}
 )
 
-func (s State) Started() (State, error) {
+func (s *State) Started() error {
 	if s.status != DeploymentStatusPending {
-		return s, ErrNotInPendingState
+		return ErrNotInPendingState
 	}
 
 	s.status = DeploymentStatusRunning
 	s.startedAt.Set(time.Now().UTC())
 
-	return s, nil
+	return nil
 }
 
-func (s State) Failed(err error) (State, error) {
+func (s *State) Failed(err error) error {
 	if s.status != DeploymentStatusRunning {
-		return s, ErrNotInRunningState
+		return ErrNotInRunningState
 	}
 
 	s.status = DeploymentStatusFailed
 	s.errcode.Set(err.Error())
 	s.finishedAt.Set(time.Now().UTC())
 
-	return s, nil
+	return nil
 }
 
-func (s State) Succeeded(services Services) (State, error) {
+func (s *State) Succeeded(services Services) error {
 	if s.status != DeploymentStatusRunning {
-		return s, ErrNotInRunningState
+		return ErrNotInRunningState
 	}
 
 	s.status = DeploymentStatusSucceeded
 	s.services.Set(services)
 	s.finishedAt.Set(time.Now().UTC())
 
-	return s, nil
+	return nil
 }
 
 func (s State) Status() DeploymentStatus           { return s.status }

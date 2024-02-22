@@ -97,7 +97,10 @@ func Test_Deployment(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.HasNEvents(t, &dpl, 3)
-		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
+		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &dpl, 1)
+		testutil.Equals(t, domain.DeploymentStatusRunning, evt.State.Status())
+
+		evt = testutil.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
 
 		testutil.Equals(t, dpl.ID(), evt.ID)
 		testutil.Equals(t, domain.DeploymentStatusSucceeded, evt.State.Status())
@@ -154,8 +157,9 @@ func Test_Deployment(t *testing.T) {
 
 	t.Run("should err if trying to redeploy a deployment on the wrong app", func(t *testing.T) {
 		source := must.Panic(app.NewDeployment(1, nonVcsMeta, domain.Production, uid))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
-		_, err := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid)).Redeploy(source, 2, "uid")
+		_, err := app.Redeploy(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})
@@ -170,8 +174,9 @@ func Test_Deployment(t *testing.T) {
 
 	t.Run("should err if trying to promote a deployment on the wrong app", func(t *testing.T) {
 		source := must.Panic(app.NewDeployment(1, nonVcsMeta, domain.Staging, uid))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid))
 
-		_, err := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingAvailable, uid)).Promote(source, 2, "uid")
+		_, err := app.Promote(source, 2, "uid")
 
 		testutil.ErrorIs(t, domain.ErrInvalidSourceDeployment, err)
 	})

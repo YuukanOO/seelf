@@ -127,7 +127,8 @@ func Test_EnvironmentConfig(t *testing.T) {
 			"db":  {"USERNAME": "admin"},
 		}
 
-		r := domain.NewEnvironmentConfig(target).WithEnvironmentVariables(vars)
+		r := domain.NewEnvironmentConfig(target)
+		r.HasEnvironmentVariables(vars)
 
 		testutil.Equals(t, target, r.Target())
 		testutil.IsTrue(t, r.Vars().HasValue())
@@ -136,43 +137,65 @@ func Test_EnvironmentConfig(t *testing.T) {
 
 	t.Run("should be able to compare itself with another config", func(t *testing.T) {
 		tests := []struct {
-			a        domain.EnvironmentConfig
-			b        domain.EnvironmentConfig
+			a        func() domain.EnvironmentConfig
+			b        func() domain.EnvironmentConfig
 			expected bool
 		}{
 			{
-				a:        domain.NewEnvironmentConfig("1"),
-				b:        domain.NewEnvironmentConfig("1"),
+				a:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
+				b:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
 				expected: true,
 			},
 			{
-				a:        domain.NewEnvironmentConfig("1"),
-				b:        domain.NewEnvironmentConfig("2"),
+				a:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
+				b:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("2") },
 				expected: false,
 			},
 			{
-				a:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
-				b:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
+				a: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
+				b: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
 				expected: true,
 			},
 			{
-				a:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
-				b:        domain.NewEnvironmentConfig("1"),
+				a: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
+				b:        func() domain.EnvironmentConfig { return domain.NewEnvironmentConfig("1") },
 				expected: false,
 			},
 			{
-				a:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}}),
-				b:        domain.NewEnvironmentConfig("1").WithEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}}),
+				a: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
+					return conf
+				},
+				b: func() domain.EnvironmentConfig {
+					conf := domain.NewEnvironmentConfig("1")
+					conf.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "true"}})
+					return conf
+				},
 				expected: false,
 			},
 		}
 
 		for _, test := range tests {
-			t.Run(fmt.Sprintf("%v %v", test.a, test.b), func(t *testing.T) {
-				r := test.a.Equals(test.b)
+			a := test.a()
+			b := test.b()
+			t.Run(fmt.Sprintf("%v %v", a, b), func(t *testing.T) {
+				r := a.Equals(b)
 				testutil.Equals(t, test.expected, r)
 
-				r = test.b.Equals(test.a)
+				r = b.Equals(a)
 				testutil.Equals(t, test.expected, r)
 			})
 		}

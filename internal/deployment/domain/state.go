@@ -40,7 +40,7 @@ func (s State) Started() (State, error) {
 	}
 
 	s.status = DeploymentStatusRunning
-	s.startedAt = s.startedAt.WithValue(time.Now().UTC())
+	s.startedAt.Set(time.Now().UTC())
 
 	return s, nil
 }
@@ -51,8 +51,8 @@ func (s State) Failed(err error) (State, error) {
 	}
 
 	s.status = DeploymentStatusFailed
-	s.errcode = s.errcode.WithValue(err.Error())
-	s.finishedAt = s.finishedAt.WithValue(time.Now().UTC())
+	s.errcode.Set(err.Error())
+	s.finishedAt.Set(time.Now().UTC())
 
 	return s, nil
 }
@@ -63,8 +63,8 @@ func (s State) Succeeded(services Services) (State, error) {
 	}
 
 	s.status = DeploymentStatusSucceeded
-	s.services = s.services.WithValue(services)
-	s.finishedAt = s.finishedAt.WithValue(time.Now().UTC())
+	s.services.Set(services)
+	s.finishedAt.Set(time.Now().UTC())
 
 	return s, nil
 }

@@ -180,7 +180,7 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 	a.created = shared.ActionFrom(createdBy, createdAt)
 
 	if requestedAt, isSet := cleanupRequestedAt.TryGet(); isSet {
-		a.cleanupRequested = a.cleanupRequested.WithValue(
+		a.cleanupRequested.Set(
 			shared.ActionFrom(domain.UserID(cleanupRequestedBy.MustGet()), requestedAt),
 		)
 	}
@@ -193,7 +193,7 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 			vcs = vcs.Authenticated(tok)
 		}
 
-		a.vcs = a.vcs.WithValue(vcs)
+		a.vcs.Set(vcs)
 	}
 
 	return a, err
@@ -317,11 +317,11 @@ func (a *App) apply(e event.Event) {
 			a.staging = evt.Config
 		}
 	case AppVCSConfigured:
-		a.vcs = a.vcs.WithValue(evt.Config)
+		a.vcs.Set(evt.Config)
 	case AppVCSRemoved:
-		a.vcs = a.vcs.None()
+		a.vcs.Unset()
 	case AppCleanupRequested:
-		a.cleanupRequested = a.cleanupRequested.WithValue(evt.Requested)
+		a.cleanupRequested.Set(evt.Requested)
 	}
 
 	event.Store(a, e)

@@ -207,9 +207,9 @@ var appLastDeploymentsByEnvDataloader = newAppWithLastDeploymentsByEnvDataloader
 	func(a get_apps.App, d get_deployment.Deployment) get_apps.App {
 		switch domain.Environment(d.Environment) {
 		case domain.Production:
-			a.LatestDeployments.Production = a.LatestDeployments.Production.WithValue(d)
+			a.LatestDeployments.Production.Set(d)
 		case domain.Staging:
-			a.LatestDeployments.Staging = a.LatestDeployments.Staging.WithValue(d)
+			a.LatestDeployments.Staging.Set(d)
 		}
 		return a
 	},
@@ -220,9 +220,9 @@ var appDetailLastDeploymentsByEnvDataloader = newAppWithLastDeploymentsByEnvData
 	func(a get_app_detail.App, d get_deployment.Deployment) get_app_detail.App {
 		switch domain.Environment(d.Environment) {
 		case domain.Production:
-			a.LatestDeployments.Production = a.LatestDeployments.Production.WithValue(d)
+			a.LatestDeployments.Production.Set(d)
 		case domain.Staging:
-			a.LatestDeployments.Staging = a.LatestDeployments.Staging.WithValue(d)
+			a.LatestDeployments.Staging.Set(d)
 		}
 		return a
 	},
@@ -247,7 +247,7 @@ func appDataMapper(s storage.Scanner) (a get_apps.App, err error) {
 	)
 
 	if id, isSet := cleanupRequestedById.TryGet(); isSet {
-		a.CleanupRequestedBy = a.CleanupRequestedBy.WithValue(app.UserSummary{
+		a.CleanupRequestedBy.Set(app.UserSummary{
 			ID:    id,
 			Email: cleanupRequestedByEmail.MustGet(),
 		})
@@ -285,14 +285,14 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 	)
 
 	if u, isSet := url.TryGet(); isSet {
-		a.VCS = a.VCS.WithValue(get_app_detail.VCSConfig{
+		a.VCS.Set(get_app_detail.VCSConfig{
 			Url:   u,
 			Token: token,
 		})
 	}
 
 	if id, isSet := cleanupRequestedById.TryGet(); isSet {
-		a.CleanupRequestedBy = a.CleanupRequestedBy.WithValue(app.UserSummary{
+		a.CleanupRequestedBy.Set(app.UserSummary{
 			ID:    id,
 			Email: cleanupRequestedByEmail.MustGet(),
 		})

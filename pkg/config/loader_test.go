@@ -44,6 +44,11 @@ func (*configurationWithProcessable) PostLoad() error {
 }
 
 func Test_Load(t *testing.T) {
+	// Since for some tests, the monad has the initial value set to true but the
+	// env removes it (setting the monad hasValue to false but keeping the initial value)
+	unsetMonad := monad.Value(true)
+	unsetMonad.Unset()
+
 	tests := []struct {
 		name     string
 		conf     string
@@ -125,7 +130,7 @@ HTTP_TWO=false`,
 			env: `HTTP_SECURE=
 HTTP_TWO=true`,
 			expected: configuration{
-				Http: httpConfiguration{Secure: monad.Value(true).None(), HttpTwo: monad.Value(true)},
+				Http: httpConfiguration{Secure: unsetMonad, HttpTwo: monad.Value(true)},
 			},
 		},
 	}

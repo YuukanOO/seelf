@@ -199,11 +199,11 @@ func (d *Docker) Prepare(ctx context.Context, payload any) (domain.ProviderConfi
 	}
 
 	if config.Host.HasValue() {
-		data.Host = data.Host.WithValue(host)
+		data.Host.Set(host)
 	}
 
 	if config.PrivateKey.HasValue() {
-		data.PrivateKey = data.PrivateKey.WithValue(privKey)
+		data.PrivateKey.Set(privKey)
 	}
 
 	return data, nil

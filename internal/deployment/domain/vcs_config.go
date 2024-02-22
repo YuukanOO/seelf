@@ -19,13 +19,13 @@ func NewVCSConfig(url Url) VCSConfig {
 
 // If this repository needs authentication, use the provided token.
 func (c VCSConfig) Authenticated(token string) VCSConfig {
-	c.token = c.token.WithValue(token)
+	c.token.Set(token)
 	return c
 }
 
 // Returns a new VCS Config without the token.
 func (c VCSConfig) Public() VCSConfig {
-	c.token = c.token.None()
+	c.token.Unset()
 	return c
 }
 

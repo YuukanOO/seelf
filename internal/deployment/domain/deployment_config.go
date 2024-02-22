@@ -60,7 +60,9 @@ func (c DeploymentConfig) EnvironmentVariablesFor(service string) (m monad.Maybe
 		return m
 	}
 
-	return m.WithValue(vars)
+	m.Set(vars)
+
+	return m
 }
 
 // Returns the subdomain that will be used to expose services of an app.

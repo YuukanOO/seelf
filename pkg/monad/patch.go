@@ -9,7 +9,7 @@ type Patch[T any] struct {
 // Builds a new patch with the given value.
 func PatchValue[T any](value T) (p Patch[T]) {
 	p.isSet = true
-	p.Maybe = p.Maybe.WithValue(value)
+	p.Maybe.Set(value)
 	return p
 }
 

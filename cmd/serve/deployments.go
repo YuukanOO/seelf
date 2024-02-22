@@ -145,11 +145,11 @@ func (s *server) listDeploymentsByAppHandler() gin.HandlerFunc {
 		}
 
 		if request.Environment != "" {
-			query.Environment = query.Environment.WithValue(request.Environment)
+			query.Environment.Set(request.Environment)
 		}
 
 		if request.Page != 0 {
-			query.Page = query.Page.WithValue(request.Page)
+			query.Page.Set(request.Page)
 		}
 
 		deployments, err := bus.Send(s.bus, ctx.Request.Context(), query)

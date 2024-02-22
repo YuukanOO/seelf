@@ -36,7 +36,7 @@ func Test_Maybe(t *testing.T) {
 		testutil.IsFalse(t, hasValue)
 		testutil.Equals(t, "", value)
 
-		m = m.WithValue("ok")
+		m.Set("ok")
 
 		value, hasValue = m.TryGet()
 
@@ -50,7 +50,7 @@ func Test_Maybe(t *testing.T) {
 			now = time.Now().UTC()
 		)
 
-		m = m.WithValue(now)
+		m.Set(now)
 		testutil.Equals(t, now, m.MustGet())
 		testutil.IsTrue(t, m.HasValue())
 	})
@@ -58,7 +58,7 @@ func Test_Maybe(t *testing.T) {
 	t.Run("could unset its value", func(t *testing.T) {
 		m := monad.Value(time.Now().UTC())
 
-		m = m.None()
+		m.Unset()
 
 		testutil.IsFalse(t, m.HasValue())
 	})
@@ -102,11 +102,26 @@ func Test_Maybe(t *testing.T) {
 		testutil.IsNil(t, driverValue)
 
 		now := time.Now().UTC()
-		m = m.WithValue(now)
+		m.Set(now)
 		driverValue, err = m.Value()
 
 		testutil.IsNil(t, err)
 		testutil.IsTrue(t, driverValue == now)
+	})
+
+	t.Run("should implements the Scanner interface", func(t *testing.T) {
+		var m monad.Maybe[string]
+
+		err := m.Scan(nil)
+
+		testutil.IsNil(t, err)
+		testutil.IsFalse(t, m.HasValue())
+
+		err = m.Scan("data")
+
+		testutil.IsNil(t, err)
+		testutil.IsTrue(t, m.HasValue())
+		testutil.Equals(t, "data", m.MustGet())
 	})
 
 	t.Run("should correctly marshal to json", func(t *testing.T) {
@@ -117,7 +132,7 @@ func Test_Maybe(t *testing.T) {
 		testutil.IsNil(t, err)
 		testutil.Equals(t, "null", string(data))
 
-		m = m.WithValue("ok")
+		m.Set("ok")
 
 		data, err = m.MarshalJSON()
 
@@ -134,7 +149,7 @@ func Test_Maybe(t *testing.T) {
 		testutil.IsTrue(t, m.IsZero())
 		testutil.IsNil(t, data)
 
-		m = m.WithValue("ok")
+		m.Set("ok")
 
 		data, err = m.MarshalYAML()
 

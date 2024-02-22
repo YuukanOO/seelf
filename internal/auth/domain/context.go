@@ -24,5 +24,7 @@ func CurrentUser(ctx context.Context) (m monad.Maybe[UserID]) {
 		return m
 	}
 
-	return m.WithValue(val.(UserID))
+	m.Set(val.(UserID))
+
+	return m
 }

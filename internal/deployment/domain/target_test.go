@@ -40,6 +40,24 @@ func Test_Target(t *testing.T) {
 		testutil.Equals(t, config, evt.Provider)
 		testutil.Equals(t, uid, evt.Created.By())
 	})
+
+	t.Run("should not be removed if still used by an app", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		testutil.ErrorIs(t, domain.ErrTargetUsed, target.Delete(1))
+	})
+
+	t.Run("could be removed if no app is using it", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		err := target.Delete(0)
+		testutil.IsNil(t, err)
+
+		testutil.IsNil(t, err)
+		testutil.HasNEvents(t, &target, 2)
+		evt := testutil.EventIs[domain.TargetDeleted](t, &target, 1)
+		testutil.Equals(t, target.ID(), evt.ID)
+	})
 }
 
 type dummyProviderConfig struct {

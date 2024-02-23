@@ -7,6 +7,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_target"
+	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/fail_running_deployments"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment_log"
@@ -70,6 +71,7 @@ func Setup(
 	bus.Register(b, redeploy.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(b, promote.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(b, create_target.Handler(targetsStore, targetsStore, providerFacade))
+	bus.Register(b, delete_target.Handler(targetsStore, targetsStore, appsStore))
 	bus.Register(b, deploymentQueryHandler.GetAllApps)
 	bus.Register(b, deploymentQueryHandler.GetAppByID)
 	bus.Register(b, deploymentQueryHandler.GetAllDeploymentsByApp)

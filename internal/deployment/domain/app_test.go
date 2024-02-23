@@ -101,7 +101,7 @@ func Test_App(t *testing.T) {
 	t.Run("need the app naming to be unique when modifying configuration", func(t *testing.T) {
 		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, uid))
 
-		err := app.WithProductionConfig(staging, domain.AppNamingTakenInProduction)
+		err := app.HasProductionConfig(staging, domain.AppNamingTakenInProduction)
 
 		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, err)
 	})
@@ -109,7 +109,7 @@ func Test_App(t *testing.T) {
 	t.Run("need the app naming target id to exists when modifying configuration", func(t *testing.T) {
 		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, uid))
 
-		err := app.WithProductionConfig(staging, domain.AppNamingProductionTargetNotFound)
+		err := app.HasProductionConfig(staging, domain.AppNamingProductionTargetNotFound)
 
 		testutil.ErrorIs(t, domain.ErrInvalidAppNaming, err)
 	})
@@ -117,8 +117,8 @@ func Test_App(t *testing.T) {
 	t.Run("raise an env changed event only if the new config is different", func(t *testing.T) {
 		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, uid))
 
-		errProd := app.WithProductionConfig(production, domain.AppNamingProductionAvailable)
-		errStaging := app.WithStagingConfig(staging, domain.AppNamingStagingAvailable)
+		errProd := app.HasProductionConfig(production, domain.AppNamingProductionAvailable)
+		errStaging := app.HasStagingConfig(staging, domain.AppNamingStagingAvailable)
 
 		testutil.IsNil(t, errProd)
 		testutil.IsNil(t, errStaging)
@@ -129,8 +129,8 @@ func Test_App(t *testing.T) {
 			"app": {"DEBUG": "true"},
 		})
 
-		errProd = app.WithProductionConfig(newConfig, domain.AppNamingProductionAvailable)
-		errStaging = app.WithStagingConfig(newConfig, domain.AppNamingStagingAvailable)
+		errProd = app.HasProductionConfig(newConfig, domain.AppNamingProductionAvailable)
+		errStaging = app.HasStagingConfig(newConfig, domain.AppNamingStagingAvailable)
 
 		testutil.IsNil(t, errProd)
 		testutil.IsNil(t, errStaging)

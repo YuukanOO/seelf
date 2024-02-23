@@ -27,11 +27,9 @@ func NewTargetsStore(db *sqlite.Database) TargetsStore {
 func (s *targetsStore) GetDomainAvailability(ctx context.Context, url domain.Url, excluded ...domain.TargetID) (domain.TargetDomainAvailability, error) {
 	count, err := builder.
 		Query[uint](`
-		SELECT
-			COUNT(domain)
+		SELECT COUNT(domain)
 		FROM targets
-		WHERE
-			domain = ?`, url).
+		WHERE domain = ?`, url).
 		S(builder.Array("AND id NOT IN", excluded)).
 		Extract(s.db, ctx)
 
@@ -45,11 +43,9 @@ func (s *targetsStore) GetDomainAvailability(ctx context.Context, url domain.Url
 func (s *targetsStore) GetConfigAvailability(ctx context.Context, config domain.ProviderConfig, excluded ...domain.TargetID) (domain.TargetConfigAvailability, error) {
 	count, err := builder.
 		Query[uint](`
-		SELECT
-			COUNT(provider_fingerprint)
+		SELECT COUNT(provider_fingerprint)
 		FROM targets
-		WHERE
-			provider_fingerprint = ?`, config.Fingerprint()).
+		WHERE provider_fingerprint = ?`, config.Fingerprint()).
 		S(builder.Array("AND id NOT IN", excluded)).
 		Extract(s.db, ctx)
 
@@ -71,7 +67,7 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 			,provider
 			,created_at
 			,created_by
-		FROM apps
+		FROM targets
 		WHERE id = ?`, id).
 		One(s.db, ctx, domain.TargetFrom)
 }
@@ -91,6 +87,10 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 					"created_at":           evt.Created.At(),
 					"created_by":           evt.Created.By(),
 				}).
+				Exec(s.db, ctx)
+		case domain.TargetDeleted:
+			return builder.
+				Command("DELETE FROM targets WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
 		default:
 			return nil

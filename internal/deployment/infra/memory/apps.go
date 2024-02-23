@@ -126,6 +126,18 @@ func (s *appsStore) GetAppNamingAvailabilityOnID(
 	return availability, nil
 }
 
+func (s *appsStore) GetAppsOnTargetCount(ctx context.Context, target domain.TargetID) (domain.AppsOnTargetCount, error) {
+	var count domain.AppsOnTargetCount
+
+	for _, app := range s.apps {
+		if app.productionTarget == target || app.stagingTarget == target {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
 func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, error) {
 	for _, app := range s.apps {
 		if app.id == id {

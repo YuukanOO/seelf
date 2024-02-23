@@ -88,6 +88,7 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	v1securedAllowApi.POST("/targets", s.createTargetHandler())
 	v1securedAllowApi.GET("/targets", s.listTargetsHandler())
 	v1securedAllowApi.GET("/targets/:id", s.getTargetByIDHandler())
+	v1securedAllowApi.DELETE("/targets/:id", s.deleteTargetHandler())
 	v1securedAllowApi.GET("/apps", s.listAppsHandler())
 	v1securedAllowApi.POST("/apps", s.createAppHandler())
 	v1securedAllowApi.PATCH("/apps/:id", s.updateAppHandler())

@@ -18,8 +18,8 @@ import (
 )
 
 type initialData struct {
-	existingApps        []*domain.App
-	existingDeployments []*domain.Deployment
+	apps        []*domain.App
+	deployments []*domain.Deployment
 }
 
 func Test_CleanupApp(t *testing.T) {
@@ -28,8 +28,8 @@ func Test_CleanupApp(t *testing.T) {
 
 	sut := func(initialData initialData) bus.RequestHandler[bus.UnitType, cleanup_app.Command] {
 		opts := config.Default(config.WithTestDefaults())
-		appsStore := memory.NewAppsStore(initialData.existingApps...)
-		deploymentsStore := memory.NewDeploymentsStore(initialData.existingDeployments...)
+		appsStore := memory.NewAppsStore(initialData.apps...)
+		deploymentsStore := memory.NewDeploymentsStore(initialData.deployments...)
 		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
@@ -53,7 +53,7 @@ func Test_CleanupApp(t *testing.T) {
 	t.Run("should fail if the application cleanup as not been requested", func(t *testing.T) {
 		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		uc := sut(initialData{
-			existingApps: []*domain.App{&app},
+			apps: []*domain.App{&app},
 		})
 
 		r, err := uc(ctx, cleanup_app.Command{
@@ -70,8 +70,8 @@ func Test_CleanupApp(t *testing.T) {
 		app.RequestCleanup("uid")
 
 		uc := sut(initialData{
-			existingApps:        []*domain.App{&app},
-			existingDeployments: []*domain.Deployment{&depl},
+			apps:        []*domain.App{&app},
+			deployments: []*domain.Deployment{&depl},
 		})
 
 		r, err := uc(ctx, cleanup_app.Command{
@@ -87,7 +87,7 @@ func Test_CleanupApp(t *testing.T) {
 		app.RequestCleanup("uid")
 
 		uc := sut(initialData{
-			existingApps: []*domain.App{&app},
+			apps: []*domain.App{&app},
 		})
 
 		r, err := uc(ctx, cleanup_app.Command{
@@ -96,7 +96,9 @@ func Test_CleanupApp(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
-		testutil.EventIs[domain.AppDeleted](t, &app, 2)
+		testutil.HasNEvents(t, &app, 3)
+		evt := testutil.EventIs[domain.AppDeleted](t, &app, 2)
+		testutil.Equals(t, app.ID(), evt.ID)
 	})
 }
 

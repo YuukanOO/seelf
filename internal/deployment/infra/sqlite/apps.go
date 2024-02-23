@@ -104,6 +104,15 @@ func (s *appsStore) GetAppNamingAvailabilityOnID(
 	return r.availability(hasProductionTarget, hasStagingTarget), nil
 }
 
+func (s *appsStore) GetAppsOnTargetCount(ctx context.Context, target domain.TargetID) (domain.AppsOnTargetCount, error) {
+	return builder.
+		Query[domain.AppsOnTargetCount](`
+		SELECT COUNT(id)
+		FROM apps
+		WHERE production_target = ? OR staging_target = ?`, target, target).
+		Extract(s.db, ctx)
+}
+
 func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, error) {
 	return builder.
 		Query[domain.App](`

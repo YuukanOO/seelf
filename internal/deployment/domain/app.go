@@ -34,7 +34,8 @@ const (
 
 type (
 	// VALUE OBJECTS
-	AppID string
+	AppID             string
+	AppsOnTargetCount uint // Represents the number of apps using a specific target
 
 	// Represents a naming availability. This one is represented with flags because
 	// there can be many reasons for a name to be unavailable and I want to represents
@@ -62,6 +63,8 @@ type (
 		GetAppNamingAvailability(ctx context.Context, name AppName, production TargetID, staging TargetID) (AppNamingAvailability, error)
 		// Same as GetAppNamingAvailability but used when updating the environment configuration with optional targets.
 		GetAppNamingAvailabilityOnID(ctx context.Context, id AppID, production monad.Maybe[TargetID], staging monad.Maybe[TargetID]) (AppNamingAvailability, error)
+		// Retrieve the number of apps tied to a specific target, either in production or staging.
+		GetAppsOnTargetCount(context.Context, TargetID) (AppsOnTargetCount, error)
 		GetByID(context.Context, AppID) (App, error)
 	}
 
@@ -218,12 +221,12 @@ func (a *App) RemoveVersionControl() {
 }
 
 // Updates the production configuration for this application.
-func (a *App) WithProductionConfig(config EnvironmentConfig, available AppNamingAvailability) error {
+func (a *App) HasProductionConfig(config EnvironmentConfig, available AppNamingAvailability) error {
 	return a.tryUpdateEnvironmentConfig(Production, config, available)
 }
 
 // Updates the staging configuration for this application.
-func (a *App) WithStagingConfig(config EnvironmentConfig, available AppNamingAvailability) error {
+func (a *App) HasStagingConfig(config EnvironmentConfig, available AppNamingAvailability) error {
 	return a.tryUpdateEnvironmentConfig(Staging, config, available)
 }
 

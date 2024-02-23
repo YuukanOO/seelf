@@ -16,6 +16,7 @@ import (
 var (
 	ErrDomainAlreadyTaken = apperr.New("domain_already_taken")
 	ErrConfigAlreadyTaken = apperr.New("config_already_taken")
+	ErrTargetUsed         = apperr.New("target_used")
 )
 
 type (
@@ -61,9 +62,16 @@ type (
 		Provider ProviderConfig
 		Created  shared.Action[auth.UserID]
 	}
+
+	TargetDeleted struct {
+		bus.Notification
+
+		ID TargetID
+	}
 )
 
 func (TargetCreated) Name_() string { return "deployment.event.target_created" }
+func (TargetDeleted) Name_() string { return "deployment.event.target_deleted" }
 
 // Builds a new deployment target.
 func NewTarget(
@@ -119,6 +127,19 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	t.created = shared.ActionFrom(createdBy, createdAt)
 
 	return t, err
+}
+
+// Deletes the target. It will fails if there are at least one app using it.
+func (t *Target) Delete(apps AppsOnTargetCount) error {
+	if apps > 0 {
+		return ErrTargetUsed
+	}
+
+	t.apply(TargetDeleted{
+		ID: t.id,
+	})
+
+	return nil
 }
 
 func (t *Target) ID() TargetID             { return t.id }

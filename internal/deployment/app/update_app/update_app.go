@@ -106,13 +106,13 @@ func Handler(
 		}
 
 		if conf, isUpdated := cmd.Production.TryGet(); isUpdated {
-			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(productionTarget.MustGet(), conf.Vars), availability); err != nil {
+			if err = app.HasProductionConfig(create_app.BuildEnvironmentConfig(productionTarget.MustGet(), conf.Vars), availability); err != nil {
 				return "", err
 			}
 		}
 
 		if conf, isUpdated := cmd.Staging.TryGet(); isUpdated {
-			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(stagingTarget.MustGet(), conf.Vars), availability); err != nil {
+			if err = app.HasStagingConfig(create_app.BuildEnvironmentConfig(stagingTarget.MustGet(), conf.Vars), availability); err != nil {
 				return "", err
 			}
 		}

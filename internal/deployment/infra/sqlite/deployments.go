@@ -87,19 +87,13 @@ func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.
 }
 
 func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appID domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
-	count, err := builder.
+	return builder.
 		Query[domain.RunningOrPendingAppDeploymentsCount](`
 		SELECT COUNT(*)
 		FROM deployments
 		WHERE app_id = ? AND state_status IN (?, ?)`,
 		appID, domain.DeploymentStatusRunning, domain.DeploymentStatusPending).
 		Extract(s.db, ctx)
-
-	if err != nil {
-		return count, err
-	}
-
-	return count, nil
 }
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {

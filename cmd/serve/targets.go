@@ -2,6 +2,7 @@ package serve
 
 import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_target"
+	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_targets"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
@@ -47,6 +48,20 @@ func (s *server) createTargetHandler() gin.HandlerFunc {
 		}
 
 		return http.Created(s, c, target, "/api/v1/targets/%s", id)
+	})
+}
+
+func (s *server) deleteTargetHandler() gin.HandlerFunc {
+	return http.Send(s, func(c *gin.Context) error {
+		_, err := bus.Send(s.bus, c.Request.Context(), delete_target.Command{
+			ID: c.Param("id"),
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return http.NoContent(c)
 	})
 }
 

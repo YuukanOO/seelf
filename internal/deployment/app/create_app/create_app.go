@@ -43,8 +43,8 @@ func Handler(
 		var (
 			appname          domain.AppName
 			url              domain.Url
-			productionTarget domain.TargetID = domain.TargetID(cmd.Production.Target)
-			stagingTarget    domain.TargetID = domain.TargetID(cmd.Staging.Target)
+			productionTarget = domain.TargetID(cmd.Production.Target)
+			stagingTarget    = domain.TargetID(cmd.Staging.Target)
 		)
 
 		if err := validate.Struct(validate.Of{

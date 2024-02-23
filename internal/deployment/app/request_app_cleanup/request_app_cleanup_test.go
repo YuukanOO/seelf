@@ -33,7 +33,7 @@ func Test_RequestAppCleanup(t *testing.T) {
 	})
 
 	t.Run("should mark an application has ready for deletion", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "uid"))
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		uc := sut(&app)
 
 		r, err := uc(ctx, request_app_cleanup.Command{

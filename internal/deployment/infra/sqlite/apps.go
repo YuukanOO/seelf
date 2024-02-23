@@ -3,9 +3,11 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
@@ -32,8 +34,6 @@ func (s *appsStore) GetAppNamingAvailability(
 	production domain.TargetID,
 	staging domain.TargetID,
 ) (domain.AppNamingAvailability, error) {
-	var availability domain.AppNamingAvailability
-
 	r, err := builder.
 		Query[appNamingResult](`
 		SELECT
@@ -45,67 +45,63 @@ func (s *appsStore) GetAppNamingAvailability(
 		One(s.db, ctx, appNameUniquenessResultMapper)
 
 	if err != nil {
-		return availability, err
+		return 0, err
 	}
 
-	if !r.productionTarget {
-		availability = availability | domain.AppNamingProductionTargetNotFound
-	}
-
-	if !r.stagingTarget {
-		availability = availability | domain.AppNamingStagingTargetNotFound
-	}
-
-	if r.productionCount > 0 {
-		availability = availability | domain.AppNamingTakenInProduction
-	}
-
-	if r.stagingCount > 0 {
-		availability = availability | domain.AppNamingTakenInStaging
-	}
-
-	if availability != 0 {
-		return availability, nil
-	}
-
-	return domain.AppNamingAvailable, nil
+	return r.availability(true, true), nil
 }
 
-func (s *appsStore) GetTargetAppNamingAvailability(
+func (s *appsStore) GetAppNamingAvailabilityOnID(
 	ctx context.Context,
 	id domain.AppID,
-	env domain.Environment,
-	target domain.TargetID,
-) (domain.TargetAppNamingAvailability, error) {
-	var availability domain.TargetAppNamingAvailability
+	production monad.Maybe[domain.TargetID],
+	staging monad.Maybe[domain.TargetID],
+) (domain.AppNamingAvailability, error) {
+	productionTarget, hasProductionTarget := production.TryGet()
+	stagingTarget, hasStagingTarget := staging.TryGet()
+
+	if !hasProductionTarget && !hasStagingTarget {
+		return 0, nil
+	}
+
+	var (
+		sql  strings.Builder
+		args = make([]any, 0, 5)
+	)
+
+	// This one is a bit tricky because the request depends on how many target we should check.
+	sql.WriteString("SELECT ")
+
+	if hasProductionTarget {
+		sql.WriteString(`
+		(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.production_target = ?) AS production_count
+		,(SELECT COUNT(id) FROM targets WHERE id = ?) AS production_target_exists`)
+		args = append(args, productionTarget, productionTarget)
+	} else {
+		sql.WriteString("0 AS production_count, 0 AS production_target_exists")
+	}
+
+	if hasStagingTarget {
+		sql.WriteString(`
+		,(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.staging_target = ?) AS staging_count
+		,(SELECT COUNT(id) FROM targets WHERE id = ?) AS staging_target_exists`)
+		args = append(args, stagingTarget, stagingTarget)
+	} else {
+		sql.WriteString(", 0 AS staging_count, 0 AS staging_target_exists")
+	}
+
+	sql.WriteString(" FROM apps src WHERE src.id = ?")
+	args = append(args, id)
 
 	r, err := builder.
-		Query[targetAppNamingResult](fmt.Sprintf(`
-		SELECT
-			(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.%s_target = ?) AS count
-			,(SELECT COUNT(id) FROM targets WHERE id = ?) AS target
-		FROM apps src
-		WHERE src.id = ?
-		`, env), target, target, id).
-		One(s.db, ctx, appNameUniquenessOnTargetEnvironmentResultMapper)
+		Query[appNamingResult](sql.String(), args...).
+		One(s.db, ctx, appNameUniquenessResultMapper)
 
 	if err != nil {
-		return availability, err
+		return 0, err
 	}
 
-	if !r.target {
-		availability = availability | domain.TargetAppNamingTargetNotFound
-	}
-
-	if r.count > 0 {
-		availability = availability | domain.TargetAppNamingTaken
-	}
-
-	if availability != 0 {
-		return availability, nil
-	}
-
-	return domain.TargetAppNamingAvailable, nil
+	return r.availability(hasProductionTarget, hasStagingTarget), nil
 }
 
 func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, error) {
@@ -189,19 +185,39 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 	})
 }
 
-type (
-	appNamingResult struct {
-		productionCount  uint
-		productionTarget bool
-		stagingCount     uint
-		stagingTarget    bool
+type appNamingResult struct {
+	productionCount  uint
+	productionTarget bool
+	stagingCount     uint
+	stagingTarget    bool
+}
+
+// Returns the appropriate flags set based on result fields.
+func (r appNamingResult) availability(includeProduction, includeStaging bool) domain.AppNamingAvailability {
+	var availability domain.AppNamingAvailability
+
+	if includeProduction {
+		if !r.productionTarget {
+			availability |= domain.AppNamingProductionTargetNotFound
+		} else if r.productionCount > 0 {
+			availability |= domain.AppNamingTakenInProduction
+		} else {
+			availability |= domain.AppNamingProductionAvailable
+		}
 	}
 
-	targetAppNamingResult struct {
-		count  uint
-		target bool
+	if includeStaging {
+		if !r.stagingTarget {
+			availability |= domain.AppNamingStagingTargetNotFound
+		} else if r.stagingCount > 0 {
+			availability |= domain.AppNamingTakenInStaging
+		} else {
+			availability |= domain.AppNamingStagingAvailable
+		}
 	}
-)
+
+	return availability
+}
 
 func appNameUniquenessResultMapper(s storage.Scanner) (r appNamingResult, err error) {
 	err = s.Scan(
@@ -210,12 +226,6 @@ func appNameUniquenessResultMapper(s storage.Scanner) (r appNamingResult, err er
 		&r.stagingCount,
 		&r.stagingTarget,
 	)
-
-	return r, err
-}
-
-func appNameUniquenessOnTargetEnvironmentResultMapper(s storage.Scanner) (r targetAppNamingResult, err error) {
-	err = s.Scan(&r.count, &r.target)
 
 	return r, err
 }

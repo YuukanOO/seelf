@@ -28,13 +28,8 @@ const (
 	AppNamingStagingTargetNotFound
 	AppNamingTakenInProduction
 	AppNamingTakenInStaging
-	AppNamingAvailable
-)
-
-const (
-	TargetAppNamingTargetNotFound TargetAppNamingAvailability = 1 << iota
-	TargetAppNamingTaken
-	TargetAppNamingAvailable
+	AppNamingProductionAvailable
+	AppNamingStagingAvailable
 )
 
 type (
@@ -45,8 +40,6 @@ type (
 	// there can be many reasons for a name to be unavailable and I want to represents
 	// all of them so the application layer could be clearer with the user.
 	AppNamingAvailability uint8
-
-	TargetAppNamingAvailability uint8 // Same as the AppNamingAvailability but for a specific target environment
 
 	// ENTITY
 
@@ -65,8 +58,10 @@ type (
 	// RELATED SERVICES
 
 	AppsReader interface {
-		GetAppNamingAvailability(context.Context, AppName, TargetID, TargetID) (AppNamingAvailability, error)
-		GetTargetAppNamingAvailability(context.Context, AppID, Environment, TargetID) (TargetAppNamingAvailability, error)
+		// Check if the naming is available (not use by another application with the same name on the same targets).
+		GetAppNamingAvailability(ctx context.Context, name AppName, production TargetID, staging TargetID) (AppNamingAvailability, error)
+		// Same as GetAppNamingAvailability but used when updating the environment configuration with optional targets.
+		GetAppNamingAvailabilityOnID(ctx context.Context, id AppID, production monad.Maybe[TargetID], staging monad.Maybe[TargetID]) (AppNamingAvailability, error)
 		GetByID(context.Context, AppID) (App, error)
 	}
 
@@ -136,7 +131,7 @@ func NewApp(
 	available AppNamingAvailability,
 	createdBy domain.UserID,
 ) (app App, err error) {
-	if available != AppNamingAvailable {
+	if !flag.IsSet(available, AppNamingProductionAvailable|AppNamingStagingAvailable) {
 		return app, ErrInvalidAppNaming
 	}
 
@@ -223,12 +218,12 @@ func (a *App) RemoveVersionControl() {
 }
 
 // Updates the production configuration for this application.
-func (a *App) WithProductionConfig(config EnvironmentConfig, available TargetAppNamingAvailability) error {
+func (a *App) WithProductionConfig(config EnvironmentConfig, available AppNamingAvailability) error {
 	return a.tryUpdateEnvironmentConfig(Production, config, available)
 }
 
 // Updates the staging configuration for this application.
-func (a *App) WithStagingConfig(config EnvironmentConfig, available TargetAppNamingAvailability) error {
+func (a *App) WithStagingConfig(config EnvironmentConfig, available AppNamingAvailability) error {
 	return a.tryUpdateEnvironmentConfig(Staging, config, available)
 }
 
@@ -268,15 +263,20 @@ func (a *App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
 func (a *App) tryUpdateEnvironmentConfig(
 	env Environment,
 	updatedConfig EnvironmentConfig,
-	available TargetAppNamingAvailability,
+	available AppNamingAvailability,
 ) error {
-	var existingConfig EnvironmentConfig
+	var (
+		existingConfig   EnvironmentConfig
+		availabilityFlag AppNamingAvailability
+	)
 
 	switch env {
 	case Production:
 		existingConfig = a.production
+		availabilityFlag = AppNamingProductionAvailable
 	case Staging:
 		existingConfig = a.staging
+		availabilityFlag = AppNamingStagingAvailable
 	default:
 		return ErrInvalidEnvironmentName
 	}
@@ -288,7 +288,7 @@ func (a *App) tryUpdateEnvironmentConfig(
 
 	// Target different, let's check naming uniqueness
 	if existingConfig.target != updatedConfig.target &&
-		available != TargetAppNamingAvailable {
+		!flag.IsSet(available, availabilityFlag) {
 		return ErrInvalidAppNaming
 	}
 
@@ -346,19 +346,6 @@ func (a AppNamingAvailability) Error(env Environment) error {
 		if flag.IsSet(a, AppNamingTakenInStaging) {
 			return ErrInvalidAppNaming
 		}
-	}
-
-	return nil
-}
-
-// Converts the TargetAppNamingAvailability to a more detailed error.
-func (a TargetAppNamingAvailability) Error() error {
-	if flag.IsSet(a, TargetAppNamingTargetNotFound) {
-		return apperr.ErrNotFound
-	}
-
-	if flag.IsSet(a, TargetAppNamingTaken) {
-		return ErrInvalidAppNaming
 	}
 
 	return nil

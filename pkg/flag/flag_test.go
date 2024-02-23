@@ -20,4 +20,7 @@ func Test_IsSet(t *testing.T) {
 	testutil.IsFalse(t, flag.IsSet(flagA, flagB))
 	testutil.IsTrue(t, flag.IsSet(flagA|flagB, flagA))
 	testutil.IsTrue(t, flag.IsSet(flagA|flagB, flagB|flagA))
+	testutil.IsTrue(t, flag.IsSet(flagA|flagB|flagC, flagB|flagA))
+	testutil.IsFalse(t, flag.IsSet(flagA, flagB|flagA))
+	testutil.IsFalse(t, flag.IsSet(flagA|flagC, flagB|flagA))
 }

@@ -123,7 +123,7 @@ func Test_Run(t *testing.T) {
 
 	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
-		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "uid"))
+		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		depl, _ := app.NewDeployment(1, raw.Data(""), domain.Production, "uid")
 		provider, artifactManager, _, _ := sut(opts)
 
@@ -161,7 +161,7 @@ func Test_Run(t *testing.T) {
 			"my-app",
 			config,
 			domain.NewEnvironmentConfig("staging-target"),
-			domain.AppNamingAvailable,
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable,
 			"uid",
 		))
 		ctx := context.Background()

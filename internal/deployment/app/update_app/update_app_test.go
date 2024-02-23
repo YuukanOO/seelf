@@ -37,7 +37,7 @@ func Test_UpdateApp(t *testing.T) {
 	})
 
 	t.Run("should update nothing if no fields are provided", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "uid"))
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		uc := sut(&a)
 
 		id, err := uc(ctx, update_app.Command{
@@ -50,8 +50,8 @@ func Test_UpdateApp(t *testing.T) {
 	})
 
 	t.Run("should validate new target naming availability", func(t *testing.T) {
-		a1 := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("2"), domain.AppNamingAvailable, "uid"))
-		a2 := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("3"), domain.NewEnvironmentConfig("4"), domain.AppNamingAvailable, "uid"))
+		a1 := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("2"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
+		a2 := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("3"), domain.NewEnvironmentConfig("4"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		uc := sut(&a1, &a2)
 
 		_, err := uc(ctx, update_app.Command{
@@ -75,7 +75,7 @@ func Test_UpdateApp(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app",
 			production,
 			staging,
-			domain.AppNamingAvailable,
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable,
 			"uid",
 		))
 
@@ -112,7 +112,7 @@ func Test_UpdateApp(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app",
 			production,
 			staging,
-			domain.AppNamingAvailable,
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable,
 			"uid",
 		))
 
@@ -170,7 +170,7 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should fail if trying to add a vcs config without an url defined", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
-			domain.AppNamingAvailable, "uid"))
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 
 		uc := sut(&a)
 
@@ -185,7 +185,7 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should remove the vcs config if nil given", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
-			domain.AppNamingAvailable, "uid"))
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
 		a.UseVersionControl(domain.NewVCSConfig(url))
 
@@ -204,7 +204,7 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should update the vcs url", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
-			domain.AppNamingAvailable, "uid"))
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
 		vcs := domain.NewVCSConfig(url)
 		vcs.Authenticated("a token")
@@ -229,7 +229,7 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should remove the vcs token", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
-			domain.AppNamingAvailable, "uid"))
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
 		vcs := domain.NewVCSConfig(url)
 		vcs.Authenticated("a token")
@@ -255,7 +255,7 @@ func Test_UpdateApp(t *testing.T) {
 
 	t.Run("should update the vcs token", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
-			domain.AppNamingAvailable, "uid"))
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		url := must.Panic(domain.UrlFrom("https://some.url"))
 		vcs := domain.NewVCSConfig(url)
 		vcs.Authenticated("a token")

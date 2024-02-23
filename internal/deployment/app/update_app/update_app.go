@@ -37,7 +37,11 @@ func Handler(
 	writer domain.AppsWriter,
 ) bus.RequestHandler[string, Command] {
 	return func(ctx context.Context, cmd Command) (string, error) {
-		var url domain.Url
+		var (
+			url              domain.Url
+			productionTarget monad.Maybe[domain.TargetID]
+			stagingTarget    monad.Maybe[domain.TargetID]
+		)
 
 		if err := validate.Struct(validate.Of{
 			"vcs": validate.Patch(cmd.VCS, func(config VCSConfig) error {
@@ -47,11 +51,13 @@ func Handler(
 				})
 			}),
 			"production": validate.Maybe(cmd.Production, func(conf EnvironmentConfig) error {
+				productionTarget.Set(domain.TargetID(conf.Target))
 				return validate.Struct(validate.Of{
 					"target": validate.Field(conf.Target, strings.Required),
 				})
 			}),
 			"staging": validate.Maybe(cmd.Staging, func(conf EnvironmentConfig) error {
+				stagingTarget.Set(domain.TargetID(conf.Target))
 				return validate.Struct(validate.Of{
 					"target": validate.Field(conf.Target, strings.Required),
 				})
@@ -66,42 +72,15 @@ func Handler(
 			return "", err
 		}
 
-		// Check availability of new targets if set to report errors early
-		var (
-			hasProductionConfigUpdate    bool
-			productionConfigUpdate       EnvironmentConfig
-			productionTarget             domain.TargetID
-			productionTargetAvailability domain.TargetAppNamingAvailability
-		)
+		availability, err := reader.GetAppNamingAvailabilityOnID(ctx, app.ID(), productionTarget, stagingTarget)
 
-		if productionConfigUpdate, hasProductionConfigUpdate = cmd.Production.TryGet(); hasProductionConfigUpdate {
-			productionTarget = domain.TargetID(productionConfigUpdate.Target)
-			productionTargetAvailability, err = reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Production, productionTarget)
-
-			if err != nil {
-				return "", err
-			}
-		}
-
-		var (
-			stagingTarget             domain.TargetID
-			hasStagingConfigUpdate    bool
-			stagingConfigUpdate       EnvironmentConfig
-			stagingTargetAvailability domain.TargetAppNamingAvailability
-		)
-
-		if stagingConfigUpdate, hasStagingConfigUpdate = cmd.Staging.TryGet(); hasStagingConfigUpdate {
-			stagingTarget = domain.TargetID(stagingConfigUpdate.Target)
-			stagingTargetAvailability, err = reader.GetTargetAppNamingAvailability(ctx, app.ID(), domain.Staging, stagingTarget)
-
-			if err != nil {
-				return "", err
-			}
+		if err != nil {
+			return "", err
 		}
 
 		if err = validate.Struct(validate.Of{
-			"production.target": productionTargetAvailability.Error(),
-			"staging.target":    stagingTargetAvailability.Error(),
+			"production.target": availability.Error(domain.Production),
+			"staging.target":    availability.Error(domain.Staging),
 		}); err != nil {
 			return "", err
 		}
@@ -126,14 +105,14 @@ func Handler(
 			}
 		}
 
-		if hasProductionConfigUpdate {
-			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(productionTarget, productionConfigUpdate.Vars), productionTargetAvailability); err != nil {
+		if conf, isUpdated := cmd.Production.TryGet(); isUpdated {
+			if err = app.WithProductionConfig(create_app.BuildEnvironmentConfig(productionTarget.MustGet(), conf.Vars), availability); err != nil {
 				return "", err
 			}
 		}
 
-		if hasStagingConfigUpdate {
-			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(stagingTarget, stagingConfigUpdate.Vars), stagingTargetAvailability); err != nil {
+		if conf, isUpdated := cmd.Staging.TryGet(); isUpdated {
+			if err = app.WithStagingConfig(create_app.BuildEnvironmentConfig(stagingTarget.MustGet(), conf.Vars), availability); err != nil {
 				return "", err
 			}
 		}

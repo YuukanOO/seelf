@@ -16,7 +16,7 @@ import (
 
 func Test_LocalArtifactManager(t *testing.T) {
 	logger := must.Panic(log.NewLogger())
-	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingAvailable, "some-uid"))
+	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "some-uid"))
 	depl := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "some-uid"))
 
 	sut := func() domain.ArtifactManager {

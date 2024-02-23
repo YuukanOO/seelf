@@ -6,5 +6,5 @@ type Flag interface {
 
 // Check if the given flag value has one of the given flags.
 func IsSet[T Flag](value, check T) bool {
-	return value&check != 0
+	return value&check == check
 }

@@ -6,6 +6,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/flag"
+	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
 type (
@@ -49,28 +51,40 @@ func (s *appsStore) GetAppNamingAvailability(
 		}
 
 		if app.productionTarget == production {
-			availability = availability | domain.AppNamingTakenInProduction
+			availability |= domain.AppNamingTakenInProduction
 		}
 
 		if app.stagingTarget == staging {
-			availability = availability | domain.AppNamingTakenInStaging
+			availability |= domain.AppNamingTakenInStaging
 		}
 	}
 
-	if availability != 0 {
-		return availability, nil
+	if !flag.IsSet(availability, domain.AppNamingTakenInProduction) {
+		availability |= domain.AppNamingProductionAvailable
 	}
 
-	return domain.AppNamingAvailable, nil
+	if !flag.IsSet(availability, domain.AppNamingTakenInStaging) {
+		availability |= domain.AppNamingStagingAvailable
+	}
+
+	return availability, nil
 }
 
-func (s *appsStore) GetTargetAppNamingAvailability(
+func (s *appsStore) GetAppNamingAvailabilityOnID(
 	ctx context.Context,
 	id domain.AppID,
-	env domain.Environment,
-	target domain.TargetID,
-) (domain.TargetAppNamingAvailability, error) {
-	// Retrieve app name
+	production monad.Maybe[domain.TargetID],
+	staging monad.Maybe[domain.TargetID],
+) (domain.AppNamingAvailability, error) {
+	productionTarget, hasProductionTarget := production.TryGet()
+	stagingTarget, hasStagingTarget := staging.TryGet()
+
+	// No input, no check!
+	if !hasProductionTarget && !hasStagingTarget {
+		return 0, nil
+	}
+
+	// Retrieve app name by its ID
 	var name domain.AppName
 
 	for _, app := range s.apps {
@@ -84,25 +98,32 @@ func (s *appsStore) GetTargetAppNamingAvailability(
 		return 0, apperr.ErrNotFound
 	}
 
+	var availability domain.AppNamingAvailability
+
 	// And check if an app on the target and env already exists
 	for _, app := range s.apps {
 		if app.id == id || app.name != name {
 			continue
 		}
 
-		switch env {
-		case domain.Production:
-			if app.productionTarget == target {
-				return domain.TargetAppNamingTaken, nil
-			}
-		case domain.Staging:
-			if app.stagingTarget == target {
-				return domain.TargetAppNamingTaken, nil
-			}
+		if hasProductionTarget && app.productionTarget == productionTarget {
+			availability |= domain.AppNamingTakenInProduction
+		}
+
+		if hasStagingTarget && app.stagingTarget == stagingTarget {
+			availability |= domain.AppNamingTakenInStaging
 		}
 	}
 
-	return domain.TargetAppNamingAvailable, nil
+	if !flag.IsSet(availability, domain.AppNamingTakenInProduction) {
+		availability |= domain.AppNamingProductionAvailable
+	}
+
+	if !flag.IsSet(availability, domain.AppNamingTakenInStaging) {
+		availability |= domain.AppNamingStagingAvailable
+	}
+
+	return availability, nil
 }
 
 func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, error) {

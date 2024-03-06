@@ -1,0 +1,1 @@
+ALTER TABLE scheduled_jobs DROP COLUMN policy;

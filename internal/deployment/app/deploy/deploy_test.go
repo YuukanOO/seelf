@@ -13,7 +13,6 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
-	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/must"
@@ -41,27 +40,27 @@ func Test_Deploy(t *testing.T) {
 		return deploy.Handler(store, store, artifactManager, source, provider)
 	}
 
-	t.Run("should fail if the deployment does not exists", func(t *testing.T) {
+	t.Run("should returns early if the deployment does not exists", func(t *testing.T) {
 		uc := sut(source(nil), provider(nil))
 		r, err := uc(ctx, deploy.Command{})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 	})
 
 	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
 		srcErr := errors.New("source_failed")
 		src := source(srcErr)
-		meta, _ := src.Prepare(ctx, a, 42)
-		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
+		meta := must.Panic(src.Prepare(ctx, a, 42))
+		depl := must.Panic(a.NewDeployment(1, meta, domain.Production, "some-uid"))
 		uc := sut(src, provider(nil), &depl)
 
 		r, err := uc(ctx, deploy.Command{
-			AppID:            string(a.ID()),
-			DeploymentNumber: 1,
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
 		})
 
-		testutil.ErrorIs(t, srcErr, err)
+		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
@@ -75,16 +74,16 @@ func Test_Deploy(t *testing.T) {
 		providerErr := errors.New("run_failed")
 		be := provider(providerErr)
 		src := source(nil)
-		meta, _ := src.Prepare(ctx, a, 42)
-		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
+		meta := must.Panic(src.Prepare(ctx, a, 42))
+		depl := must.Panic(a.NewDeployment(1, meta, domain.Production, "some-uid"))
 		uc := sut(src, be, &depl)
 
 		r, err := uc(ctx, deploy.Command{
-			AppID:            string(a.ID()),
-			DeploymentNumber: 1,
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
 		})
 
-		testutil.ErrorIs(t, providerErr, err)
+		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
@@ -95,13 +94,13 @@ func Test_Deploy(t *testing.T) {
 
 	t.Run("should mark the deployment has succeeded if all is good", func(t *testing.T) {
 		src := source(nil)
-		meta, _ := src.Prepare(ctx, a, 42)
-		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
+		meta := must.Panic(src.Prepare(ctx, a, 42))
+		depl := must.Panic(a.NewDeployment(1, meta, domain.Production, "some-uid"))
 		uc := sut(src, provider(nil), &depl)
 
 		r, err := uc(ctx, deploy.Command{
-			AppID:            string(a.ID()),
-			DeploymentNumber: 1,
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
 		})
 
 		testutil.IsNil(t, err)
@@ -130,11 +129,14 @@ func (t *dummySource) Fetch(context.Context, domain.DeploymentContext, domain.De
 }
 
 type dummyProvider struct {
+	domain.Provider
 	err error
 }
 
 func provider(failedWithErr error) domain.Provider {
-	return &dummyProvider{failedWithErr}
+	return &dummyProvider{
+		err: failedWithErr,
+	}
 }
 
 func (b *dummyProvider) Prepare(context.Context, any) (domain.ProviderConfig, error) {

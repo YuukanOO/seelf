@@ -21,7 +21,7 @@ func Test_FailRunningDeployments(t *testing.T) {
 
 	sut := func(existingDeployments ...*domain.Deployment) bus.RequestHandler[bus.UnitType, fail_running_deployments.Command] {
 		deploymentsStore := memory.NewDeploymentsStore(existingDeployments...)
-		return fail_running_deployments.Handler(deploymentsStore, deploymentsStore)
+		return fail_running_deployments.Handler(deploymentsStore)
 	}
 
 	t.Run("should reset running deployments", func(t *testing.T) {

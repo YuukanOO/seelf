@@ -14,7 +14,7 @@ import (
 func TestScheduler(t *testing.T) {
 	t.Run("should be able to queue a job", func(t *testing.T) {
 		a := memory.NewSchedulerAdapter()
-		err := a.Create(context.Background(), addCommand{}, monad.None[string](), bus.JobErrPolicyRetry)
+		err := a.Create(context.Background(), addCommand{}, monad.None[string]())
 
 		testutil.IsNil(t, err)
 	})
@@ -26,8 +26,8 @@ func TestScheduler(t *testing.T) {
 			c2 = getQuery{}
 		)
 
-		a.Create(context.Background(), c1, monad.None[string](), bus.JobErrPolicyRetry)
-		a.Create(context.Background(), c2, monad.None[string](), bus.JobErrPolicyRetry)
+		a.Create(context.Background(), c1, monad.None[string]())
+		a.Create(context.Background(), c2, monad.None[string]())
 
 		jobs, err := a.GetNextPendingJobs(context.Background())
 
@@ -41,7 +41,7 @@ func TestScheduler(t *testing.T) {
 		testutil.HasLength(t, jobs, 0)
 	})
 
-	t.Run("should be able to mark jobs has done and satisfy the job err policy", func(t *testing.T) {
+	t.Run("should be able to mark jobs has done", func(t *testing.T) {
 		var (
 			a      = memory.NewSchedulerAdapter()
 			c1     = addCommand{A: 1, B: 2}
@@ -49,8 +49,8 @@ func TestScheduler(t *testing.T) {
 			jobErr = errors.New("job error")
 		)
 
-		a.Create(context.Background(), c1, monad.None[string](), bus.JobErrPolicyIgnore)
-		a.Create(context.Background(), c2, monad.None[string](), bus.JobErrPolicyRetry)
+		a.Create(context.Background(), c1, monad.None[string]())
+		a.Create(context.Background(), c2, monad.None[string]())
 		jobs, _ := a.GetNextPendingJobs(context.Background())
 
 		testutil.IsNil(t, a.Done(context.Background(), jobs[0]))

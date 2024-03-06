@@ -24,9 +24,8 @@ const retryDelay = 15 * time.Second
 
 type (
 	job struct {
-		id     string
-		msg    bus.Request
-		policy bus.JobErrPolicy
+		id  string
+		msg bus.Request
 	}
 
 	scheduler struct {
@@ -34,9 +33,8 @@ type (
 	}
 )
 
-func (j *job) ID() string               { return j.id }
-func (j *job) Message() bus.Request     { return j.msg }
-func (j *job) Policy() bus.JobErrPolicy { return j.policy }
+func (j *job) ID() string           { return j.id }
+func (j *job) Message() bus.Request { return j.msg }
 
 // Builds a new adapter persisting jobs in the given sqlite database.
 // For it to work, commands must be (de)serializable using the bus.Marshallable mapper.
@@ -64,7 +62,6 @@ func (s *scheduler) Create(
 	ctx context.Context,
 	msg bus.Request,
 	dedupeName monad.Maybe[string],
-	policy bus.JobErrPolicy,
 ) error {
 	jobId := id.New[string]()
 
@@ -75,7 +72,6 @@ func (s *scheduler) Create(
 			"message_name": msg.Name_(),
 			"message_data": msg,
 			"queued_at":    time.Now().UTC(),
-			"policy":       policy,
 			"retrieved":    false,
 		}).
 		Exec(s.db, ctx)
@@ -96,7 +92,7 @@ WHERE id IN (SELECT id FROM (
 		GROUP BY dedupe_name
 	)
 )
-RETURNING id, message_name, message_data, policy`).
+RETURNING id, message_name, message_data`).
 		All(s.db, ctx, jobMapper)
 }
 
@@ -128,7 +124,6 @@ func jobMapper(scanner storage.Scanner) (bus.ScheduledJob, error) {
 		&j.id,
 		&msgName,
 		&msgData,
-		&j.policy,
 	)
 
 	if err != nil {

@@ -37,6 +37,28 @@ func (f *facade) Run(context.Context, domain.DeploymentContext, domain.Deploymen
 	return nil, nil
 }
 
+func (f *facade) Stale(ctx context.Context, id domain.TargetID) error {
+	for _, p := range f.providers {
+		if err := p.Stale(ctx, id); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (f *facade) CleanupTarget(ctx context.Context, target domain.Target) error {
+	config := target.Provider()
+
+	for _, p := range f.providers {
+		if p.CanHandle(config) {
+			return p.CleanupTarget(ctx, target)
+		}
+	}
+
+	return nil
+}
+
 func (f *facade) Cleanup(context.Context, domain.App) error {
 	return nil
 }

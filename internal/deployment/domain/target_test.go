@@ -44,18 +44,43 @@ func Test_Target(t *testing.T) {
 	t.Run("should not be removed if still used by an app", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
 
-		testutil.ErrorIs(t, domain.ErrTargetUsed, target.Delete(1))
+		testutil.ErrorIs(t, domain.ErrTargetInUse, target.RequestDelete(1, uid))
 	})
 
 	t.Run("could be removed if no app is using it", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
 
-		err := target.Delete(0)
+		err := target.RequestDelete(0, uid)
 		testutil.IsNil(t, err)
 
 		testutil.IsNil(t, err)
 		testutil.HasNEvents(t, &target, 2)
-		evt := testutil.EventIs[domain.TargetDeleted](t, &target, 1)
+		evt := testutil.EventIs[domain.TargetDeleteRequested](t, &target, 1)
+		testutil.Equals(t, target.ID(), evt.ID)
+	})
+
+	t.Run("should not be removed if no delete request has been set", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		testutil.ErrorIs(t, domain.ErrTargetDeleteRequestNeeded, target.Delete(0))
+	})
+
+	t.Run("should not be removed if at least one deployment is using it", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		testutil.IsNil(t, target.RequestDelete(0, uid))              // No application is using it
+		testutil.ErrorIs(t, domain.ErrTargetInUse, target.Delete(1)) // But one deployment is still running on it
+	})
+
+	t.Run("could be removed if a delete request has been set", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		testutil.IsNil(t, target.RequestDelete(0, uid))
+		err := target.Delete(0)
+
+		testutil.IsNil(t, err)
+		testutil.HasNEvents(t, &target, 3)
+		evt := testutil.EventIs[domain.TargetDeleted](t, &target, 2)
 		testutil.Equals(t, target.ID(), evt.ID)
 	})
 }

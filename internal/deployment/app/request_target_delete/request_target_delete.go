@@ -1,8 +1,9 @@
-package delete_target
+package request_target_delete
 
 import (
 	"context"
 
+	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 )
@@ -13,7 +14,7 @@ type Command struct {
 	ID string `json:"id"`
 }
 
-func (Command) Name_() string { return "deployment.command.delete_target" }
+func (Command) Name_() string { return "deployment.command.request_target_delete" }
 
 func Handler(
 	reader domain.TargetsReader,
@@ -33,14 +34,10 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		if err = target.Delete(apps); err != nil {
+		if err = target.RequestDelete(apps, auth.CurrentUser(ctx).MustGet()); err != nil {
 			return bus.Unit, err
 		}
 
-		if err = writer.Write(ctx, &target); err != nil {
-			return bus.Unit, err
-		}
-
-		return bus.Unit, nil
+		return bus.Unit, writer.Write(ctx, &target)
 	}
 }

@@ -20,6 +20,6 @@ func OnDeploymentCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domai
 		// Only one deployment per app per environment can be processed at a given time.
 		dedupeName := monad.Value(fmt.Sprintf("%s.%s", cmd.Name_(), evt.Config.ProjectName()))
 
-		return scheduler.Queue(ctx, cmd, dedupeName, bus.JobErrPolicyIgnore)
+		return scheduler.Queue(ctx, cmd, dedupeName)
 	}
 }

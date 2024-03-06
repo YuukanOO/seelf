@@ -21,6 +21,7 @@ type (
 	// VALUE & RELATED OBJECTS
 
 	RunningOrPendingAppDeploymentsCount uint
+	RunningDeploymentsOnTargetCount     uint
 
 	// ENTITY
 
@@ -39,11 +40,12 @@ type (
 	DeploymentsReader interface {
 		GetByID(context.Context, DeploymentID) (Deployment, error)
 		GetNextDeploymentNumber(context.Context, AppID) (DeploymentNumber, error)
-		GetRunningDeployments(context.Context) ([]Deployment, error)
+		GetRunningDeploymentsOnTargetCount(context.Context, TargetID) (RunningDeploymentsOnTargetCount, error)
 		GetRunningOrPendingDeploymentsCount(context.Context, AppID) (RunningOrPendingAppDeploymentsCount, error)
 	}
 
 	DeploymentsWriter interface {
+		FailDeployments(context.Context, DeploymentStatus, error, ...AppID) error // Fail all deployments with the given status. If no AppID is given, all deployments will be concerned
 		Write(context.Context, ...*Deployment) error
 	}
 

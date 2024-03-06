@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -55,16 +56,16 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appid do
 	return domain.DeploymentNumber(count + 1), nil
 }
 
-func (s *deploymentsStore) GetRunningDeployments(context.Context) ([]domain.Deployment, error) {
-	var result []domain.Deployment
+func (s *deploymentsStore) GetRunningDeploymentsOnTargetCount(ctx context.Context, id domain.TargetID) (domain.RunningDeploymentsOnTargetCount, error) {
+	var count domain.RunningDeploymentsOnTargetCount
 
-	for _, d := range s.deployments {
-		if d.state.Status() == domain.DeploymentStatusRunning {
-			result = append(result, *d.value)
+	for _, depl := range s.deployments {
+		if depl.value.Config().Target() == id && depl.state.Status() == domain.DeploymentStatusRunning {
+			count += 1
 		}
 	}
 
-	return result, nil
+	return count, nil
 }
 
 func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appid domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
@@ -77,6 +78,20 @@ func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Conte
 	}
 
 	return count, nil
+}
+
+func (s *deploymentsStore) FailDeployments(ctx context.Context, status domain.DeploymentStatus, reason error, appids ...domain.AppID) error {
+	for _, d := range s.deployments {
+		if (len(appids) > 0 && !slices.Contains(appids, d.id.AppID())) ||
+			(d.state.Status() != status) {
+			continue
+		}
+
+		d.value.HasStarted() // try the has started to make sure it is started
+		d.value.HasEnded(domain.Services{}, reason)
+	}
+
+	return nil
 }
 
 func (s *deploymentsStore) Write(ctx context.Context, deployments ...*domain.Deployment) error {

@@ -1,10 +1,11 @@
-package delete_target_test
+package request_target_delete_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
+	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/app/request_target_delete"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -18,17 +19,19 @@ type initialData struct {
 	apps    []*domain.App
 }
 
-func Test_DeleteTarget(t *testing.T) {
-	sut := func(existing initialData) bus.RequestHandler[bus.UnitType, delete_target.Command] {
+func Test_RequestDeleteTarget(t *testing.T) {
+	ctx := auth.WithUserID(context.Background(), "some-uid")
+
+	sut := func(existing initialData) bus.RequestHandler[bus.UnitType, request_target_delete.Command] {
 		targetsStore := memory.NewTargetsStore(existing.targets...)
 		appsStore := memory.NewAppsStore(existing.apps...)
-		return delete_target.Handler(targetsStore, targetsStore, appsStore)
+		return request_target_delete.Handler(targetsStore, targetsStore, appsStore)
 	}
 
 	t.Run("should returns an error if the target does not exist", func(t *testing.T) {
 		uc := sut(initialData{})
 
-		_, err := uc(context.Background(), delete_target.Command{
+		_, err := uc(ctx, request_target_delete.Command{
 			ID: "some-id",
 		})
 
@@ -47,11 +50,11 @@ func Test_DeleteTarget(t *testing.T) {
 			apps:    []*domain.App{&app},
 		})
 
-		_, err := uc(context.Background(), delete_target.Command{
+		_, err := uc(ctx, request_target_delete.Command{
 			ID: string(target.ID()),
 		})
 
-		testutil.ErrorIs(t, domain.ErrTargetUsed, err)
+		testutil.ErrorIs(t, domain.ErrTargetInUse, err)
 	})
 
 	t.Run("should correctly delete the target", func(t *testing.T) {
@@ -61,13 +64,13 @@ func Test_DeleteTarget(t *testing.T) {
 			targets: []*domain.Target{&target},
 		})
 
-		_, err := uc(context.Background(), delete_target.Command{
+		_, err := uc(ctx, request_target_delete.Command{
 			ID: string(target.ID()),
 		})
 
 		testutil.IsNil(t, err)
 		testutil.HasNEvents(t, &target, 2)
-		evt := testutil.EventIs[domain.TargetDeleted](t, &target, 1)
+		evt := testutil.EventIs[domain.TargetDeleteRequested](t, &target, 1)
 		testutil.Equals(t, target.ID(), evt.ID)
 	})
 }

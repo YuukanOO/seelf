@@ -16,7 +16,7 @@ func TestScheduler(t *testing.T) {
 	t.Run("should be able to queue a job using a specific adapter", func(t *testing.T) {
 		scheduler := bus.NewScheduler(memory.NewSchedulerAdapter(), must.Panic(log.NewLogger()), memory.NewBus())
 
-		err := scheduler.Queue(context.Background(), addCommand{}, monad.None[string](), bus.JobErrPolicyRetry)
+		err := scheduler.Queue(context.Background(), addCommand{}, monad.None[string]())
 
 		testutil.IsNil(t, err)
 
@@ -28,7 +28,7 @@ func TestScheduler(t *testing.T) {
 
 	t.Run("should be able to process a scheduled job and mark it as done", func(t *testing.T) {
 		scheduler := bus.NewScheduler(memory.NewSchedulerAdapter(), must.Panic(log.NewLogger()), memory.NewBus())
-		scheduler.Queue(context.Background(), addCommand{}, monad.None[string](), bus.JobErrPolicyRetry)
+		scheduler.Queue(context.Background(), addCommand{}, monad.None[string]())
 		jobs, _ := scheduler.GetNextPendingJobs(context.Background())
 
 		// Since no handlers are attached, the job should fail and be requeued

@@ -65,6 +65,8 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 			,domain
 			,provider_kind
 			,provider
+			,delete_requested_at
+			,delete_requested_by
 			,created_at
 			,created_by
 		FROM targets
@@ -87,6 +89,14 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 					"created_at":           evt.Created.At(),
 					"created_by":           evt.Created.By(),
 				}).
+				Exec(s.db, ctx)
+		case domain.TargetDeleteRequested:
+			return builder.
+				Update("targets", builder.Values{
+					"delete_requested_at": evt.Requested.At(),
+					"delete_requested_by": evt.Requested.By(),
+				}).
+				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
 		case domain.TargetDeleted:
 			return builder.

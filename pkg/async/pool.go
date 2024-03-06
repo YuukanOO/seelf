@@ -110,11 +110,17 @@ func (p *pool[T]) Run(fn Func) {
 
 func (p *pool[T]) Queue(ctx context.Context, jobs ...T) {
 	for _, job := range jobs {
+		var processed bool
+
 		for _, g := range p.groups {
 			// Stop at the first group which can handle the job
-			if g.Handle(ctx, job) {
+			if processed = g.Handle(ctx, job); processed {
 				break
 			}
+		}
+
+		if !processed {
+			p.logger.Warn("no handler found for job, please check your setup")
 		}
 	}
 }

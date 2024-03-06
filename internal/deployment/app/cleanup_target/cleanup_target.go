@@ -1,4 +1,4 @@
-package cleanup_app
+package cleanup_target
 
 import (
 	"context"
@@ -11,14 +11,14 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
-// Cleanup an application artifacts, images, networks, volumes and so on...
+// Cleanup a target and all its associated resources.
 type Command struct {
 	bus.Command[bus.UnitType]
 
 	ID string `json:"id"`
 }
 
-func (Command) Name_() string                  { return "deployment.command.cleanup_app" }
+func (Command) Name_() string                  { return "deployment.command.cleanup_target" }
 func (c Command) Value() (driver.Value, error) { return storage.ValueJSON(c) }
 
 func init() {
@@ -26,17 +26,16 @@ func init() {
 }
 
 func Handler(
+	reader domain.TargetsReader,
+	writer domain.TargetsWriter,
 	deploymentsReader domain.DeploymentsReader,
-	reader domain.AppsReader,
-	writer domain.AppsWriter,
-	artifactManager domain.ArtifactManager,
 	provider domain.Provider,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
-		app, err := reader.GetByID(ctx, domain.AppID(cmd.ID))
+		target, err := reader.GetByID(ctx, domain.TargetID(cmd.ID))
 
 		if err != nil {
-			// If the application doesn't exist anymore, may be it has been processed by another job in rare case, so just returns
+			// If the target doesn't exist anymore, may be it has been processed by another job in rare case, so just returns
 			if errors.Is(err, apperr.ErrNotFound) {
 				return bus.Unit, nil
 			}
@@ -44,25 +43,20 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		count, err := deploymentsReader.GetRunningOrPendingDeploymentsCount(ctx, app.ID())
+		count, err := deploymentsReader.GetRunningDeploymentsOnTargetCount(ctx, target.ID())
 
 		if err != nil {
 			return bus.Unit, err
 		}
 
-		// Before calling the provider cleanup, make sure the application can be safely deleted.
-		if err = app.Delete(count); err != nil {
+		if err = target.Delete(count); err != nil {
 			return bus.Unit, err
 		}
 
-		if err = provider.Cleanup(ctx, app); err != nil {
+		if err = provider.CleanupTarget(ctx, target); err != nil {
 			return bus.Unit, err
 		}
 
-		if err = artifactManager.Cleanup(ctx, app); err != nil {
-			return bus.Unit, err
-		}
-
-		return bus.Unit, writer.Write(ctx, &app)
+		return bus.Unit, writer.Write(ctx, &target)
 	}
 }

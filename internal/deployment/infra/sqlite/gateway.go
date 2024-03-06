@@ -135,11 +135,16 @@ func (s *gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]g
 			,targets.domain
 			,targets.provider_kind
 			,targets.provider
+			,targets.delete_requested_at
+			,cusers.id
+			,cusers.email
 			,targets.created_at
 			,users.id
 			,users.email
 		FROM targets
-		INNER JOIN users ON users.id = targets.created_by`).
+		INNER JOIN users ON users.id = targets.created_by
+		LEFT JOIN users cusers ON cusers.id = targets.delete_requested_by
+		`).
 		All(s.db, ctx, targetMapper)
 }
 
@@ -152,11 +157,15 @@ func (s *gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_
 			,targets.domain
 			,targets.provider_kind
 			,targets.provider
+			,targets.delete_requested_at
+			,cusers.id
+			,cusers.email
 			,targets.created_at
 			,users.id
 			,users.email
 		FROM targets
 		INNER JOIN users ON users.id = targets.created_by
+		LEFT JOIN users cusers ON cusers.id = targets.delete_requested_by
 		WHERE targets.id = ?`, cmd.ID).
 		One(s.db, ctx, targetMapper)
 }
@@ -167,7 +176,7 @@ func newAppWithLastDeploymentsByEnvDataloader[T any](
 	extractor func(T) string,
 	merger storage.Merger[T, get_deployment.Deployment],
 ) builder.Dataloader[T] {
-	return builder.NewDataloader[T](
+	return builder.NewDataloader(
 		extractor,
 		func(e builder.Executor, ctx context.Context, kr builder.KeyedResult[T]) error {
 			_, err := builder.
@@ -366,7 +375,11 @@ func deploymentMapper(scanner storage.Scanner) (d get_deployment.Deployment, err
 }
 
 func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
-	var providerData string
+	var (
+		providerData           string
+		deleteRequestedById    monad.Maybe[string]
+		deleteRequestedByEmail monad.Maybe[string]
+	)
 
 	err = scanner.Scan(
 		&t.ID,
@@ -374,6 +387,9 @@ func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
 		&t.Domain,
 		&t.Provider.Kind,
 		&providerData,
+		&t.DeleteRequestedAt,
+		&deleteRequestedById,
+		&deleteRequestedByEmail,
 		&t.CreatedAt,
 		&t.CreatedBy.ID,
 		&t.CreatedBy.Email,
@@ -381,6 +397,13 @@ func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
 
 	if err != nil {
 		return t, err
+	}
+
+	if id, isSet := deleteRequestedById.TryGet(); isSet {
+		t.DeleteRequestedBy.Set(app.UserSummary{
+			ID:    id,
+			Email: deleteRequestedByEmail.MustGet(),
+		})
 	}
 
 	t.Provider.Data, err = get_target.ProviderConfigTypes.From(t.Provider.Kind, providerData)

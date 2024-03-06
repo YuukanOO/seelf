@@ -10,9 +10,8 @@ import (
 
 type (
 	job struct {
-		id     string
-		msg    bus.Request
-		policy bus.JobErrPolicy
+		id  string
+		msg bus.Request
 	}
 
 	scheduler struct {
@@ -20,9 +19,8 @@ type (
 	}
 )
 
-func (j *job) ID() string               { return j.id }
-func (j *job) Message() bus.Request     { return j.msg }
-func (j *job) Policy() bus.JobErrPolicy { return j.policy }
+func (j *job) ID() string           { return j.id }
+func (j *job) Message() bus.Request { return j.msg }
 
 // Builds a new inmemory scheduler adapter which will store all scheduled jobs in memory.
 // It will not make use of dedupe names and should be used only for testing purposes.
@@ -38,12 +36,10 @@ func (s *scheduler) Create(
 	_ context.Context,
 	msg bus.Request,
 	dedupeName monad.Maybe[string],
-	policy bus.JobErrPolicy,
 ) error {
 	s.jobs = append(s.jobs, &job{
-		id:     id.New[string](),
-		msg:    msg,
-		policy: policy,
+		id:  id.New[string](),
+		msg: msg,
 	})
 	return nil
 }

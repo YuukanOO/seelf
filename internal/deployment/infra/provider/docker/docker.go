@@ -267,6 +267,14 @@ func (d *Docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext
 	return services, nil
 }
 
+func (d *Docker) Stale(ctx context.Context, id domain.TargetID) error {
+	return nil
+}
+
+func (d *Docker) CleanupTarget(ctx context.Context, target domain.Target) error {
+	return nil
+}
+
 func (d *Docker) Cleanup(ctx context.Context, app domain.App) error {
 	cli, _, err := d.instantiateClientAndCompose(nil)
 

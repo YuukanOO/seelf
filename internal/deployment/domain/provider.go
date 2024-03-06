@@ -25,6 +25,8 @@ type (
 	Provider interface {
 		Prepare(context.Context, any) (ProviderConfig, error)                 // Prepare the given payload representing a Provider specific configuration
 		Run(context.Context, DeploymentContext, Deployment) (Services, error) // Launch a deployment and return services that has been deployed
+		Stale(context.Context, TargetID) error                                // Mark a target as stale, meaning it should be reinitialized before being used again
+		CleanupTarget(context.Context, Target) error                          // Cleanup a target, removing every resources managed by seelf
 		Cleanup(context.Context, App) error                                   // Cleanup an application, which means removing every possible stuff related to it
 	}
 )

@@ -11,10 +11,8 @@ import (
 // Upon receiving a cleanup request, queue a job to remove everything related to the application.
 func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.AppCleanupRequested] {
 	return func(ctx context.Context, evt domain.AppCleanupRequested) error {
-		cmd := Command{
+		return scheduler.Queue(ctx, Command{
 			ID: string(evt.ID),
-		}
-
-		return scheduler.Queue(ctx, cmd, monad.None[string](), bus.JobErrPolicyRetry)
+		}, monad.None[string]())
 	}
 }

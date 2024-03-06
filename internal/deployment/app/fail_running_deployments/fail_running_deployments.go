@@ -5,7 +5,6 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/collections"
 )
 
 // Mark all running deployments as failed with the given reason. This is mostly used
@@ -19,29 +18,8 @@ type Command struct {
 
 func (Command) Name_() string { return "deployment.command.fail_running_deployments" }
 
-func Handler(
-	reader domain.DeploymentsReader,
-	writer domain.DeploymentsWriter,
-) bus.RequestHandler[bus.UnitType, Command] {
+func Handler(writer domain.DeploymentsWriter) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
-		deployments, err := reader.GetRunningDeployments(ctx)
-
-		if err != nil {
-			return bus.Unit, err
-		}
-
-		for idx := range deployments {
-			err = deployments[idx].HasEnded(nil, cmd.Reason)
-
-			if err != nil {
-				return bus.Unit, err
-			}
-		}
-
-		if err = writer.Write(ctx, collections.ToPointers(deployments)...); err != nil {
-			return bus.Unit, err
-		}
-
-		return bus.Unit, nil
+		return bus.Unit, writer.FailDeployments(ctx, domain.DeploymentStatusRunning, cmd.Reason)
 	}
 }

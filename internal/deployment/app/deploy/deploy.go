@@ -3,8 +3,10 @@ package deploy
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
@@ -40,13 +42,19 @@ func Handler(
 		))
 
 		if err != nil {
+			// Deployment does not exist anymore, the app should have been deleted, return early
+			if errors.Is(err, apperr.ErrNotFound) {
+				return result, nil
+			}
+
 			return result, err
 		}
 
-		err = depl.HasStarted()
-
-		if err != nil {
-			return result, err
+		if err = depl.HasStarted(); err != nil {
+			// If the deployment could not be started, it probably means the
+			// application has been requested for cleanup and the deployment has been
+			// cancelled, so the deploy job will never succeed.
+			return result, nil
 		}
 
 		if err = writer.Write(ctx, &depl); err != nil {
@@ -70,17 +78,17 @@ func Handler(
 				return
 			}
 
-			stateErr := depl.HasEnded(services, finalErr)
-
-			if stateErr != nil {
-				finalErr = stateErr
+			if err = depl.HasEnded(services, finalErr); err != nil {
+				finalErr = err
 				return
 			}
 
-			if werr := writer.Write(ctx, &depl); werr != nil {
-				finalErr = werr
+			if err = writer.Write(ctx, &depl); err != nil {
+				finalErr = err
 				return
 			}
+
+			finalErr = nil // Don't return any error, the deployment has ended and embed the error if any
 		}()
 
 		// Prepare the build directory

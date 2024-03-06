@@ -8,6 +8,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	authinfra "github.com/YuukanOO/seelf/internal/auth/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/pkg/async"
@@ -73,9 +74,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	scheduler := bus.NewScheduler(adapter, s.logger, s.bus)
 
 	// Setup auth infrastructure
-	s.usersReader, err = authinfra.Setup(s.options, s.logger, s.db, s.bus)
-
-	if err != nil {
+	if s.usersReader, err = authinfra.Setup(s.options, s.logger, s.db, s.bus); err != nil {
 		return nil, err
 	}
 
@@ -91,9 +90,10 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	}
 
 	// Names of jobs to process in a specific group since they can take a long time
-	deploymentNames := []string{
+	longRunningJobs := []string{
 		deploy.Command{}.Name_(),
 		cleanup_app.Command{}.Name_(),
+		cleanup_target.Command{}.Name_(),
 	}
 
 	s.pool = async.NewPool(
@@ -103,7 +103,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 			s.options.RunnersDeploymentCount(),
 			scheduler.Process,
 			func(ctx context.Context, job bus.ScheduledJob) bool {
-				return slices.Contains(deploymentNames, job.Message().Name_())
+				return slices.Contains(longRunningJobs, job.Message().Name_())
 			},
 		),
 	)

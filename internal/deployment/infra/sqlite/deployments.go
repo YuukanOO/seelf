@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"time"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
@@ -62,28 +63,14 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID do
 	return domain.DeploymentNumber(c + 1), nil
 }
 
-func (s *deploymentsStore) GetRunningDeployments(ctx context.Context) ([]domain.Deployment, error) {
+func (s *deploymentsStore) GetRunningDeploymentsOnTargetCount(ctx context.Context, id domain.TargetID) (domain.RunningDeploymentsOnTargetCount, error) {
 	return builder.
-		Query[domain.Deployment](`
-		SELECT
-			app_id
-			,deployment_number
-			,config_appname
-			,config_environment
-			,config_target
-			,config_vars
-			,state_status
-			,state_errcode
-			,state_services
-			,state_started_at
-			,state_finished_at
-			,source_discriminator
-			,source
-			,requested_at
-			,requested_by
+		Query[domain.RunningDeploymentsOnTargetCount](`
+		SELECT COUNT(*)
 		FROM deployments
-		WHERE state_status = ?`, domain.DeploymentStatusRunning).
-		All(s.db, ctx, domain.DeploymentFrom)
+		WHERE config_target = ? AND state_status = ?`,
+		id, domain.DeploymentStatusRunning).
+		Extract(s.db, ctx)
 }
 
 func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appID domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
@@ -94,6 +81,20 @@ func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Conte
 		WHERE app_id = ? AND state_status IN (?, ?)`,
 		appID, domain.DeploymentStatusRunning, domain.DeploymentStatusPending).
 		Extract(s.db, ctx)
+}
+
+func (s *deploymentsStore) FailDeployments(ctx context.Context, status domain.DeploymentStatus, reason error, appIDs ...domain.AppID) error {
+	now := time.Now().UTC()
+
+	return builder.Update("deployments", builder.Values{
+		"state_status":      domain.DeploymentStatusFailed,
+		"state_errcode":     reason.Error(),
+		"state_started_at":  now,
+		"state_finished_at": now,
+	}).
+		F("WHERE state_status = ?", status).
+		S(builder.Array("app_id IN", appIDs)).
+		Exec(s.db, ctx)
 }
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {

@@ -7,6 +7,8 @@ CREATE TABLE targets (
     provider_kind TEXT NOT NULL,
     provider_fingerprint TEXT NOT NULL,
     provider TEXT NOT NULL,
+    delete_requested_at DATETIME NULL,
+    delete_requested_by TEXT NULL,
     created_at DATETIME NOT NULL,
     created_by TEXT NOT NULL,
 
@@ -120,6 +122,8 @@ CREATE TABLE deployments (
     CONSTRAINT fk_deployments_app_id FOREIGN KEY(app_id) REFERENCES apps(id) ON DELETE CASCADE,
     CONSTRAINT fk_deployments_requested_by FOREIGN KEY(requested_by) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_deployments_target ON deployments(config_target);
 
 INSERT INTO deployments (
     app_id

@@ -98,6 +98,15 @@ func Test_App(t *testing.T) {
 		testutil.Equals(t, otherConfig, evt.Config)
 	})
 
+	t.Run("does not allow to modify the vcs config if the app is marked for deletion", func(t *testing.T) {
+		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, uid))
+		app.RequestCleanup("uid")
+
+		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.UseVersionControl(domain.NewVCSConfig(url)))
+		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.RemoveVersionControl())
+	})
+
 	t.Run("need the app naming to be unique when modifying configuration", func(t *testing.T) {
 		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, uid))
 
@@ -146,6 +155,14 @@ func Test_App(t *testing.T) {
 		testutil.Equals(t, app.ID(), evt.ID)
 		testutil.Equals(t, domain.Staging, evt.Environment)
 		testutil.DeepEquals(t, newConfig, evt.Config)
+	})
+
+	t.Run("does not allow to modify the environment config if the app is marked for deletion", func(t *testing.T) {
+		app := must.Panic(domain.NewApp(appname, production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, uid))
+		app.RequestCleanup("uid")
+
+		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasProductionConfig(production, domain.AppNamingProductionAvailable))
+		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasStagingConfig(staging, domain.AppNamingStagingAvailable))
 	})
 
 	t.Run("could be marked for deletion only if not already the case", func(t *testing.T) {

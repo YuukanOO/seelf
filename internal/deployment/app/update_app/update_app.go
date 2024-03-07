@@ -99,9 +99,13 @@ func Handler(
 					}
 				}
 
-				app.UseVersionControl(vcs)
+				err = app.UseVersionControl(vcs)
 			} else {
-				app.RemoveVersionControl()
+				err = app.RemoveVersionControl()
+			}
+
+			if err != nil {
+				return "", err
 			}
 		}
 

@@ -168,6 +168,23 @@ func Test_UpdateApp(t *testing.T) {
 		testutil.Equals(t, "", id)
 	})
 
+	t.Run("should fail if trying to update an app being deleted", func(t *testing.T) {
+		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
+			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
+		a.RequestCleanup("uid")
+
+		uc := sut(&a)
+
+		_, err := uc(ctx, update_app.Command{
+			ID: string(a.ID()),
+			VCS: monad.PatchValue(update_app.VCSConfig{
+				Url: "https://some.url",
+			}),
+		})
+
+		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, err)
+	})
+
 	t.Run("should fail if trying to add a vcs config without an url defined", func(t *testing.T) {
 		a := must.Panic(domain.NewApp("an-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"),
 			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))

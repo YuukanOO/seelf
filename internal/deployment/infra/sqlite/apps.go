@@ -38,9 +38,9 @@ func (s *appsStore) GetAppNamingAvailability(
 		Query[appNamingResult](`
 		SELECT
 			(SELECT COUNT(id) FROM apps WHERE name = ? AND production_target = ?) AS production_count
-			,(SELECT COUNT(id) FROM targets WHERE id = ?) AS production_target_exists
+			,(SELECT COUNT(id) FROM targets WHERE id = ? AND delete_requested_at IS NULL) AS production_target_exists
 			,(SELECT COUNT(id) FROM apps WHERE name = ? AND staging_target = ?) AS staging_count
-			,(SELECT COUNT(id) FROM targets WHERE id = ?) AS staging_target_exists
+			,(SELECT COUNT(id) FROM targets WHERE id = ? AND delete_requested_at IS NULL) AS staging_target_exists
 		`, name, production, production, name, staging, staging).
 		One(s.db, ctx, appNameUniquenessResultMapper)
 
@@ -75,7 +75,7 @@ func (s *appsStore) GetAppNamingAvailabilityOnID(
 	if hasProductionTarget {
 		sql.WriteString(`
 		(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.production_target = ?) AS production_count
-		,(SELECT COUNT(id) FROM targets WHERE id = ?) AS production_target_exists`)
+		,(SELECT COUNT(id) FROM targets WHERE id = ? AND delete_requested_at IS NULL) AS production_target_exists`)
 		args = append(args, productionTarget, productionTarget)
 	} else {
 		sql.WriteString("0 AS production_count, 0 AS production_target_exists")
@@ -84,7 +84,7 @@ func (s *appsStore) GetAppNamingAvailabilityOnID(
 	if hasStagingTarget {
 		sql.WriteString(`
 		,(SELECT COUNT(id) FROM apps WHERE apps.id != src.id AND apps.name = src.name AND apps.staging_target = ?) AS staging_count
-		,(SELECT COUNT(id) FROM targets WHERE id = ?) AS staging_target_exists`)
+		,(SELECT COUNT(id) FROM targets WHERE id = ? AND delete_requested_at IS NULL) AS staging_target_exists`)
 		args = append(args, stagingTarget, stagingTarget)
 	} else {
 		sql.WriteString(", 0 AS staging_count, 0 AS staging_target_exists")

@@ -24,12 +24,12 @@ var (
 )
 
 const (
-	AppNamingProductionTargetNotFound AppNamingAvailability = 1 << iota
-	AppNamingStagingTargetNotFound
-	AppNamingTakenInProduction
-	AppNamingTakenInStaging
-	AppNamingProductionAvailable
-	AppNamingStagingAvailable
+	AppNamingProductionTargetNotFound AppNamingAvailability = 1 << iota // Production target does not exist or is being deleted
+	AppNamingStagingTargetNotFound                                      // Staging target does not exist or is being deleted
+	AppNamingTakenInProduction                                          // Application name is already taken on production target
+	AppNamingTakenInStaging                                             // Application name is already taken on staging target
+	AppNamingProductionAvailable                                        // Production target is available
+	AppNamingStagingAvailable                                           // Staging target is available
 )
 
 type (
@@ -198,26 +198,38 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 }
 
 // Sets an app version control configuration.
-func (a *App) UseVersionControl(config VCSConfig) {
+func (a *App) UseVersionControl(config VCSConfig) error {
+	if a.cleanupRequested.HasValue() {
+		return ErrAppCleanupRequested
+	}
+
 	if existing, isSet := a.vcs.TryGet(); isSet && config.Equals(existing) {
-		return
+		return nil
 	}
 
 	a.apply(AppVCSConfigured{
 		ID:     a.id,
 		Config: config,
 	})
+
+	return nil
 }
 
 // Removes the version control configuration from the app.
-func (a *App) RemoveVersionControl() {
+func (a *App) RemoveVersionControl() error {
+	if a.cleanupRequested.HasValue() {
+		return ErrAppCleanupRequested
+	}
+
 	if !a.vcs.HasValue() {
-		return
+		return nil
 	}
 
 	a.apply(AppVCSRemoved{
 		ID: a.id,
 	})
+
+	return nil
 }
 
 // Updates the production configuration for this application.
@@ -268,6 +280,10 @@ func (a *App) tryUpdateEnvironmentConfig(
 	updatedConfig EnvironmentConfig,
 	available AppNamingAvailability,
 ) error {
+	if a.cleanupRequested.HasValue() {
+		return ErrAppCleanupRequested
+	}
+
 	var (
 		existingConfig   EnvironmentConfig
 		availabilityFlag AppNamingAvailability

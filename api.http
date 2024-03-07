@@ -10,7 +10,7 @@ Content-Type: application/json
 
 {
     "email": "admin@example.com",
-    "password": "admin"
+    "password": "forg3tDaPa55word"
 }
 
 ###
@@ -32,18 +32,44 @@ Content-Type: application/json
 }
 
 ###
+
+GET {{url}}/targets
+
+###
+# @name createTarget
+
+POST {{url}}/targets
+Content-Type: application/json
+
+{
+    "name": "my docker",
+    "domain": "http://my.docker.localhost.somewhere",
+    "docker": {
+        "host":"somewhere"
+    }
+}
+
+###
+
+GET {{url}}/targets/{{createTarget.response.body.$.id}}
+
+###
+
+DELETE {{url}}/targets/{{createTarget.response.body.$.id}}
+
+###
 # @name createApp
 
 POST {{url}}/apps
 Content-Type: application/json
 
 {
-    "name": "go-api",
+    "name": "baba-sheet",
     "vcs": {
         "url": "https://git.voixdu.net/jleicher/go-api-example.git"
     },
     "production": {
-        "target": "de",
+        "target": "2cS5hh8Q9zIZGOjmlKWcsO9zEOE",
         "vars": {
             "app": {
                 "DEBUG": "false"
@@ -51,7 +77,7 @@ Content-Type: application/json
         }
     },
     "staging": {
-        "target": "de",
+        "target": "2cS5hh8Q9zIZGOjmlKWcsO9zEOE",
         "vars": {
             "app": {
                 "DEBUG": "true"
@@ -70,14 +96,19 @@ GET {{url}}/apps/{{createApp.response.body.$.id}}
 
 ###
 
-PATCH {{url}}/apps/{{createApp.response.body.$.id}}
+PATCH {{url}}/apps/2clEu036Rka90XFVy41QelY91j3
 Content-Type: application/json
 
 {
     "vcs": {
         "url": "https://git.voixdu.net/jleicher/go-api-example.git"
     },
-    "env": {}
+    "production": {
+        "target": "2bRUdQnyRELMqyh9gFLQV1s0cqv"
+    },
+    "staging": {
+        "target": "2bRUdQnyRELMqyh9gFLQV1s0cqv"
+    }
 }
 
 ###

@@ -17,7 +17,9 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/redeploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_app_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_target_delete"
+	"github.com/YuukanOO/seelf/internal/deployment/app/stale_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/update_target"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
@@ -73,6 +75,7 @@ func Setup(
 	bus.Register(b, redeploy.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(b, promote.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(b, create_target.Handler(targetsStore, targetsStore, providerFacade))
+	bus.Register(b, update_target.Handler(targetsStore, targetsStore, providerFacade))
 	bus.Register(b, request_target_delete.Handler(targetsStore, targetsStore, appsStore))
 	bus.Register(b, cleanup_target.Handler(targetsStore, targetsStore, deploymentsStore, providerFacade))
 	bus.Register(b, deploymentQueryHandler.GetAllApps)
@@ -86,6 +89,8 @@ func Setup(
 	bus.On(b, cleanup_app.OnAppCleanupRequestedHandler(scheduler))
 	bus.On(b, fail_pending_deployments.OnAppCleanupRequestedHandler(deploymentsStore))
 	bus.On(b, cleanup_target.OnTargetDeleteRequested(scheduler))
+	bus.On(b, stale_target.OnTargetDomainChanged(providerFacade))
+	bus.On(b, stale_target.OnTargetProviderChanged(providerFacade))
 
 	if err := db.Migrate(deploymentsqlite.Migrations); err != nil {
 		return err

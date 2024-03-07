@@ -36,5 +36,5 @@ func (c VCSConfig) Url() Url                   { return c.url }
 func (c VCSConfig) Token() monad.Maybe[string] { return c.token }
 
 func (c VCSConfig) Equals(other VCSConfig) bool {
-	return other.url.String() == c.url.String() && other.token == c.token
+	return other.url.Equals(c.url) && other.token == c.token
 }

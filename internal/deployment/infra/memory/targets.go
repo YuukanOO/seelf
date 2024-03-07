@@ -100,6 +100,14 @@ func (s *targetsStore) Write(ctx context.Context, targets ...*domain.Target) err
 					domain: evt.Domain,
 					value:  target,
 				})
+			case domain.TargetDomainChanged:
+				for _, t := range s.targets {
+					if t.id == evt.ID {
+						t.domain = evt.Domain
+						*t.value = *target
+						break
+					}
+				}
 			case domain.TargetDeleted:
 				for i, t := range s.targets {
 					if t.id == target.ID() {

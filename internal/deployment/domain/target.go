@@ -19,6 +19,7 @@ var (
 	ErrConfigAlreadyTaken        = apperr.New("config_already_taken")
 	ErrTargetInUse               = apperr.New("target_in_use")
 	ErrTargetDeleteRequestNeeded = apperr.New("target_delete_request_needed")
+	ErrTargetDeleteRequested     = apperr.New("target_delete_requested")
 )
 
 type (
@@ -66,6 +67,27 @@ type (
 		Created  shared.Action[auth.UserID]
 	}
 
+	TargetRenamed struct {
+		bus.Notification
+
+		ID   TargetID
+		Name string
+	}
+
+	TargetDomainChanged struct {
+		bus.Notification
+
+		ID     TargetID
+		Domain Url
+	}
+
+	TargetProviderChanged struct {
+		bus.Notification
+
+		ID       TargetID
+		Provider ProviderConfig
+	}
+
 	TargetDeleteRequested struct {
 		bus.Notification
 
@@ -81,6 +103,9 @@ type (
 )
 
 func (TargetCreated) Name_() string         { return "deployment.event.target_created" }
+func (TargetRenamed) Name_() string         { return "deployment.event.target_renamed" }
+func (TargetDomainChanged) Name_() string   { return "deployment.event.target_domain_changed" }
+func (TargetProviderChanged) Name_() string { return "deployment.event.target_provider_changed" }
 func (TargetDeleteRequested) Name_() string { return "deployment.event.target_delete_requested" }
 func (TargetDeleted) Name_() string         { return "deployment.event.target_deleted" }
 
@@ -150,6 +175,65 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	return t, err
 }
 
+func (t *Target) Rename(name string) error {
+	if t.deleteRequested.HasValue() {
+		return ErrTargetDeleteRequested
+	}
+
+	if name == t.name {
+		return nil
+	}
+
+	t.apply(TargetRenamed{
+		ID:   t.id,
+		Name: name,
+	})
+
+	return nil
+}
+
+func (t *Target) HasDomain(domain Url, availability TargetDomainAvailability) error {
+	if t.deleteRequested.HasValue() {
+		return ErrTargetDeleteRequested
+	}
+
+	if t.domain.Equals(domain) {
+		return nil
+	}
+
+	if !availability {
+		return ErrDomainAlreadyTaken
+	}
+
+	t.apply(TargetDomainChanged{
+		ID:     t.id,
+		Domain: domain,
+	})
+
+	return nil
+}
+
+func (t *Target) HasProvider(provider ProviderConfig, availability TargetConfigAvailability) error {
+	if t.deleteRequested.HasValue() {
+		return ErrTargetDeleteRequested
+	}
+
+	if t.provider.Equals(provider) {
+		return nil
+	}
+
+	if !availability {
+		return ErrConfigAlreadyTaken
+	}
+
+	t.apply(TargetProviderChanged{
+		ID:       t.id,
+		Provider: provider,
+	})
+
+	return nil
+}
+
 // Request the target deletion, meaning it will be deleted with all its related data.
 func (t *Target) RequestDelete(apps AppsOnTargetCount, by auth.UserID) error {
 	if t.deleteRequested.HasValue() {
@@ -196,6 +280,12 @@ func (t *Target) apply(e event.Event) {
 		t.domain = evt.Domain
 		t.provider = evt.Provider
 		t.created = evt.Created
+	case TargetRenamed:
+		t.name = evt.Name
+	case TargetDomainChanged:
+		t.domain = evt.Domain
+	case TargetProviderChanged:
+		t.provider = evt.Provider
 	case TargetDeleteRequested:
 		t.deleteRequested.Set(evt.Requested)
 	}

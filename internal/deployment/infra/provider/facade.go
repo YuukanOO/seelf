@@ -23,10 +23,10 @@ func NewFacade(providers ...Provider) domain.Provider {
 	return &facade{providers}
 }
 
-func (f *facade) Prepare(ctx context.Context, payload any) (domain.ProviderConfig, error) {
+func (f *facade) Prepare(ctx context.Context, payload any, existing ...domain.ProviderConfig) (domain.ProviderConfig, error) {
 	for _, p := range f.providers {
 		if p.CanPrepare(payload) {
-			return p.Prepare(ctx, payload)
+			return p.Prepare(ctx, payload, existing...)
 		}
 	}
 

@@ -139,7 +139,7 @@ func provider(failedWithErr error) domain.Provider {
 	}
 }
 
-func (b *dummyProvider) Prepare(context.Context, any) (domain.ProviderConfig, error) {
+func (b *dummyProvider) Prepare(context.Context, any, ...domain.ProviderConfig) (domain.ProviderConfig, error) {
 	return nil, nil
 }
 

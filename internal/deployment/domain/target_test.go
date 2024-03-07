@@ -41,6 +41,51 @@ func Test_Target(t *testing.T) {
 		testutil.Equals(t, uid, evt.Created.By())
 	})
 
+	t.Run("could be renamed and raise the event only if different", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		err := target.Rename("new-name")
+
+		testutil.IsNil(t, err)
+		evt := testutil.EventIs[domain.TargetRenamed](t, &target, 1)
+		testutil.Equals(t, "new-name", evt.Name)
+
+		testutil.IsNil(t, target.Rename("new-name"))
+		testutil.HasNEvents(t, &target, 2)
+	})
+
+	t.Run("could not be renamed if delete requested", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+		testutil.IsNil(t, target.RequestDelete(0, uid))
+
+		testutil.ErrorIs(t, domain.ErrTargetDeleteRequested, target.Rename("new-name"))
+	})
+
+	t.Run("could have its domain changed if available and raise the event only if different", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+		newUrl := must.Panic(domain.UrlFrom("http://new-url.com"))
+
+		err := target.HasDomain(newUrl, false)
+
+		testutil.ErrorIs(t, domain.ErrDomainAlreadyTaken, err)
+
+		err = target.HasDomain(newUrl, true)
+
+		testutil.IsNil(t, err)
+		evt := testutil.EventIs[domain.TargetDomainChanged](t, &target, 1)
+		testutil.Equals(t, newUrl, evt.Domain)
+
+		testutil.IsNil(t, target.HasDomain(newUrl, true))
+		testutil.HasNEvents(t, &target, 2)
+	})
+
+	t.Run("could not have its domain changed if delete requested", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
+
+		testutil.IsNil(t, target.RequestDelete(0, uid))
+		testutil.ErrorIs(t, domain.ErrTargetDeleteRequested, target.HasDomain(must.Panic(domain.UrlFrom("http://new-url.com")), true))
+	})
+
 	t.Run("should not be removed if still used by an app", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, targetUrl, true, config, true, uid))
 

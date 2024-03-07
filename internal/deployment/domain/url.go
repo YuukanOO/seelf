@@ -29,8 +29,9 @@ func UrlFrom(raw string) (Url, error) {
 	return Url{u}, nil
 }
 
-func (u Url) Host() string { return u.value.Host }
-func (u Url) UseSSL() bool { return u.value.Scheme == schemeHttps }
+func (u Url) Host() string          { return u.value.Host }
+func (u Url) UseSSL() bool          { return u.value.Scheme == schemeHttps }
+func (u Url) Equals(other Url) bool { return u.value.String() == other.value.String() }
 
 // Returns a new url representing a subdomain.
 func (u Url) SubDomain(subdomain string) Url {

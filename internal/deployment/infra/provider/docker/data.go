@@ -35,10 +35,10 @@ type (
 	}
 )
 
-func (Data) Kind() string                   { return providerKind }
-func (c Data) Fingerprint() string          { return string(c.Host.Get("")) } // One provider allowed by host
-func (c Data) IsLocal() bool                { return !c.Host.HasValue() }     // Local docker instance if host is not set
-func (c Data) Value() (driver.Value, error) { return storage.ValueJSON(c) }
+func (Data) Kind() string                              { return providerKind }
+func (c Data) Fingerprint() string                     { return string(c.Host.Get("")) } // One provider allowed by host
+func (c Data) Value() (driver.Value, error)            { return storage.ValueJSON(c) }
+func (c Data) Equals(other domain.ProviderConfig) bool { return c == other }
 
 // Parses a raw value as a host. Allow ipv4 & ipv6 addresses and domain names without port number.
 func HostFrom(value string) (Host, error) {

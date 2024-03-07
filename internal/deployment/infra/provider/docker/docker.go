@@ -169,7 +169,7 @@ func (d *Docker) Setup() error {
 	})
 }
 
-func (d *Docker) Prepare(ctx context.Context, payload any) (domain.ProviderConfig, error) {
+func (d *Docker) Prepare(ctx context.Context, payload any, existing ...domain.ProviderConfig) (domain.ProviderConfig, error) {
 	config, ok := payload.(Body)
 
 	if !ok {
@@ -202,8 +202,27 @@ func (d *Docker) Prepare(ctx context.Context, payload any) (domain.ProviderConfi
 		data.Host.Set(host)
 	}
 
+	// Private key nil, we're done
+	if config.PrivateKey.IsNil() {
+		return data, nil
+	}
+
+	// Private key updated, we're done
 	if config.PrivateKey.HasValue() {
 		data.PrivateKey.Set(privKey)
+		return data, nil
+	}
+
+	// Else try to retrieve it from the existing one.
+	// (This is needed because the existing private key is never exposed to the user)
+	for _, existingConfig := range existing {
+		d, isDockerData := existingConfig.(Data)
+
+		if !isDockerData {
+			continue
+		}
+
+		data.PrivateKey = d.PrivateKey
 	}
 
 	return data, nil

@@ -103,7 +103,7 @@ type (
 	dummyConfig struct{}
 )
 
-func (*dummyProvider) Prepare(ctx context.Context, payload any) (domain.ProviderConfig, error) {
+func (*dummyProvider) Prepare(ctx context.Context, payload any, existing ...domain.ProviderConfig) (domain.ProviderConfig, error) {
 	if payload == nil {
 		return nil, domain.ErrNoValidProviderFound
 	}
@@ -111,5 +111,6 @@ func (*dummyProvider) Prepare(ctx context.Context, payload any) (domain.Provider
 	return dummyConfig{}, nil
 }
 
-func (dummyConfig) Fingerprint() string { return "dummy" }
-func (dummyConfig) Kind() string        { return "dummy" }
+func (dummyConfig) Fingerprint() string                   { return "dummy" }
+func (c dummyConfig) Equals(o domain.ProviderConfig) bool { return c == o }
+func (dummyConfig) Kind() string                          { return "dummy" }

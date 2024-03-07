@@ -90,6 +90,29 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 					"created_by":           evt.Created.By(),
 				}).
 				Exec(s.db, ctx)
+		case domain.TargetRenamed:
+			return builder.
+				Update("targets", builder.Values{
+					"name": evt.Name,
+				}).
+				F("WHERE id = ?", evt.ID).
+				Exec(s.db, ctx)
+		case domain.TargetDomainChanged:
+			return builder.
+				Update("targets", builder.Values{
+					"domain": evt.Domain,
+				}).
+				F("WHERE id = ?", evt.ID).
+				Exec(s.db, ctx)
+		case domain.TargetProviderChanged:
+			return builder.
+				Update("targets", builder.Values{
+					"provider_kind":        evt.Provider.Kind(),
+					"provider_fingerprint": evt.Provider.Fingerprint(),
+					"provider":             evt.Provider,
+				}).
+				F("WHERE id = ?", evt.ID).
+				Exec(s.db, ctx)
 		case domain.TargetDeleteRequested:
 			return builder.
 				Update("targets", builder.Values{

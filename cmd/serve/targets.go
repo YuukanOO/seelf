@@ -5,6 +5,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_targets"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_target_delete"
+	"github.com/YuukanOO/seelf/internal/deployment/app/update_target"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/http"
@@ -48,6 +49,46 @@ func (s *server) createTargetHandler() gin.HandlerFunc {
 		}
 
 		return http.Created(s, c, target, "/api/v1/targets/%s", id)
+	})
+}
+
+type updateTargetBody struct {
+	Name   monad.Maybe[string]      `json:"name"`
+	Domain monad.Maybe[string]      `json:"domain"`
+	Docker monad.Maybe[docker.Body] `json:"docker"`
+}
+
+func (s *server) updateTargetHandler() gin.HandlerFunc {
+	return http.Bind(s, func(c *gin.Context, body updateTargetBody) error {
+		var (
+			payload any
+			ctx     = c.Request.Context()
+		)
+
+		if dockerBody, isSet := body.Docker.TryGet(); isSet {
+			payload = dockerBody
+		}
+
+		id, err := bus.Send(s.bus, ctx, update_target.Command{
+			ID:       c.Param("id"),
+			Name:     body.Name,
+			Domain:   body.Domain,
+			Provider: payload,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		data, err := bus.Send(s.bus, ctx, get_target.Query{
+			ID: id,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return http.Ok(c, data)
 	})
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/compose-spec/compose-go/types"
@@ -29,7 +30,7 @@ type options interface {
 	artifact.LocalOptions
 }
 
-func Test_Run(t *testing.T) {
+func Test_Docker(t *testing.T) {
 	logger, _ := log.NewLogger()
 
 	composeMock := &composeMockService{}
@@ -44,6 +45,170 @@ func Test_Run(t *testing.T) {
 
 		return docker.New(opts, logger, docker.WithDockerAndCompose(dockerMock, composeMock)), artifactManager, composeMock, dockerMock.cli
 	}
+
+	t.Run("should be able to prepare a docker provider config from raw payload", func(t *testing.T) {
+		tests := []struct {
+			payload  docker.Body
+			expected docker.Data
+			existing []domain.ProviderConfig
+		}{
+			{
+				payload:  docker.Body{},
+				expected: docker.Data{},
+			},
+			{
+				payload: docker.Body{
+					Host: monad.Value("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+				},
+				expected: docker.Data{
+					Host: monad.Value[docker.Host]("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+				},
+			},
+			{
+				payload: docker.Body{
+					Host: monad.Value("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+					PrivateKey: monad.PatchValue(`-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAlwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5l
+oEuW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lz
+a+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAIQWL0H31i9B98AAAAH
+c3NoLXJzYQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5loE
+uW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lza+
+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAADAQABAAAAgCThyTGsT4
+IARDxVMhWl6eiB2ZrgFgWSeJm/NOqtppWgOebsIqPMMg4UVuVFsl422/lE3RkPhVkjGXgE
+pWvZAdCnmLmApK8wK12vF334lZhZT7t3Z9EzJps88PWEHo7kguf285HcnUM7FlFeissJdk
+kXly34y7/3X/a6Tclm+iABAAAAQE0xR/KxZ39slwfMv64Rz7WKk1PPskaryI29aHE3mKHk
+pY2QA+P3QlrKxT/VWUMjHUbNNdYfJm48xu0SGNMRdKMAAABBAORh2NP/06JUV3J9W/2Hju
+X1ViJuqqcQnJPVzpgSL826EC2xwOECTqoY8uvFpUdD7CtpksIxNVqRIhuNOlz0lqEAAABB
+ANkaHTTaPojClO0dKJ/Zjs7pWOCGliebBYprQ/Y4r9QLBkC/XaWMS26gFIrjgC7D2Rv+rZ
+wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
+-----END OPENSSH PRIVATE KEY-----`),
+				},
+				expected: docker.Data{
+					Host: monad.Value[docker.Host]("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+					PrivateKey: monad.Value[docker.PrivateKey](`-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAlwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5l
+oEuW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lz
+a+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAIQWL0H31i9B98AAAAH
+c3NoLXJzYQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5loE
+uW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lza+
+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAADAQABAAAAgCThyTGsT4
+IARDxVMhWl6eiB2ZrgFgWSeJm/NOqtppWgOebsIqPMMg4UVuVFsl422/lE3RkPhVkjGXgE
+pWvZAdCnmLmApK8wK12vF334lZhZT7t3Z9EzJps88PWEHo7kguf285HcnUM7FlFeissJdk
+kXly34y7/3X/a6Tclm+iABAAAAQE0xR/KxZ39slwfMv64Rz7WKk1PPskaryI29aHE3mKHk
+pY2QA+P3QlrKxT/VWUMjHUbNNdYfJm48xu0SGNMRdKMAAABBAORh2NP/06JUV3J9W/2Hju
+X1ViJuqqcQnJPVzpgSL826EC2xwOECTqoY8uvFpUdD7CtpksIxNVqRIhuNOlz0lqEAAABB
+ANkaHTTaPojClO0dKJ/Zjs7pWOCGliebBYprQ/Y4r9QLBkC/XaWMS26gFIrjgC7D2Rv+rZ
+wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
+-----END OPENSSH PRIVATE KEY-----`),
+				},
+			},
+			{
+				payload: docker.Body{
+					Host: monad.Value("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+					PrivateKey: monad.PatchValue(`-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAlwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5l
+oEuW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lz
+a+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAIQWL0H31i9B98AAAAH
+c3NoLXJzYQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5loE
+uW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lza+
+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAADAQABAAAAgCThyTGsT4
+IARDxVMhWl6eiB2ZrgFgWSeJm/NOqtppWgOebsIqPMMg4UVuVFsl422/lE3RkPhVkjGXgE
+pWvZAdCnmLmApK8wK12vF334lZhZT7t3Z9EzJps88PWEHo7kguf285HcnUM7FlFeissJdk
+kXly34y7/3X/a6Tclm+iABAAAAQE0xR/KxZ39slwfMv64Rz7WKk1PPskaryI29aHE3mKHk
+pY2QA+P3QlrKxT/VWUMjHUbNNdYfJm48xu0SGNMRdKMAAABBAORh2NP/06JUV3J9W/2Hju
+X1ViJuqqcQnJPVzpgSL826EC2xwOECTqoY8uvFpUdD7CtpksIxNVqRIhuNOlz0lqEAAABB
+ANkaHTTaPojClO0dKJ/Zjs7pWOCGliebBYprQ/Y4r9QLBkC/XaWMS26gFIrjgC7D2Rv+rZ
+wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
+-----END OPENSSH PRIVATE KEY-----`),
+				},
+				expected: docker.Data{
+					Host: monad.Value[docker.Host]("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+					PrivateKey: monad.Value[docker.PrivateKey](`-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAlwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5l
+oEuW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lz
+a+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAIQWL0H31i9B98AAAAH
+c3NoLXJzYQAAAIEAwa48yfWFi3uIdqzuf9X7C2Zxfea/Iaaw0zIwHudpF8U92WVIiC5loE
+uW1+OaVi3UWfIEjWMV1tHGysrHOwtwc34BPCJqJknUQO/KtDTBTJ4Pryhw1bWPC999Lza+
+yrCTdNQYBzoROXKExZgPFh9pTMi5wqpHDuOQ2qZFIEI3lT0AAAADAQABAAAAgCThyTGsT4
+IARDxVMhWl6eiB2ZrgFgWSeJm/NOqtppWgOebsIqPMMg4UVuVFsl422/lE3RkPhVkjGXgE
+pWvZAdCnmLmApK8wK12vF334lZhZT7t3Z9EzJps88PWEHo7kguf285HcnUM7FlFeissJdk
+kXly34y7/3X/a6Tclm+iABAAAAQE0xR/KxZ39slwfMv64Rz7WKk1PPskaryI29aHE3mKHk
+pY2QA+P3QlrKxT/VWUMjHUbNNdYfJm48xu0SGNMRdKMAAABBAORh2NP/06JUV3J9W/2Hju
+X1ViJuqqcQnJPVzpgSL826EC2xwOECTqoY8uvFpUdD7CtpksIxNVqRIhuNOlz0lqEAAABB
+ANkaHTTaPojClO0dKJ/Zjs7pWOCGliebBYprQ/Y4r9QLBkC/XaWMS26gFIrjgC7D2Rv+rZ
+wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
+-----END OPENSSH PRIVATE KEY-----`),
+				},
+				existing: []domain.ProviderConfig{
+					docker.Data{
+						Host:       monad.Value[docker.Host]("other"),
+						PrivateKey: monad.Value[docker.PrivateKey]("other"),
+					},
+				},
+			},
+			{
+				payload: docker.Body{
+					Host: monad.Value("localhost"),
+					User: monad.Value("test"),
+					Port: monad.Value[uint](2222),
+				},
+				expected: docker.Data{
+					Host:       monad.Value[docker.Host]("localhost"),
+					User:       monad.Value("test"),
+					Port:       monad.Value[uint](2222),
+					PrivateKey: monad.Value[docker.PrivateKey]("other"),
+				},
+				existing: []domain.ProviderConfig{
+					docker.Data{
+						Host:       monad.Value[docker.Host]("other"),
+						PrivateKey: monad.Value[docker.PrivateKey]("other"),
+					},
+				},
+			},
+			{
+				payload: docker.Body{
+					Host:       monad.Value("localhost"),
+					PrivateKey: monad.Nil[string](),
+				},
+				expected: docker.Data{
+					Host: monad.Value[docker.Host]("localhost"),
+				},
+				existing: []domain.ProviderConfig{
+					docker.Data{
+						Host:       monad.Value[docker.Host]("other"),
+						PrivateKey: monad.Value[docker.PrivateKey]("other"),
+					},
+				},
+			},
+		}
+
+		provider, _, _, _ := sut(config.Default(config.WithTestDefaults()))
+
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%v", tt.payload), func(t *testing.T) {
+				data, err := provider.Prepare(context.Background(), tt.payload, tt.existing...)
+
+				testutil.IsNil(t, err)
+				testutil.IsTrue(t, tt.expected == data)
+			})
+		}
+	})
 
 	t.Run("should setup the balancer correctly without SSL", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())

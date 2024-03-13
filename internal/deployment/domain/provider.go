@@ -20,14 +20,15 @@ type (
 		Kind() string
 		Equals(ProviderConfig) bool // Compare the provider configuration with another one
 		Fingerprint() string        // Used for unicity of a provider configuration (such as one per host)
+		String() string             // User friendly representation, mostly for logs
 	}
 
 	// Provider used to run an application services.
 	Provider interface {
 		Prepare(ctx context.Context, payload any, existing ...ProviderConfig) (ProviderConfig, error) // Prepare the given payload representing a Provider specific configuration
-		Run(context.Context, DeploymentContext, Deployment) (Services, error)                         // Launch a deployment and return services that has been deployed
+		Run(context.Context, DeploymentContext, Deployment, Target) (Services, error)                 // Run a deployment on the specified target and return services that has been deployed
 		Stale(context.Context, TargetID) error                                                        // Mark a target as stale, meaning it should be reinitialized before being used again
-		CleanupTarget(context.Context, Target) error                                                  // Cleanup a target, removing every resources managed by seelf
-		Cleanup(context.Context, App) error                                                           // Cleanup an application, which means removing every possible stuff related to it
+		CleanupTarget(context.Context, Target) error                                                  // Cleanup a target, removing every resources managed by seelf on it
+		Cleanup(context.Context, AppID, Target, Environment) error                                    // Cleanup an application on the specified target and environment, which means removing every possible stuff related to it
 	}
 )

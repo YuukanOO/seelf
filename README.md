@@ -16,7 +16,8 @@ _Althought Docker is the only provider supported at the moment, I would like to 
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/)
+- [Docker >= v18.0.9](https://docs.docker.com/get-docker/)
+- SSH (for remote targets)
 - A DNS correctly configured (with a wildcard redirecting to where seelf is hosted)
 
 ## Quick start

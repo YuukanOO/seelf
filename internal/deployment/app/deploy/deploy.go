@@ -32,6 +32,7 @@ func Handler(
 	artifactManager domain.ArtifactManager,
 	source domain.Source,
 	provider domain.Provider,
+	targetsReader domain.TargetsReader,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (result bus.UnitType, finalErr error) {
 		result = bus.Unit
@@ -62,6 +63,7 @@ func Handler(
 		}
 
 		var (
+			target        domain.Target
 			deploymentCtx domain.DeploymentContext
 			services      domain.Services
 		)
@@ -91,6 +93,10 @@ func Handler(
 			finalErr = nil // Don't return any error, the deployment has ended and embed the error if any
 		}()
 
+		if target, finalErr = targetsReader.GetByID(ctx, depl.Config().Target()); finalErr != nil {
+			return
+		}
+
 		// Prepare the build directory
 		if deploymentCtx, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
 			return
@@ -104,7 +110,7 @@ func Handler(
 		}
 
 		// Ask the provider to actually deploy the app
-		if services, finalErr = provider.Run(ctx, deploymentCtx, depl); finalErr != nil {
+		if services, finalErr = provider.Run(ctx, deploymentCtx, depl, target); finalErr != nil {
 			return
 		}
 

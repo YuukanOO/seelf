@@ -33,8 +33,14 @@ func (f *facade) Prepare(ctx context.Context, payload any, existing ...domain.Pr
 	return nil, domain.ErrNoValidProviderFound
 }
 
-func (f *facade) Run(context.Context, domain.DeploymentContext, domain.Deployment) (domain.Services, error) {
-	return nil, nil
+func (f *facade) Run(ctx context.Context, info domain.DeploymentContext, depl domain.Deployment, target domain.Target) (domain.Services, error) {
+	provider, err := f.providerForTarget(target)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return provider.Run(ctx, info, depl, target)
 }
 
 func (f *facade) Stale(ctx context.Context, id domain.TargetID) error {
@@ -48,17 +54,33 @@ func (f *facade) Stale(ctx context.Context, id domain.TargetID) error {
 }
 
 func (f *facade) CleanupTarget(ctx context.Context, target domain.Target) error {
+	provider, err := f.providerForTarget(target)
+
+	if err != nil {
+		return err
+	}
+
+	return provider.CleanupTarget(ctx, target)
+}
+
+func (f *facade) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.Environment) error {
+	provider, err := f.providerForTarget(target)
+
+	if err != nil {
+		return err
+	}
+
+	return provider.Cleanup(ctx, app, target, env)
+}
+
+func (f *facade) providerForTarget(target domain.Target) (Provider, error) {
 	config := target.Provider()
 
 	for _, p := range f.providers {
 		if p.CanHandle(config) {
-			return p.CleanupTarget(ctx, target)
+			return p, nil
 		}
 	}
 
-	return nil
-}
-
-func (f *facade) Cleanup(context.Context, domain.App) error {
-	return nil
+	return nil, domain.ErrNoValidProviderFound
 }

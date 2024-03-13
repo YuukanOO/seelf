@@ -63,6 +63,31 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID do
 	return domain.DeploymentNumber(c + 1), nil
 }
 
+func (s *deploymentsStore) GetLatestSuccessfulDeployments(ctx context.Context, appID domain.AppID) ([]domain.Deployment, error) {
+	return builder.
+		Query[domain.Deployment](`
+		SELECT
+			app_id
+			,MAX(deployment_number) AS deployment_number
+			,config_appname
+			,config_environment
+			,config_target
+			,config_vars
+			,state_status
+			,state_errcode
+			,state_services
+			,state_started_at
+			,state_finished_at
+			,source_discriminator
+			,source
+			,requested_at
+			,requested_by
+		FROM deployments
+		WHERE app_id = ? AND state_status = ?
+		GROUP BY config_environment`, appID, domain.DeploymentStatusSucceeded).
+		All(s.db, ctx, domain.DeploymentFrom)
+}
+
 func (s *deploymentsStore) GetRunningDeploymentsOnTargetCount(ctx context.Context, id domain.TargetID) (domain.RunningDeploymentsOnTargetCount, error) {
 	return builder.
 		Query[domain.RunningDeploymentsOnTargetCount](`

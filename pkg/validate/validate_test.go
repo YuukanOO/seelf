@@ -33,7 +33,7 @@ func Test_Field(t *testing.T) {
 		testutil.ErrorIs(t, errRequired, err)
 	})
 
-	t.Run("returns nil when validation pass successfuly", func(t *testing.T) {
+	t.Run("returns nil when validation pass successfully", func(t *testing.T) {
 		err := validate.Field("something", required)
 		testutil.IsNil(t, err)
 	})

@@ -4,6 +4,7 @@ package testutil
 
 import (
 	"errors"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -108,6 +109,15 @@ func EventIs[T event.Event](t testing.TB, source event.Source, index int) (resul
 	}
 
 	return result
+}
+
+func FileEquals(t testing.TB, path, expected string) {
+	data, _ := os.ReadFile(path)
+	str := string(data)
+
+	if str != expected {
+		expectationVersusReality(t, "file content should have been equals", expected, str)
+	}
 }
 
 func expectationVersusReality(t testing.TB, message string, expected, actual any) {

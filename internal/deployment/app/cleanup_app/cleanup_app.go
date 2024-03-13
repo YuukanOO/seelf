@@ -31,6 +31,7 @@ func Handler(
 	writer domain.AppsWriter,
 	artifactManager domain.ArtifactManager,
 	provider domain.Provider,
+	targetsReader domain.TargetsReader,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
 		app, err := reader.GetByID(ctx, domain.AppID(cmd.ID))
@@ -55,8 +56,28 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		if err = provider.Cleanup(ctx, app); err != nil {
+		// Remove the latest successful deployments on both environments.
+		deployments, err := deploymentsReader.GetLatestSuccessfulDeployments(ctx, app.ID())
+
+		if err != nil {
 			return bus.Unit, err
+		}
+
+		for _, depl := range deployments {
+			target, err := targetsReader.GetByID(ctx, depl.Config().Target())
+
+			if err != nil {
+				// Target does not exist anymore, the app resources should have been cleaned up
+				if errors.Is(err, apperr.ErrNotFound) {
+					continue
+				}
+
+				return bus.Unit, err
+			}
+
+			if err = provider.Cleanup(ctx, app.ID(), target, depl.Config().Environment()); err != nil {
+				return bus.Unit, err
+			}
 		}
 
 		if err = artifactManager.Cleanup(ctx, app); err != nil {

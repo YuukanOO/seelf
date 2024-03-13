@@ -124,6 +124,7 @@ CREATE TABLE deployments (
 );
 
 CREATE INDEX idx_deployments_target ON deployments(config_target);
+CREATE INDEX idx_deployments_state_status ON deployments(state_status);
 
 INSERT INTO deployments (
     app_id

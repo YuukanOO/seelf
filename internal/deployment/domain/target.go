@@ -270,6 +270,7 @@ func (t *Target) Delete(deployments RunningDeploymentsOnTargetCount) error {
 }
 
 func (t *Target) ID() TargetID             { return t.id }
+func (t *Target) Domain() Url              { return t.domain }
 func (t *Target) Provider() ProviderConfig { return t.provider }
 
 func (t *Target) apply(e event.Event) {

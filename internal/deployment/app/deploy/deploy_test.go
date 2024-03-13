@@ -70,7 +70,7 @@ func Test_Deploy(t *testing.T) {
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 	})
 
-	t.Run("should mark the deployment has failed if provider does not run the deployment successfuly", func(t *testing.T) {
+	t.Run("should mark the deployment has failed if provider does not run the deployment successfully", func(t *testing.T) {
 		providerErr := errors.New("run_failed")
 		be := provider(providerErr)
 		src := source(nil)

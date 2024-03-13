@@ -40,6 +40,8 @@ type (
 	DeploymentsReader interface {
 		GetByID(context.Context, DeploymentID) (Deployment, error)
 		GetNextDeploymentNumber(context.Context, AppID) (DeploymentNumber, error)
+		GetLatestSuccessfulDeployments(context.Context, AppID) ([]Deployment, error) // Retrieve the latest successful deployments for a particular app on all environments
+		//GetLatestSuccessfulDeployment(context.Context, AppID, Environment, ...DeploymentNumber) (Deployment, error)
 		GetRunningDeploymentsOnTargetCount(context.Context, TargetID) (RunningDeploymentsOnTargetCount, error)
 		GetRunningOrPendingDeploymentsCount(context.Context, AppID) (RunningOrPendingAppDeploymentsCount, error)
 	}

@@ -3,6 +3,7 @@ module github.com/YuukanOO/seelf
 go 1.21
 
 require (
+	github.com/YuukanOO/ssh_config v0.0.0-20240313135817-9af26488786c
 	github.com/compose-spec/compose-go v1.20.1
 	github.com/docker/cli v24.0.6+incompatible
 	github.com/docker/compose/v2 v2.23.0

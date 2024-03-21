@@ -34,7 +34,7 @@ func NewTargetsStore(existingTargets ...*domain.Target) TargetsStore {
 	return s
 }
 
-func (s *targetsStore) GetDomainAvailability(ctx context.Context, domainUrl domain.Url, excluded ...domain.TargetID) (domain.TargetDomainAvailability, error) {
+func (s *targetsStore) GetUrlAvailability(ctx context.Context, domainUrl domain.Url, excluded ...domain.TargetID) (domain.TargetUrlAvailability, error) {
 	var target *domain.Target
 
 	for _, t := range s.targets {
@@ -97,13 +97,13 @@ func (s *targetsStore) Write(ctx context.Context, targets ...*domain.Target) err
 
 				s.targets = append(s.targets, &targetData{
 					id:     evt.ID,
-					domain: evt.Domain,
+					domain: evt.Url,
 					value:  target,
 				})
-			case domain.TargetDomainChanged:
+			case domain.TargetUrlChanged:
 				for _, t := range s.targets {
 					if t.id == evt.ID {
-						t.domain = evt.Domain
+						t.domain = evt.Url
 						*t.value = *target
 						break
 					}

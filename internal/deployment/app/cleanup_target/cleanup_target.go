@@ -37,7 +37,7 @@ func Handler(
 		if err != nil {
 			// If the target doesn't exist anymore, may be it has been processed by another job in rare case, so just returns
 			if errors.Is(err, apperr.ErrNotFound) {
-				return bus.Unit, nil
+				return bus.Unit, bus.Ignore(err)
 			}
 
 			return bus.Unit, err
@@ -49,11 +49,18 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		if err = target.Delete(count); err != nil {
+		strategy, err := target.Delete(count)
+
+		if err != nil {
 			return bus.Unit, err
 		}
 
-		if err = provider.CleanupTarget(ctx, target); err != nil {
+		// Don't bother with the provider if the strategy is to skip the cleanup
+		if strategy == domain.TargetCleanupStrategySkip {
+			return bus.Unit, writer.Write(ctx, &target)
+		}
+
+		if err = provider.CleanupTarget(ctx, target, strategy); err != nil {
 			return bus.Unit, err
 		}
 

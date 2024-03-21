@@ -7,7 +7,6 @@ import (
 
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/id"
-	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
@@ -19,8 +18,6 @@ var (
 
 	migrationsModule = sqlite.NewMigrationsModule("scheduler", "migrations", migrations)
 )
-
-const retryDelay = 15 * time.Second
 
 type (
 	job struct {
@@ -50,25 +47,25 @@ func (s *scheduler) Setup() error {
 		return err
 	}
 
-	return builder.
-		Update("scheduled_jobs", builder.Values{
-			"retrieved": false,
-		}).
-		F("WHERE retrieved = true").
-		Exec(s.db, context.Background())
+	_, err := s.db.ExecContext(context.Background(), `
+		UPDATE scheduled_jobs
+		SET retrieved = false
+		WHERE retrieved = true`)
+
+	return err
 }
 
 func (s *scheduler) Create(
 	ctx context.Context,
 	msg bus.Request,
-	dedupeName monad.Maybe[string],
+	options bus.JobOptions,
 ) error {
 	jobId := id.New[string]()
 
 	return builder.
 		Insert("scheduled_jobs", builder.Values{
 			"id":           jobId,
-			"dedupe_name":  dedupeName.Get(jobId), // Default to the job id if no dedupe
+			"dedupe_name":  options.DedupeName.Get(jobId), // Default to the job id if no dedupe
 			"message_name": msg.Name_(),
 			"message_data": msg,
 			"queued_at":    time.Now().UTC(),
@@ -81,36 +78,62 @@ func (s *scheduler) GetNextPendingJobs(ctx context.Context) ([]bus.ScheduledJob,
 	// This query will lock the database to make sure we can't retrieved the same job twice.
 	return builder.
 		Query[bus.ScheduledJob](`
-UPDATE scheduled_jobs
-SET retrieved = true
-WHERE id IN (SELECT id FROM (
-	SELECT id, min(queued_at) FROM scheduled_jobs
-	WHERE 
-		retrieved = false
-		AND queued_at <= DATETIME('now')
-		AND dedupe_name NOT IN (SELECT DISTINCT dedupe_name FROM scheduled_jobs WHERE retrieved = true)
-		GROUP BY dedupe_name
-	)
-)
-RETURNING id, message_name, message_data`).
+			UPDATE scheduled_jobs
+			SET retrieved = true
+			WHERE id IN (SELECT id FROM (
+				SELECT id, min(queued_at) FROM scheduled_jobs
+				WHERE 
+					retrieved = false
+					AND queued_at <= DATETIME('now')
+					AND dedupe_name NOT IN (SELECT DISTINCT dedupe_name FROM scheduled_jobs WHERE retrieved = true)
+					GROUP BY dedupe_name
+				)
+			)
+			RETURNING id, message_name, message_data`).
 		All(s.db, ctx, jobMapper)
 }
 
-func (s *scheduler) Retry(ctx context.Context, j bus.ScheduledJob, err error) error {
-	return builder.
-		Update("scheduled_jobs", builder.Values{
-			"errcode":   err.Error(),
-			"queued_at": time.Now().Add(retryDelay).UTC(),
-			"retrieved": false,
-		}).
-		F("WHERE id = ?", j.ID()).
-		Exec(s.db, ctx)
+func (s *scheduler) Retry(ctx context.Context, j bus.ScheduledJob, jobErr error, preserveOrder bool) error {
+	// If we don't need to preserve the order of related tasks, we simply update the job to queue it again
+	// in the future.
+	if !preserveOrder {
+		if _, err := s.db.ExecContext(ctx, `
+			UPDATE scheduled_jobs
+			SET
+				errcode = ?
+				,queued_at = DATETIME('now', '+15 seconds')
+				,retrieved = false
+			WHERE id = ?`, jobErr.Error(), j.ID(),
+		); err != nil {
+			return err
+		}
+	}
+
+	// If instead, we want all jobs sharing the same dedupe_name to be updated all at once,
+	// we should make sure to set all of them in the future by a specific amount to preserve
+	// the job order.
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE scheduled_jobs
+		SET
+			errcode = v.errcode
+			,queued_at = v.updated_date
+			,retrieved = false
+		FROM (
+			SELECT
+				id
+				,CASE WHEN id = ? THEN ? ELSE errcode END AS errcode
+				,DATETIME('now', '+' || CAST(14 + 1 * ROW_NUMBER() OVER (ORDER BY queued_at) AS TEXT) || ' seconds') AS updated_date
+			FROM scheduled_jobs
+			WHERE dedupe_name = (SELECT dedupe_name FROM scheduled_jobs WHERE id = ?)
+		) v
+		WHERE scheduled_jobs.id = v.id`, j.ID(), jobErr.Error(), j.ID())
+
+	return err
 }
 
 func (s *scheduler) Done(ctx context.Context, j bus.ScheduledJob) error {
-	return builder.
-		Command("DELETE FROM scheduled_jobs WHERE id = ?", j.ID()).
-		Exec(s.db, ctx)
+	_, err := s.db.ExecContext(ctx, "DELETE FROM scheduled_jobs WHERE id = ?", j.ID())
+	return err
 }
 
 func jobMapper(scanner storage.Scanner) (bus.ScheduledJob, error) {

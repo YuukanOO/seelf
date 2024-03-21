@@ -2,7 +2,6 @@ package docker
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider"
@@ -38,11 +36,10 @@ import (
 )
 
 var (
-	ErrLoadProjectFailed         = errors.New("compose_file_malformed")
-	ErrOpenComposeFileFailed     = errors.New("compose_file_open_failed")
-	ErrComposeFailed             = errors.New("compose_failed")
-	ErrTargetInitFailed          = errors.New("target_init_failed")
-	ErrTargetNotAvailableAnymore = errors.New("target_not_available_anymore")
+	ErrLoadProjectFailed     = errors.New("compose_file_malformed")
+	ErrOpenComposeFileFailed = errors.New("compose_file_open_failed")
+	ErrComposeFailed         = errors.New("compose_failed")
+	ErrTargetConnectFailed   = errors.New("target_connect_failed")
 
 	sshConfigPath = filepath.Join(must.Panic(os.UserHomeDir()), ".ssh", "config")
 )
@@ -65,16 +62,11 @@ type (
 	DockerOptions func(*docker)
 
 	docker struct {
-		cli                command.Cli // Docker cli to use, if nil, a new one will be created per deployment task
-		compose            api.Service // Docker compose service to use, if nil, a new one will be created per deployment task
-		options            Options
-		logger             log.Logger
-		sshConfig          ssh.Configurator
-		targetsInitialized map[domain.TargetID]bool // Maps of target already initialized
-		staleTargets       map[domain.TargetID]bool // Maps of target to consider as stale (ie. they will need a new setup before being used again)
-		deletedTargets     map[domain.TargetID]bool // Maps of target to consider as deleted (not available anymore)
-		muSetup            sync.Mutex               // Mutex to protect the targetsInitialized map
-		muStaleAndDeleted  sync.Mutex               // Mutex to protect the staleTargets and deletedTargets map
+		cli       command.Cli // Docker cli to use, if nil, a new one will be created per deployment task
+		compose   api.Service // Docker compose service to use, if nil, a new one will be created per deployment task
+		options   Options
+		logger    log.Logger
+		sshConfig ssh.Configurator
 	}
 )
 
@@ -84,12 +76,9 @@ type (
 // Multiple goroutine can use the same provider at the same time.
 func New(options Options, logger log.Logger, configuration ...DockerOptions) provider.Provider {
 	d := &docker{
-		options:            options,
-		logger:             logger,
-		sshConfig:          ssh.NewFileConfigurator(sshConfigPath),
-		targetsInitialized: make(map[domain.TargetID]bool),
-		staleTargets:       make(map[domain.TargetID]bool),
-		deletedTargets:     make(map[domain.TargetID]bool),
+		options:   options,
+		logger:    logger,
+		sshConfig: ssh.NewFileConfigurator(sshConfigPath),
 	}
 
 	for _, opt := range configuration {
@@ -172,12 +161,141 @@ func (d *docker) Prepare(ctx context.Context, payload any, existing ...domain.Pr
 	return data, nil
 }
 
-func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment, target domain.Target) (domain.Services, error) {
-	logger := deploymentCtx.Logger()
-	cli, compose, err := d.setup(ctx, logger, target)
+func (d *docker) Configure(ctx context.Context, target domain.Target) (err error) {
+	config, ok := target.Provider().(Data)
+
+	if !ok {
+		return domain.ErrInvalidProviderPayload
+	}
+
+	id := target.ID()
+
+	// If the target is a remote one, configure the appropriate ssh configuration to make
+	// sure it's reachable.
+	if host, isRemote := config.Host.TryGet(); isRemote {
+		var key monad.Maybe[ssh.ConnectionKey]
+
+		if privKey, hasKey := config.PrivateKey.TryGet(); hasKey {
+			key.Set(ssh.ConnectionKey{
+				Name: string(id),
+				Key:  privKey,
+			})
+		}
+
+		if err = d.sshConfig.Upsert(ssh.Connection{
+			Identifier: string(id),
+			Host:       host,
+			User:       config.User,
+			Port:       config.Port,
+			PrivateKey: key,
+		}); err != nil {
+			return err
+		}
+
+		// At this point, when returning from this function, if an error has occured,
+		// ensure the ssh configuration will be removed to.
+		defer func() {
+			if err == nil {
+				return
+			}
+
+			if removeErr := d.sshConfig.Remove(host, string(id)); removeErr != nil {
+				err = removeErr
+				return
+			}
+		}()
+	}
+
+	cli, compose, err := d.tryConnect(ctx, nil, config.Host)
 
 	if err != nil {
-		return nil, err
+		return
+	}
+
+	defer cli.Client().Close()
+
+	// Append seelf specific labels to be able to clean up resources if the target is deleted
+	labels := types.Labels{AppLabel: balancerServiceName}
+
+	project := &types.Project{
+		Name: balancerProjectName,
+		Services: []types.ServiceConfig{
+			{
+				Name:    balancerServiceName,
+				Labels:  labels,
+				Image:   "traefik:v2.6",
+				Restart: types.RestartPolicyUnlessStopped,
+				Command: []string{
+					"--providers.docker",
+					fmt.Sprintf("--providers.docker.network=%s", publicNetworkName),
+					"--providers.docker.exposedbydefault=false",
+				},
+				Ports: []types.ServicePortConfig{
+					{Target: 80, Published: "80"},
+				},
+				Volumes: []types.ServiceVolumeConfig{
+					{Type: types.VolumeTypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
+				},
+				CustomLabels: getProjectCustomLabels(balancerProjectName, balancerServiceName, ""),
+			},
+		},
+		Networks: types.Networks{
+			"default": types.NetworkConfig{
+				Name:   publicNetworkName,
+				Labels: labels,
+			},
+		},
+	}
+
+	if target.Url().UseSSL() {
+		project.Services[0].Command = append(project.Services[0].Command,
+			"--entrypoints.web.address=:80",
+			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
+			"--entrypoints.web.http.redirections.entryPoint.scheme=https",
+			"--entrypoints.websecure.address=:443",
+			fmt.Sprintf("--certificatesresolvers.%s.acme.tlschallenge=true", certResolverName),
+			fmt.Sprintf("--certificatesresolvers.%s.acme.storage=/letsencrypt/acme.json", certResolverName),
+		)
+		project.Services[0].Ports = append(project.Services[0].Ports, types.ServicePortConfig{
+			Target: 443, Published: "443",
+		})
+		project.Services[0].Volumes = append(project.Services[0].Volumes, types.ServiceVolumeConfig{
+			Type:   types.VolumeTypeVolume,
+			Source: "letsencrypt",
+			Target: "/letsencrypt",
+		})
+
+		project.Volumes = types.Volumes{
+			"letsencrypt": types.VolumeConfig{
+				Labels: labels,
+			},
+		}
+	}
+
+	if err = loader.Normalize(project); err != nil {
+		return
+	}
+
+	err = compose.Up(ctx, project, api.UpOptions{
+		Create: api.CreateOptions{
+			RemoveOrphans: true,
+			QuietPull:     true,
+		},
+		Start: api.StartOptions{
+			Wait: true,
+		},
+	})
+
+	return
+}
+
+func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment, target domain.Target) (domain.Services, error) {
+	logger := deploymentCtx.Logger()
+	cli, compose, err := d.connect(ctx, logger, target)
+
+	if err != nil {
+		logger.Error(err)
+		return nil, ErrTargetConnectFailed
 	}
 
 	client := cli.Client()
@@ -186,9 +304,9 @@ func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext
 
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
-	domain := target.Domain()
+	url := target.Url()
 
-	project, services, err := generateProject(depl, deploymentCtx.BuildDirectory(), logger, domain)
+	project, services, err := generateProject(depl, deploymentCtx.BuildDirectory(), logger, url)
 
 	if err != nil {
 		return nil, err
@@ -209,7 +327,7 @@ func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext
 		return nil, ErrComposeFailed
 	}
 
-	if domain.UseSSL() {
+	if url.UseSSL() {
 		logger.Infof("you may have to wait for certificates to be generated before your app is available")
 	}
 
@@ -234,34 +352,28 @@ func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext
 	return services, nil
 }
 
-func (d *docker) Stale(ctx context.Context, id domain.TargetID) error {
-	d.muStaleAndDeleted.Lock()
-	defer d.muStaleAndDeleted.Unlock()
+func (d *docker) CleanupTarget(ctx context.Context, target domain.Target, strategy domain.TargetCleanupStrategy) (err error) {
+	cli, _, err := d.connect(ctx, nil, target)
 
-	// Already in deleted targets, no need to mark it as stale
-	if d.deletedTargets[id] {
-		return nil
-	}
+	defer func() {
+		if err != nil {
+			if strategy != domain.TargetCleanupStrategyForce {
+				return
+			}
 
-	d.staleTargets[id] = true
+			d.logger.Errorw(fmt.Sprintf(`Could not connect to the target but the cleanup was forced. The configuration
+associated with this target will be removed.
 
-	return nil
-}
+If you wish to remove docker resources allocated by seelf yourself, you can use: docker <resource> --filters label=%s`, AppLabel),
+				"target", target.ID(),
+				"config", target.Provider().String())
+		}
 
-func (d *docker) CleanupTarget(ctx context.Context, target domain.Target) error {
-	cli, _, err := d.setup(ctx, nil, target)
+		err = d.removeTargetConfiguration(target)
+	}()
 
 	if err != nil {
-		// FIXME: Handle this case gracefully. One possibility is to return the err only if at least one
-		// deployment has occured on the target. If an error is returned, the scheduled job will never succeed,
-		// and so for this to be fixed, we need to expose scheduled jobs on the UI and the ability
-		// to manually remove them, not the priority right now.
-		d.logger.Errorw("failed to connect to target for cleanup, you may have to remove seelf resources yourself for now (you can use docker <resource> --filters label=app.seelf.application)",
-			"target", target.ID(),
-			"config", target.Provider().String(),
-			"error", err)
-
-		return d.removeTargetConfiguration(target.ID(), target.Provider().(Data))
+		return
 	}
 
 	client := cli.Client()
@@ -272,14 +384,14 @@ func (d *docker) CleanupTarget(ctx context.Context, target domain.Target) error 
 	if err = d.removeResources(ctx, client, filters.NewArgs(
 		filters.Arg("label", AppLabel),
 	)); err != nil {
-		return err
+		return
 	}
 
-	return d.removeTargetConfiguration(target.ID(), target.Provider().(Data))
+	return
 }
 
 func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.Environment) error {
-	cli, _, err := d.setup(ctx, nil, target)
+	cli, _, err := d.connect(ctx, nil, target)
 
 	if err != nil {
 		return err
@@ -295,110 +407,38 @@ func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Ta
 	))
 }
 
-// Initialize a new docker client and compose service. You MUST close the command.Cli
-// once done if no error is returned. The DeploymentLogger is optional.
-//
-// If that's the first time the target is used, it will make sure it is correctly
-// initialized to actually expose services.
-//
-// This method is a bit hard to understand but its goal is to prevent multiple targets
-// to be initialized at the same time which may cause issues.
-//
-// It handles rare cases where a deleted target could be requested and remove stale ones so
-// that it could be correctly reintialized the next time its seen.
-func (d *docker) setup(ctx context.Context, logger domain.DeploymentLogger, target domain.Target) (cli command.Cli, compose api.Service, err error) {
-	id := target.ID()
-	config, ok := target.Provider().(Data)
+func (d *docker) removeTargetConfiguration(target domain.Target) error {
+	data, ok := target.Provider().(Data)
 
 	if !ok {
-		return nil, nil, domain.ErrInvalidProviderPayload
+		return domain.ErrInvalidProviderPayload
 	}
 
-	if logger != nil {
-		logger.Stepf("checking if the target has already been initialized")
-	}
-
-	// Prevent multiple target initialization at the same time
-	d.muSetup.Lock()
-	defer d.muSetup.Unlock()
-
-	if err := d.checkStaleAndDeletedTarget(d.targetsInitialized, id); err != nil {
-		return nil, nil, err
-	}
-
-	var ping dockertypes.Ping
-
-	// Translate the  error returned to a more generic one but logs the internal to make
-	// sure the user knows what's going on.
-	defer func() {
-		if err == nil {
-			if logger != nil {
-				logger.Stepf("successfully connected to docker version %s", ping.APIVersion)
-			}
-			return
+	if host, isRemote := data.Host.TryGet(); isRemote {
+		if err := d.sshConfig.Remove(host, string(target.ID())); err != nil {
+			return err
 		}
-
-		if logger != nil {
-			logger.Error(err)
-		} else {
-			d.logger.Error(err)
-		}
-
-		err = ErrTargetInitFailed
-
-		// If the client has been opened, close it
-		if cli != nil {
-			cli.Client().Close()
-		}
-	}()
-
-	// Target already initialized, just try to connect to it
-	if d.targetsInitialized[id] {
-		if logger != nil {
-			logger.Stepf("target already initialized during seelf lifetime, skipping setup")
-		}
-
-		cli, compose, ping, err = d.connect(ctx, logger, config.Host)
-
-		return
 	}
 
-	if logger != nil {
-		logger.Stepf("target is new or has changed, initializing...")
-	}
-
-	if cli, compose, ping, err = d.configureTarget(ctx, logger, id, target.Domain().UseSSL(), config); err != nil {
-		return
-	}
-
-	d.targetsInitialized[id] = true
-
-	return
+	return nil
 }
 
-// Connect to the docker daemon and return a new docker cli and compose service.
-func (d *docker) connect(
-	ctx context.Context,
-	out io.Writer,
-	host monad.Maybe[ssh.Host],
-) (command.Cli, api.Service, dockertypes.Ping, error) {
-	var ping dockertypes.Ping
-
+func (d *docker) tryConnect(ctx context.Context, logger domain.DeploymentLogger, host monad.Maybe[ssh.Host]) (command.Cli, api.Service, error) {
 	// For tests, bypass the initialization and use the provided ones
 	if d.compose != nil && d.cli != nil {
-		return d.cli, d.compose, ping, nil
+		return d.cli, d.compose, nil
 	}
 
 	stream := io.Discard
 
-	if out != nil {
-		stream = out
+	if logger != nil {
+		stream = logger
 	}
 
 	dockerCli, err := command.NewDockerCli(command.WithCombinedStreams(stream))
 
 	if err != nil {
-		return nil, nil, ping, err
+		return nil, nil, err
 	}
 
 	opts := flags.NewClientOptions()
@@ -408,30 +448,38 @@ func (d *docker) connect(
 	}
 
 	if err = dockerCli.Initialize(opts); err != nil {
-		return nil, nil, ping, err
+		return nil, nil, err
 	}
 
-	if ping, err = dockerCli.Client().Ping(ctx); err != nil {
-		return nil, nil, ping, err
+	// Make sure the client is closed if an error occurs
+	defer func(cli command.Cli) {
+		if err != nil && cli != nil {
+			cli.Client().Close()
+		}
+	}(dockerCli)
+
+	ping, err := dockerCli.Client().Ping(ctx)
+
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return dockerCli, compose.NewComposeService(dockerCli), ping, nil
+	if logger != nil {
+		logger.Stepf("successfully connected to docker version %s", ping.APIVersion)
+	}
+
+	return dockerCli, compose.NewComposeService(dockerCli), nil
 }
 
-// Mark the given target as deleted and remove the ssh configuration associated if needed.
-func (d *docker) removeTargetConfiguration(id domain.TargetID, config Data) error {
-	d.muStaleAndDeleted.Lock()
-	defer d.muStaleAndDeleted.Unlock()
+// Connect to the docker daemon and return a new docker cli and compose service.
+func (d *docker) connect(ctx context.Context, logger domain.DeploymentLogger, target domain.Target) (command.Cli, api.Service, error) {
+	data, ok := target.Provider().(Data)
 
-	if host, isRemote := config.Host.TryGet(); isRemote {
-		if err := d.sshConfig.Remove(host, string(id)); err != nil {
-			return err
-		}
+	if !ok {
+		return nil, nil, domain.ErrInvalidProviderPayload
 	}
 
-	d.deletedTargets[id] = true
-
-	return nil
+	return d.tryConnect(ctx, logger, data.Host)
 }
 
 // Remove all resources matching the given filters
@@ -516,148 +564,8 @@ func (d *docker) removeResources(ctx context.Context, client client.APIClient, f
 	return nil
 }
 
-// Check stale and deleted targets and remove them from the given map.
-// If the given id appears to have been deleted, it will return an error.
-func (d *docker) checkStaleAndDeletedTarget(targets map[domain.TargetID]bool, id domain.TargetID) error {
-	d.muStaleAndDeleted.Lock()
-	defer d.muStaleAndDeleted.Unlock()
-
-	for deletedId := range d.deletedTargets {
-		if deletedId == id {
-			return ErrTargetNotAvailableAnymore
-		}
-
-		delete(d.targetsInitialized, deletedId)
-	}
-
-	for staleId := range d.staleTargets {
-		delete(targets, staleId)
-	}
-
-	clear(d.deletedTargets)
-	clear(d.staleTargets)
-
-	return nil
-}
-
-// This method makes sure the target is reachable (by writing appropriate ssh configuration
-// if needed) and deploy the proxy needed to expose services on it.
-func (d *docker) configureTarget(
-	ctx context.Context,
-	logger domain.DeploymentLogger,
-	id domain.TargetID,
-	useSSL bool,
-	config Data,
-) (cli command.Cli, compose api.Service, ping dockertypes.Ping, err error) {
-	// If the target is a remote one, configure the appropriate ssh configuration to make
-	// sure it's reachable.
-	if host, isRemote := config.Host.TryGet(); isRemote {
-		var key monad.Maybe[ssh.ConnectionKey]
-
-		if privKey, hasKey := config.PrivateKey.TryGet(); hasKey {
-			key.Set(ssh.ConnectionKey{
-				Name: string(id),
-				Key:  privKey,
-			})
-		}
-
-		if err = d.sshConfig.Upsert(ssh.Connection{
-			Identifier: string(id),
-			Host:       host,
-			User:       config.User,
-			Port:       config.Port,
-			PrivateKey: key,
-		}); err != nil {
-			return
-		}
-	}
-
-	if cli, compose, ping, err = d.connect(ctx, logger, config.Host); err != nil {
-		return
-	}
-
-	// Deploy the traefik proxy
-	if logger != nil {
-		logger.Stepf("deploying proxy service, it could take a while if it's the first time")
-	}
-
-	// Append seelf specific labels to be able to clean up resources if the target is deleted
-	labels := types.Labels{AppLabel: balancerServiceName}
-
-	project := &types.Project{
-		Name: balancerProjectName,
-		Services: []types.ServiceConfig{
-			{
-				Name:    balancerServiceName,
-				Labels:  labels,
-				Image:   "traefik:v2.6",
-				Restart: types.RestartPolicyUnlessStopped,
-				Command: []string{
-					"--providers.docker",
-					fmt.Sprintf("--providers.docker.network=%s", publicNetworkName),
-					"--providers.docker.exposedbydefault=false",
-				},
-				Ports: []types.ServicePortConfig{
-					{Target: 80, Published: "80"},
-				},
-				Volumes: []types.ServiceVolumeConfig{
-					{Type: types.VolumeTypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
-				},
-				CustomLabels: getProjectCustomLabels(balancerProjectName, balancerServiceName, ""),
-			},
-		},
-		Networks: types.Networks{
-			"default": types.NetworkConfig{
-				Name:   publicNetworkName,
-				Labels: labels,
-			},
-		},
-	}
-
-	if useSSL {
-		project.Services[0].Command = append(project.Services[0].Command,
-			"--entrypoints.web.address=:80",
-			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
-			"--entrypoints.web.http.redirections.entryPoint.scheme=https",
-			"--entrypoints.websecure.address=:443",
-			fmt.Sprintf("--certificatesresolvers.%s.acme.tlschallenge=true", certResolverName),
-			fmt.Sprintf("--certificatesresolvers.%s.acme.storage=/letsencrypt/acme.json", certResolverName),
-		)
-		project.Services[0].Ports = append(project.Services[0].Ports, types.ServicePortConfig{
-			Target: 443, Published: "443",
-		})
-		project.Services[0].Volumes = append(project.Services[0].Volumes, types.ServiceVolumeConfig{
-			Type:   types.VolumeTypeVolume,
-			Source: "letsencrypt",
-			Target: "/letsencrypt",
-		})
-
-		project.Volumes = types.Volumes{
-			"letsencrypt": types.VolumeConfig{
-				Labels: labels,
-			},
-		}
-	}
-
-	if err = loader.Normalize(project); err != nil {
-		return
-	}
-
-	err = compose.Up(ctx, project, api.UpOptions{
-		Create: api.CreateOptions{
-			RemoveOrphans: true,
-			QuietPull:     true,
-		},
-		Start: api.StartOptions{
-			Wait: true,
-		},
-	})
-
-	return
-}
-
 // add some labels to a given target.
-func appendLabels(labelsToAdd types.Labels, target types.Labels) types.Labels {
+func appendLabels(target types.Labels, labelsToAdd types.Labels) types.Labels {
 	if target == nil {
 		target = types.Labels{}
 	}
@@ -767,7 +675,7 @@ func getProjectCustomLabels(project, service, workingDir string, composeFiles ..
 //
 // The goal is really for the user to provide a docker-compose file which runs fine locally
 // and we should do our best to expose it accordingly without the user providing anything.
-func generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger, targetUrl domain.Url) (*types.Project, domain.Services, error) {
+func generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger, url domain.Url) (*types.Project, domain.Services, error) {
 	var (
 		services    domain.Services
 		config      = depl.Config()
@@ -828,7 +736,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 		if len(service.Ports) == 0 {
 			services, deployedService = services.Internal(config, service.Name, service.Image)
 		} else {
-			services, deployedService = services.Public(targetUrl, config, service.Name, service.Image)
+			services, deployedService = services.Public(url, config, service.Name, service.Image)
 		}
 
 		if service.Restart == "" {
@@ -839,7 +747,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 		if service.Build != nil {
 			service.Image = deployedService.Image() // Since the image name may have been generated, override it
 			service.PullPolicy = types.PullPolicyBuild
-			service.Build.Labels = appendLabels(seelfLabels, service.Build.Labels)
+			service.Build.Labels = appendLabels(service.Build.Labels, seelfLabels)
 		}
 
 		// Attach environment variables if any
@@ -857,7 +765,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 			logger.Infof("using %s environment variable(s) for service %s", strings.Join(envNames, ", "), deployedService.Name())
 		}
 
-		service.Labels = appendLabels(seelfLabels, service.Labels)
+		service.Labels = appendLabels(service.Labels, seelfLabels)
 
 		for _, volume := range service.Volumes {
 			if volume.Type == types.VolumeTypeBind {
@@ -903,12 +811,12 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 	// Add labels to network and volumes to make it easy to find them
 
 	for name, network := range project.Networks {
-		network.Labels = appendLabels(seelfLabels, network.Labels)
+		network.Labels = appendLabels(network.Labels, seelfLabels)
 		project.Networks[name] = network
 	}
 
 	for name, volume := range project.Volumes {
-		volume.Labels = appendLabels(seelfLabels, volume.Labels)
+		volume.Labels = appendLabels(volume.Labels, seelfLabels)
 		project.Volumes[name] = volume
 	}
 

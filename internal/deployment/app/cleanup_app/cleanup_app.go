@@ -39,7 +39,7 @@ func Handler(
 		if err != nil {
 			// If the application doesn't exist anymore, may be it has been processed by another job in rare case, so just returns
 			if errors.Is(err, apperr.ErrNotFound) {
-				return bus.Unit, nil
+				return bus.Unit, bus.Ignore(err)
 			}
 
 			return bus.Unit, err
@@ -56,28 +56,12 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		// Remove the latest successful deployments on both environments.
-		deployments, err := deploymentsReader.GetLatestSuccessfulDeployments(ctx, app.ID())
-
-		if err != nil {
+		if err := handleCleanup(targetsReader, provider, ctx, app.ID(), app.Production().Target(), domain.Production); err != nil {
 			return bus.Unit, err
 		}
 
-		for _, depl := range deployments {
-			target, err := targetsReader.GetByID(ctx, depl.Config().Target())
-
-			if err != nil {
-				// Target does not exist anymore, the app resources should have been cleaned up
-				if errors.Is(err, apperr.ErrNotFound) {
-					continue
-				}
-
-				return bus.Unit, err
-			}
-
-			if err = provider.Cleanup(ctx, app.ID(), target, depl.Config().Environment()); err != nil {
-				return bus.Unit, err
-			}
+		if err := handleCleanup(targetsReader, provider, ctx, app.ID(), app.Staging().Target(), domain.Staging); err != nil {
+			return bus.Unit, err
 		}
 
 		if err = artifactManager.Cleanup(ctx, app); err != nil {
@@ -86,4 +70,41 @@ func Handler(
 
 		return bus.Unit, writer.Write(ctx, &app)
 	}
+}
+
+func handleCleanup(
+	reader domain.TargetsReader,
+	provider domain.Provider,
+	ctx context.Context,
+	app domain.AppID,
+	id domain.TargetID,
+	env domain.Environment,
+) error {
+	target, err := reader.GetByID(ctx, id)
+
+	if err != nil {
+		// The target does not exist anymore, it should have been deleted and cleanup up,
+		// nothing to do anymore.
+		if errors.Is(err, apperr.ErrNotFound) {
+			return nil
+		}
+
+		return err
+	}
+
+	beenReadyAtLeastOnce, err := target.CheckAvailability()
+
+	// Target configuration has failed but the target has never been reachable so no need
+	// to cleanup anything or the target is being deleted, everything will be removed, no need to
+	// case about it
+	if (errors.Is(err, domain.ErrTargetConfigurationFailed) && !beenReadyAtLeastOnce) ||
+		errors.Is(err, domain.ErrTargetDeleteRequested) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return provider.Cleanup(ctx, app, target, env)
 }

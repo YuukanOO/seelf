@@ -31,7 +31,11 @@ func (c Data) Value() (driver.Value, error)            { return storage.ValueJSO
 func (c Data) Equals(other domain.ProviderConfig) bool { return c == other }
 
 func (c Data) String() string {
-	return fmt.Sprintf("%s@%s:%d", c.User.Get(defaultUser), c.Host.Get(""), c.Port.Get(defaultPort))
+	if host, isRemote := c.Host.TryGet(); isRemote {
+		return fmt.Sprintf("%s@%s:%d", c.User.Get(defaultUser), host, c.Port.Get(defaultPort))
+	}
+
+	return "local"
 }
 
 // Specific representation of a docker provider config to avoid leak of sensitive data.

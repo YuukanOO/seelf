@@ -1,17 +1,16 @@
 package startup
 
 import (
-	"context"
-	"slices"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	authinfra "github.com/YuukanOO/seelf/internal/auth/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
+	"github.com/YuukanOO/seelf/internal/deployment/app/configure_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
-	"github.com/YuukanOO/seelf/pkg/async"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/memory"
 	bussqlite "github.com/YuukanOO/seelf/pkg/bus/sqlite"
@@ -43,7 +42,7 @@ type (
 		logger      log.Logger
 		db          *sqlite.Database
 		usersReader domain.UsersReader
-		pool        async.Pool[bus.ScheduledJob]
+		scheduler   bus.RunnableScheduler
 	}
 )
 
@@ -71,7 +70,21 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		return nil, err
 	}
 
-	scheduler := bus.NewScheduler(adapter, s.logger, s.bus)
+	s.scheduler = bus.NewScheduler(adapter, s.logger, s.bus, s.options.RunnersPollInterval(),
+		bus.WorkerGroup{
+			Size:     s.options.RunnersDeploymentCount(),
+			Messages: []string{deploy.Command{}.Name_()},
+		},
+		bus.WorkerGroup{
+			Size: 2,
+			Messages: []string{
+				cleanup_app.Command{}.Name_(),
+				cleanup_app_target.Command{}.Name_(),
+				configure_target.Command{}.Name_(),
+				cleanup_target.Command{}.Name_(),
+			},
+		},
+	)
 
 	// Setup auth infrastructure
 	if s.usersReader, err = authinfra.Setup(s.options, s.logger, s.db, s.bus); err != nil {
@@ -84,37 +97,20 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		s.logger,
 		s.db,
 		s.bus,
-		scheduler,
+		s.scheduler,
 	); err != nil {
 		return nil, err
 	}
 
-	// Names of jobs to process in a specific group since they can take a long time
-	longRunningJobs := []string{
-		deploy.Command{}.Name_(),
-		cleanup_app.Command{}.Name_(),
-		cleanup_target.Command{}.Name_(),
-	}
+	s.scheduler.Start()
 
-	s.pool = async.NewPool(
-		s.logger,
-		async.Poll(s.options.RunnersPollInterval(), scheduler.GetNextPendingJobs),
-		async.GroupFunc(
-			s.options.RunnersDeploymentCount(),
-			scheduler.Process,
-			func(ctx context.Context, job bus.ScheduledJob) bool {
-				return slices.Contains(longRunningJobs, job.Message().Name_())
-			},
-		),
-	)
-
-	return s, s.pool.Start()
+	return s, nil
 }
 
 func (s *serverRoot) Cleanup() error {
 	s.logger.Debug("cleaning server services")
 
-	s.pool.Stop()
+	s.scheduler.Stop()
 
 	return s.db.Close()
 }

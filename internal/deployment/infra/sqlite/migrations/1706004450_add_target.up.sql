@@ -3,10 +3,14 @@
 CREATE TABLE targets (
     id TEXT NOT NULL,
     name TEXT NOT NULL,
-    domain TEXT NOT NULL,
+    url TEXT NOT NULL,
     provider_kind TEXT NOT NULL,
     provider_fingerprint TEXT NOT NULL,
     provider TEXT NOT NULL,
+    state_status INTEGER NOT NULL,
+    state_version DATETIME NOT NULL,
+    state_errcode TEXT NULL,
+    state_last_ready_version DATETIME NULL,
     delete_requested_at DATETIME NULL,
     delete_requested_by TEXT NULL,
     created_at DATETIME NOT NULL,
@@ -14,12 +18,24 @@ CREATE TABLE targets (
 
     CONSTRAINT pk_targets PRIMARY KEY(id),
     CONSTRAINT fk_targets_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT unique_targets_domain UNIQUE(domain), -- unique domain among all targets
+    CONSTRAINT unique_targets_domain UNIQUE(url), -- unique url among all targets
     CONSTRAINT unique_targets_provider_fingerprint UNIQUE(provider_fingerprint) -- unique provider fingerprint
 );
 
 -- Creates a default target if at least one app exists, else do nothing
-INSERT INTO targets (id, name, domain, provider_kind, provider_fingerprint, provider, created_at, created_by)
+INSERT INTO targets (
+    id
+    ,name
+    ,url
+    ,provider_kind
+    ,provider_fingerprint
+    ,provider
+    ,state_status
+    ,state_version
+    ,state_last_ready_version
+    ,created_at
+    ,created_by
+)
 SELECT 
     '2bRUdQnyRELMqyh9gFLQV1s0cqv'
     ,'local'
@@ -27,6 +43,9 @@ SELECT
     ,'docker'
     ,''
     ,'{}'
+    ,2
+    ,DATETIME()
+    ,DATETIME()
     ,DATETIME()
     ,(SELECT id FROM users LIMIT 1)
 FROM apps LIMIT 1;
@@ -104,6 +123,7 @@ ALTER TABLE deployments RENAME TO tmp_deployments;
 CREATE TABLE deployments (
     app_id TEXT NOT NULL,
     deployment_number INTEGER NOT NULL,
+    config_appid TEXT NOT NULL,
     config_appname TEXT NOT NULL,
     config_environment TEXT NOT NULL,
     config_target TEXT NOT NULL, -- No FK on config_target because we don't want to deal with a target deletion.
@@ -129,6 +149,7 @@ CREATE INDEX idx_deployments_state_status ON deployments(state_status);
 INSERT INTO deployments (
     app_id
     ,deployment_number
+    ,config_appid
     ,config_appname
     ,config_environment
     ,config_target
@@ -146,6 +167,7 @@ INSERT INTO deployments (
 SELECT
     app_id
 	,deployment_number
+    ,app_id
 	,config_appname
 	,config_environment
 	,'2bRUdQnyRELMqyh9gFLQV1s0cqv'

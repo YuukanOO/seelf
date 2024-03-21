@@ -22,12 +22,19 @@ type (
 	Target struct {
 		ID                string                       `json:"id"`
 		Name              string                       `json:"name"`
-		Domain            string                       `json:"domain"`
+		Url               string                       `json:"url"`
 		Provider          Provider                     `json:"provider"`
+		State             State                        `json:"state"`
 		DeleteRequestedAt monad.Maybe[time.Time]       `json:"delete_requested_at"`
 		DeleteRequestedBy monad.Maybe[app.UserSummary] `json:"delete_requested_by"`
 		CreatedAt         time.Time                    `json:"created_at"`
 		CreatedBy         app.UserSummary              `json:"created_by"`
+	}
+
+	State struct {
+		Status           uint8                  `json:"status"`
+		ErrCode          monad.Maybe[string]    `json:"error_code"`
+		LastReadyVersion monad.Maybe[time.Time] `json:"last_ready_version"`
 	}
 
 	Provider struct {

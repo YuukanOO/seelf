@@ -147,4 +147,52 @@ IdentitiesOnly yes
 		testutil.FileEquals(t, newKeyPath, "newprivkeycontent")
 		testutil.FileEquals(t, oldKeyPath, "")
 	})
+
+	t.Run("should do nothing if trying to delete an host and no config file exist", func(t *testing.T) {
+		configurator, _ := sut("")
+
+		testutil.IsNil(t, configurator.Remove("example.com", ""))
+	})
+
+	t.Run("should correctly remove an host", func(t *testing.T) {
+		configurator, path := sut(`Host example.com
+User root
+Host example.com #my-identifier
+User john
+`)
+
+		testutil.IsNil(t, configurator.Remove("example.com", ""))
+		testutil.FileEquals(t, path, `Host example.com #my-identifier
+User john
+`)
+	})
+
+	t.Run("should correctly remove an host with a specific identifier", func(t *testing.T) {
+		configurator, path := sut(`Host example.com
+User root
+Host example.com #my-identifier
+User john
+`)
+
+		testutil.IsNil(t, configurator.Remove("example.com", "my-identifier"))
+		testutil.FileEquals(t, path, `Host example.com
+User root
+`)
+	})
+
+	t.Run("should remove the private key attached to the host being removed", func(t *testing.T) {
+		configurator, path := sut("")
+		keyPath := filepath.Join(filepath.Dir(path), "privkeyfilename")
+		configurator.Upsert(ssh.Connection{
+			Host: "example.com",
+			PrivateKey: monad.Value(ssh.ConnectionKey{
+				Name: "privkeyfilename",
+				Key:  "privkeycontent",
+			}),
+		})
+
+		testutil.IsNil(t, configurator.Remove("example.com", ""))
+		testutil.FileEquals(t, path, "")
+		testutil.FileEquals(t, keyPath, "")
+	})
 }

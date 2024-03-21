@@ -1,4 +1,4 @@
-package cleanup_target
+package configure_target
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 )
 
-func OnTargetDeleteRequested(scheduler bus.Scheduler) bus.SignalHandler[domain.TargetDeleteRequested] {
-	return func(ctx context.Context, evt domain.TargetDeleteRequested) error {
+func OnTargetCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.TargetCreated] {
+	return func(ctx context.Context, evt domain.TargetCreated) error {
 		return scheduler.Queue(ctx, Command{
-			ID: string(evt.ID),
+			ID:      string(evt.ID),
+			Version: evt.State.Version(),
 		}, bus.WithDedupeName(app.TargetOperationDedupeName(evt.ID)))
 	}
 }

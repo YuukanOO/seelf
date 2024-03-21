@@ -7,7 +7,6 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/event"
-	"golang.org/x/exp/maps"
 )
 
 type (
@@ -23,7 +22,7 @@ type (
 	deploymentData struct {
 		id    domain.DeploymentID
 		value *domain.Deployment
-		state domain.State
+		state domain.DeploymentState
 	}
 )
 
@@ -45,6 +44,25 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 	return domain.Deployment{}, apperr.ErrNotFound
 }
 
+func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppID, env domain.Environment) (domain.Deployment, error) {
+	var last *deploymentData
+
+	for _, depl := range s.deployments {
+		if depl.id.AppID() == id && depl.value.Config().Environment() == env {
+			if last == nil || last.id.DeploymentNumber() < depl.id.DeploymentNumber() {
+				last = depl
+			}
+		}
+	}
+
+	if last == nil {
+		return domain.Deployment{}, apperr.ErrNotFound
+	}
+
+	return *last.value, nil
+
+}
+
 func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appid domain.AppID) (domain.DeploymentNumber, error) {
 	count := 0
 
@@ -55,24 +73,6 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appid do
 	}
 
 	return domain.DeploymentNumber(count + 1), nil
-}
-
-func (s *deploymentsStore) GetLatestSuccessfulDeployments(ctx context.Context, appid domain.AppID) ([]domain.Deployment, error) {
-	group := make(map[domain.Environment]domain.Deployment)
-
-	for _, depl := range s.deployments {
-		if depl.id.AppID() != appid || depl.state.Status() != domain.DeploymentStatusSucceeded {
-			continue
-		}
-
-		env := depl.value.Config().Environment()
-
-		if d, exists := group[env]; !exists || depl.id.DeploymentNumber() > d.ID().DeploymentNumber() {
-			group[env] = *depl.value
-		}
-	}
-
-	return maps.Values(group), nil
 }
 
 func (s *deploymentsStore) GetRunningDeploymentsOnTargetCount(ctx context.Context, id domain.TargetID) (domain.RunningDeploymentsOnTargetCount, error) {

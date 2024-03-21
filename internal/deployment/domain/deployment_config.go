@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/monad"
 )
@@ -10,6 +11,7 @@ import (
 // have everything needed to resolve service and image names and is the primarly used
 // structure during the deployment by a provider.
 type DeploymentConfig struct {
+	appid       AppID
 	appname     AppName
 	environment Environment
 	target      TargetID
@@ -32,6 +34,7 @@ func (a *App) ConfigSnapshotFor(env Environment) (DeploymentConfig, error) {
 		return snapshot, ErrInvalidEnvironmentName
 	}
 
+	snapshot.appid = a.id
 	snapshot.appname = a.name
 	snapshot.environment = env
 	snapshot.target = conf.Target()
@@ -40,6 +43,7 @@ func (a *App) ConfigSnapshotFor(env Environment) (DeploymentConfig, error) {
 	return snapshot, nil
 }
 
+func (c DeploymentConfig) AppID() AppID                   { return c.appid }
 func (c DeploymentConfig) AppName() AppName               { return c.appname }
 func (c DeploymentConfig) Environment() Environment       { return c.environment }
 func (c DeploymentConfig) Target() TargetID               { return c.target }
@@ -69,13 +73,24 @@ func (c DeploymentConfig) EnvironmentVariablesFor(service string) (m monad.Maybe
 func (c DeploymentConfig) SubDomain() string {
 	if c.environment.IsProduction() {
 		return string(c.appname)
+
 	}
 
-	return c.ProjectName()
+	return fmt.Sprintf("%s-%s", c.appname, c.environment)
 }
 
-// Retrieve the name of the project wich is the combination of the appname and the environment
+// Builds a unique image name for the given service.
+func (c DeploymentConfig) ImageName(service string) string {
+	return fmt.Sprintf("%s-%s/%s:%s", c.appname, strings.ToLower(string(c.appid)), service, c.environment)
+}
+
+// Builds a qualified name, truly unique, for the given service.
+func (c DeploymentConfig) QualifiedName(service string) string {
+	return fmt.Sprintf("%s-%s", c.ProjectName(), service)
+}
+
+// Retrieve the name of the project wich is the combination of the appname, environment and appid
 // targeted by this configuration.
 func (c DeploymentConfig) ProjectName() string {
-	return fmt.Sprintf("%s-%s", c.appname, c.environment)
+	return fmt.Sprintf("%s-%s-%s", c.appname, strings.ToLower(string(c.appid)), c.environment)
 }

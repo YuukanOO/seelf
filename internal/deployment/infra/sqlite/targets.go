@@ -24,12 +24,12 @@ func NewTargetsStore(db *sqlite.Database) TargetsStore {
 	return &targetsStore{db}
 }
 
-func (s *targetsStore) GetDomainAvailability(ctx context.Context, url domain.Url, excluded ...domain.TargetID) (domain.TargetDomainAvailability, error) {
+func (s *targetsStore) GetUrlAvailability(ctx context.Context, url domain.Url, excluded ...domain.TargetID) (domain.TargetUrlAvailability, error) {
 	count, err := builder.
 		Query[uint](`
-		SELECT COUNT(domain)
+		SELECT COUNT(url)
 		FROM targets
-		WHERE domain = ?`, url).
+		WHERE url = ?`, url).
 		S(builder.Array("AND id NOT IN", excluded)).
 		Extract(s.db, ctx)
 
@@ -62,9 +62,13 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 		SELECT
 			id
 			,name
-			,domain
+			,url
 			,provider_kind
 			,provider
+			,state_status
+			,state_version
+			,state_errcode
+			,state_last_ready_version
 			,delete_requested_at
 			,delete_requested_by
 			,created_at
@@ -80,15 +84,29 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 		case domain.TargetCreated:
 			return builder.
 				Insert("targets", builder.Values{
-					"id":                   evt.ID,
-					"name":                 evt.Name,
-					"domain":               evt.Domain,
-					"provider_kind":        evt.Provider.Kind(),
-					"provider_fingerprint": evt.Provider.Fingerprint(),
-					"provider":             evt.Provider,
-					"created_at":           evt.Created.At(),
-					"created_by":           evt.Created.By(),
+					"id":                       evt.ID,
+					"name":                     evt.Name,
+					"url":                      evt.Url,
+					"provider_kind":            evt.Provider.Kind(),
+					"provider_fingerprint":     evt.Provider.Fingerprint(),
+					"provider":                 evt.Provider,
+					"state_status":             evt.State.Status(),
+					"state_version":            evt.State.Version(),
+					"state_errcode":            evt.State.ErrCode(),
+					"state_last_ready_version": evt.State.LastReadyVersion(),
+					"created_at":               evt.Created.At(),
+					"created_by":               evt.Created.By(),
 				}).
+				Exec(s.db, ctx)
+		case domain.TargetStateChanged:
+			return builder.
+				Update("targets", builder.Values{
+					"state_status":             evt.State.Status(),
+					"state_version":            evt.State.Version(),
+					"state_errcode":            evt.State.ErrCode(),
+					"state_last_ready_version": evt.State.LastReadyVersion(),
+				}).
+				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
 		case domain.TargetRenamed:
 			return builder.
@@ -97,10 +115,10 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
-		case domain.TargetDomainChanged:
+		case domain.TargetUrlChanged:
 			return builder.
 				Update("targets", builder.Values{
-					"domain": evt.Domain,
+					"domain": evt.Url,
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)

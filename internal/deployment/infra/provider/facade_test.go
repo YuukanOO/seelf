@@ -32,16 +32,18 @@ func Test_Facade(t *testing.T) {
 		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
-	t.Run("should do nothing if no provider mark the target as stale", func(t *testing.T) {
+	t.Run("should return an error if no provider can configure the target", func(t *testing.T) {
 		sut := provider.NewFacade()
 
-		testutil.IsNil(t, sut.Stale(context.Background(), "target"))
+		err := sut.Configure(context.Background(), target)
+
+		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
 	t.Run("should return an error if no provider can cleanup the target", func(t *testing.T) {
 		sut := provider.NewFacade()
 
-		err := sut.CleanupTarget(context.Background(), target)
+		err := sut.CleanupTarget(context.Background(), target, domain.TargetCleanupStrategyDefault)
 
 		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})

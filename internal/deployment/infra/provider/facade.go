@@ -43,24 +43,24 @@ func (f *facade) Run(ctx context.Context, info domain.DeploymentContext, depl do
 	return provider.Run(ctx, info, depl, target)
 }
 
-func (f *facade) Stale(ctx context.Context, id domain.TargetID) error {
-	for _, p := range f.providers {
-		if err := p.Stale(ctx, id); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (f *facade) CleanupTarget(ctx context.Context, target domain.Target) error {
+func (f *facade) Configure(ctx context.Context, target domain.Target) error {
 	provider, err := f.providerForTarget(target)
 
 	if err != nil {
 		return err
 	}
 
-	return provider.CleanupTarget(ctx, target)
+	return provider.Configure(ctx, target)
+}
+
+func (f *facade) CleanupTarget(ctx context.Context, target domain.Target, strategy domain.TargetCleanupStrategy) error {
+	provider, err := f.providerForTarget(target)
+
+	if err != nil {
+		return err
+	}
+
+	return provider.CleanupTarget(ctx, target, strategy)
 }
 
 func (f *facade) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.Environment) error {

@@ -2,9 +2,9 @@ package docker_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	dockertypes "github.com/docker/docker/api/types"
@@ -23,6 +23,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 )
 
@@ -33,16 +34,28 @@ type options interface {
 
 func Test_Docker(t *testing.T) {
 	logger := must.Panic(log.NewLogger())
+	myApp := must.Panic(domain.NewApp("my-app",
+		domain.NewEnvironmentConfig("1"),
+		domain.NewEnvironmentConfig("1"),
+		domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable,
+		"uid"))
+	myAppDeployment := must.Panic(myApp.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
+
+	// Configure specific targets for tests
 	targetWithSSL := must.Panic(domain.NewTarget("my-target",
 		must.Panic(domain.UrlFrom("https://docker.localhost")), true, docker.Data{}, true, "uid"))
+	evt := testutil.EventIs[domain.TargetCreated](t, &targetWithSSL, 0)
+	targetWithSSL.Configured(evt.State.Version(), nil)
+
 	targetWithoutSSL := must.Panic(domain.NewTarget("my-target",
 		must.Panic(domain.UrlFrom("http://docker.localhost")), true, docker.Data{}, true, "uid"))
-
-	composeMock := &composeMockService{}
-	dockerMock := newDockerMockService()
+	evt = testutil.EventIs[domain.TargetCreated](t, &targetWithoutSSL, 0)
+	targetWithoutSSL.Configured(evt.State.Version(), nil)
 
 	sut := func(opts options) (domain.Provider, domain.ArtifactManager, *composeMockService, *dockerCliMockService) {
 		artifactManager := artifact.NewLocal(opts, logger)
+		composeMock := &composeMockService{}
+		dockerMock := newDockerMockService()
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())
@@ -217,101 +230,110 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		}
 	})
 
-	// t.Run("should setup the balancer correctly without SSL", func(t *testing.T) {
-	// 	opts := config.Default(config.WithTestDefaults())
-	// 	provider, _, composeMock, _ := sut(opts)
-
-	// 	err := provider.Setup()
-
-	// 	testutil.IsNil(t, err)
-	// 	project := composeMock.project
-	// 	testutil.IsNotNil(t, project)
-	// 	testutil.Equals(t, "seelf-internal", project.Name)
-	// 	testutil.HasLength(t, project.Services, 1)
-	// 	testutil.Equals(t, "balancer", project.Services[0].Name)
-	// 	testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
-	// 	testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
-	// 	testutil.DeepEquals(t, []string{
-	// 		"--providers.docker",
-	// 		"--providers.docker.network=seelf-public",
-	// 		"--providers.docker.exposedbydefault=false",
-	// 	}, project.Services[0].Command)
-	// 	testutil.HasLength(t, project.Services[0].Ports, 1)
-	// 	testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
-	// 	testutil.Equals(t, 80, project.Services[0].Ports[0].Target)
-	// 	testutil.HasLength(t, project.Services[0].Volumes, 1)
-	// 	testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Source)
-	// 	testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
-
-	// 	testutil.Equals(t, 1, len(project.Networks))
-	// 	testutil.Equals(t, "seelf-public", project.Networks["default"].Name)
-	// })
-
-	// t.Run("should setup the balancer correctly with SSL", func(t *testing.T) {
-	// 	opts := config.Default(
-	// 		config.WithTestDefaults(),
-	// 		config.WithBalancer("https://docker.localhost", "someone@example.com"),
-	// 	)
-	// 	provider, _, composeMock, _ := sut(opts)
-
-	// 	err := provider.Setup()
-	// 	testutil.IsNil(t, err)
-	// 	project := composeMock.project
-	// 	testutil.IsNotNil(t, project)
-	// 	testutil.Equals(t, "seelf-internal", project.Name)
-	// 	testutil.HasLength(t, project.Services, 1)
-	// 	testutil.Equals(t, "balancer", project.Services[0].Name)
-	// 	testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
-	// 	testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
-	// 	testutil.DeepEquals(t, []string{
-	// 		"--providers.docker",
-	// 		"--providers.docker.network=seelf-public",
-	// 		"--providers.docker.exposedbydefault=false",
-	// 		"--entrypoints.web.address=:80",
-	// 		"--entrypoints.web.http.redirections.entryPoint.to=websecure",
-	// 		"--entrypoints.web.http.redirections.entryPoint.scheme=https",
-	// 		"--entrypoints.websecure.address=:443",
-	// 		"--certificatesresolvers.seelfresolver.acme.tlschallenge=true",
-	// 		"--certificatesresolvers.seelfresolver.acme.email=someone@example.com",
-	// 		"--certificatesresolvers.seelfresolver.acme.storage=/letsencrypt/acme.json",
-	// 	}, project.Services[0].Command)
-	// 	testutil.HasLength(t, project.Services[0].Ports, 2)
-	// 	testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
-	// 	testutil.Equals(t, 80, project.Services[0].Ports[0].Target)
-	// 	testutil.Equals(t, "443", project.Services[0].Ports[1].Published)
-	// 	testutil.Equals(t, 443, project.Services[0].Ports[1].Target)
-	// 	testutil.HasLength(t, project.Services[0].Volumes, 2)
-	// 	testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Source)
-	// 	testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
-	// 	testutil.Equals(t, "letsencrypt", project.Services[0].Volumes[1].Source)
-	// 	testutil.Equals(t, "/letsencrypt", project.Services[0].Volumes[1].Target)
-
-	// 	testutil.Equals(t, 1, len(project.Networks))
-	// 	testutil.Equals(t, "seelf-public", project.Networks["default"].Name)
-
-	// 	testutil.Equals(t, 1, len(project.Volumes))
-	// 	testutil.Equals(t, "seelf-internal_letsencrypt", project.Volumes["letsencrypt"].Name)
-	// })
-
-	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
+	t.Run("should be able to configure a target without ssl", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
-		app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
-		depl := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
-		provider, artifactManager, _, _ := sut(opts)
+		provider, _, compose, _ := sut(opts)
 
-		ctx := context.Background()
-		deplCtx, err := artifactManager.PrepareBuild(ctx, depl)
+		err := provider.Configure(context.Background(), targetWithoutSSL)
 
 		testutil.IsNil(t, err)
 
-		defer deplCtx.Logger().Close()
+		project := compose.up.project
+		testutil.IsNotNil(t, project)
+		testutil.Equals(t, "seelf-internal", project.Name)
+		testutil.HasLength(t, project.Services, 1)
+		testutil.Equals(t, "balancer", project.Services[0].Name)
+		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
+		testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
+		testutil.DeepEquals(t, []string{
+			"--providers.docker",
+			"--providers.docker.network=seelf-public",
+			"--providers.docker.exposedbydefault=false",
+		}, project.Services[0].Command)
+		testutil.HasLength(t, project.Services[0].Ports, 1)
+		testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
+		testutil.Equals(t, 80, project.Services[0].Ports[0].Target)
+		testutil.HasLength(t, project.Services[0].Volumes, 1)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Source)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
 
-		_, err = provider.Run(ctx, deplCtx, depl, targetWithoutSSL)
-
-		testutil.IsTrue(t, errors.Is(err, docker.ErrOpenComposeFileFailed))
+		testutil.Equals(t, 1, len(project.Networks))
+		testutil.Equals(t, "seelf-public", project.Networks["default"].Name)
 	})
 
-	testServices := func(t *testing.T, opts options, target domain.Target) {
+	t.Run("should be able to configure a target with ssl", func(t *testing.T) {
+		opts := config.Default(config.WithTestDefaults())
+		provider, _, compose, _ := sut(opts)
+
+		err := provider.Configure(context.Background(), targetWithSSL)
+
+		testutil.IsNil(t, err)
+
+		project := compose.up.project
+		testutil.IsNotNil(t, project)
+		testutil.Equals(t, "seelf-internal", project.Name)
+		testutil.HasLength(t, project.Services, 1)
+		testutil.Equals(t, "balancer", project.Services[0].Name)
+		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
+		testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
+		testutil.DeepEquals(t, []string{
+			"--providers.docker",
+			"--providers.docker.network=seelf-public",
+			"--providers.docker.exposedbydefault=false",
+			"--entrypoints.web.address=:80",
+			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
+			"--entrypoints.web.http.redirections.entryPoint.scheme=https",
+			"--entrypoints.websecure.address=:443",
+			"--certificatesresolvers.seelfresolver.acme.tlschallenge=true",
+			"--certificatesresolvers.seelfresolver.acme.storage=/letsencrypt/acme.json",
+		}, project.Services[0].Command)
+		testutil.HasLength(t, project.Services[0].Ports, 2)
+		testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
+		testutil.Equals(t, 80, project.Services[0].Ports[0].Target)
+		testutil.Equals(t, "443", project.Services[0].Ports[1].Published)
+		testutil.Equals(t, 443, project.Services[0].Ports[1].Target)
+		testutil.HasLength(t, project.Services[0].Volumes, 2)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Source)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
+		testutil.Equals(t, "letsencrypt", project.Services[0].Volumes[1].Source)
+		testutil.Equals(t, "/letsencrypt", project.Services[0].Volumes[1].Target)
+
+		testutil.Equals(t, 1, len(project.Networks))
+		testutil.Equals(t, "seelf-public", project.Networks["default"].Name)
+
+		testutil.Equals(t, 1, len(project.Volumes))
+		testutil.Equals(t, "seelf-internal_letsencrypt", project.Volumes["letsencrypt"].Name)
+	})
+
+	t.Run("should be able to cleanup a target", func(t *testing.T) {
+		provider, _, _, _ := sut(config.Default(config.WithTestDefaults()))
+
+		err := provider.CleanupTarget(context.Background(), targetWithSSL, domain.TargetCleanupStrategyDefault)
+
+		testutil.IsNil(t, err)
+	})
+
+	t.Run("should be able to cleanup an app environment on a target", func(t *testing.T) {
+		provider, _, _, _ := sut(config.Default(config.WithTestDefaults()))
+
+		err := provider.Cleanup(context.Background(), myApp.ID(), targetWithSSL, myAppDeployment.Config().Environment())
+
+		testutil.IsNil(t, err)
+	})
+
+	t.Run("should err if no compose file was found for a deployment", func(t *testing.T) {
+		provider, artifactManager, _, _ := sut(config.Default(config.WithTestDefaults()))
+		ctx := context.Background()
+		deplCtx := must.Panic(artifactManager.PrepareBuild(ctx, myAppDeployment))
+		defer deplCtx.Logger().Close()
+
+		_, err := provider.Run(ctx, deplCtx, myAppDeployment, targetWithoutSSL)
+
+		testutil.ErrorIs(t, docker.ErrOpenComposeFileFailed, err)
+	})
+
+	// Main function which asserts for a successful deployment
+	assertDeployedProject := func(t *testing.T, opts options, target domain.Target) {
 		provider, artifactManager, composeMock, cliMock := sut(opts)
 
 		dsn := "postgres://prodapp:passprod@db/app?sslmode=disable"
@@ -336,6 +358,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 			domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable,
 			"uid",
 		))
+		appidLower := strings.ToLower(string(app.ID()))
 		ctx := context.Background()
 		src := raw.New()
 		meta := must.Panic(src.Prepare(ctx, app, `
@@ -374,9 +397,7 @@ volumes:
 `))
 
 		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "uid"))
-		deplCtx, err := artifactManager.PrepareBuild(ctx, depl)
-
-		testutil.IsNil(t, err)
+		deplCtx := must.Panic(artifactManager.PrepareBuild(ctx, depl))
 
 		defer deplCtx.Logger().Close()
 
@@ -387,8 +408,8 @@ volumes:
 		testutil.IsNil(t, err)
 		testutil.HasLength(t, services, 3)
 		testutil.Equals(t, "app", services[0].Name())
-		testutil.Equals(t, "my-app/app:production", services[0].Image())
-		if target.Domain().UseSSL() {
+		testutil.Equals(t, fmt.Sprintf("my-app-%s/app:production", appidLower), services[0].Image())
+		if target.Url().UseSSL() {
 			testutil.Equals(t, "https://my-app.docker.localhost", services[0].Url().MustGet().String())
 		} else {
 			testutil.Equals(t, "http://my-app.docker.localhost", services[0].Url().MustGet().String())
@@ -400,20 +421,20 @@ volumes:
 
 		testutil.Equals(t, "sidecar", services[2].Name())
 		testutil.Equals(t, "traefik/whoami", services[2].Image())
-		if target.Domain().UseSSL() {
+		if target.Url().UseSSL() {
 			testutil.Equals(t, "https://sidecar.my-app.docker.localhost", services[2].Url().MustGet().String())
 		} else {
 			testutil.Equals(t, "http://sidecar.my-app.docker.localhost", services[2].Url().MustGet().String())
 		}
 
-		project := composeMock.project
+		project := composeMock.up.project
 		testutil.IsNotNil(t, project)
-		testutil.Equals(t, "my-app-production", project.Name)
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-production", appidLower), project.Name)
 
-		for _, service := range composeMock.project.Services {
+		for _, service := range project.Services {
 			switch service.Name {
 			case "app":
-				testutil.Equals(t, "my-app/app:production", service.Image)
+				testutil.Equals(t, fmt.Sprintf("my-app-%s/app:production", appidLower), service.Image)
 				testutil.Equals(t, types.RestartPolicyUnlessStopped, service.Restart)
 				testutil.Equals(t, types.PullPolicyBuild, service.PullPolicy)
 				testutil.DeepEquals(t, types.Labels{
@@ -424,22 +445,22 @@ volumes:
 				testutil.DeepEquals(t, types.MappingWithEquals{
 					"DSN": &dsn,
 				}, service.Environment)
-				if target.Domain().UseSSL() {
+				if target.Url().UseSSL() {
 					testutil.DeepEquals(t, types.Labels{
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.services.my-app-production-app.loadbalancer.server.port": "8080",
-						"traefik.http.routers.my-app-production-app.rule":                      "Host(`my-app.docker.localhost`)",
-						"traefik.http.routers.my-app-production-app.tls.certresolver":          "seelfresolver",
+						fmt.Sprintf("traefik.http.services.my-app-%s-production-app.loadbalancer.server.port", appidLower): "8080",
+						fmt.Sprintf("traefik.http.routers.my-app-%s-production-app.rule", appidLower):                      "Host(`my-app.docker.localhost`)",
+						fmt.Sprintf("traefik.http.routers.my-app-%s-production-app.tls.certresolver", appidLower):          "seelfresolver",
 					}, service.Labels)
 				} else {
 					testutil.DeepEquals(t, types.Labels{
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.services.my-app-production-app.loadbalancer.server.port": "8080",
-						"traefik.http.routers.my-app-production-app.rule":                      "Host(`my-app.docker.localhost`)",
+						fmt.Sprintf("traefik.http.services.my-app-%s-production-app.loadbalancer.server.port", appidLower): "8080",
+						fmt.Sprintf("traefik.http.routers.my-app-%s-production-app.rule", appidLower):                      "Host(`my-app.docker.localhost`)",
 					}, service.Labels)
 				}
 			case "db":
@@ -460,23 +481,22 @@ volumes:
 				testutil.Equals(t, "traefik/whoami", service.Image)
 				testutil.HasLength(t, service.Ports, 0)
 				testutil.DeepEquals(t, types.MappingWithEquals{}, service.Environment)
-				if target.Domain().UseSSL() {
+				if target.Url().UseSSL() {
 					testutil.DeepEquals(t, types.Labels{
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.services.my-app-production-sidecar.loadbalancer.server.port": "80",
-
-						"traefik.http.routers.my-app-production-sidecar.rule":             "Host(`sidecar.my-app.docker.localhost`)",
-						"traefik.http.routers.my-app-production-sidecar.tls.certresolver": "seelfresolver",
+						fmt.Sprintf("traefik.http.services.my-app-%s-production-sidecar.loadbalancer.server.port", appidLower): "80",
+						fmt.Sprintf("traefik.http.routers.my-app-%s-production-sidecar.rule", appidLower):                      "Host(`sidecar.my-app.docker.localhost`)",
+						fmt.Sprintf("traefik.http.routers.my-app-%s-production-sidecar.tls.certresolver", appidLower):          "seelfresolver",
 					}, service.Labels)
 				} else {
 					testutil.DeepEquals(t, types.Labels{
 						docker.AppLabel:         string(app.ID()),
 						docker.EnvironmentLabel: string(domain.Production),
 						"traefik.enable":        "true",
-						"traefik.http.services.my-app-production-sidecar.loadbalancer.server.port": "80",
-						"traefik.http.routers.my-app-production-sidecar.rule":                      "Host(`sidecar.my-app.docker.localhost`)",
+						fmt.Sprintf("traefik.http.services.my-app-%s-production-sidecar.loadbalancer.server.port", appidLower): "80",
+						fmt.Sprintf("traefik.http.routers.my-app-%s-production-sidecar.rule", appidLower):                      "Host(`sidecar.my-app.docker.localhost`)",
 					}, service.Labels)
 				}
 			default:
@@ -485,17 +505,17 @@ volumes:
 		}
 
 		testutil.Equals(t, 2, len(project.Networks))
-		testutil.Equals(t, "my-app-production_default", project.Networks["default"].Name)
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-production_default", appidLower), project.Networks["default"].Name)
 		testutil.DeepEquals(t, types.Labels{
 			docker.AppLabel:         string(app.ID()),
 			docker.EnvironmentLabel: string(domain.Production),
-		}, composeMock.project.Networks["default"].Labels)
+		}, project.Networks["default"].Labels)
 		testutil.Equals(t, "seelf-public", project.Networks["seelf-public"].Name)
 		testutil.Equals(t, 0, len(project.Networks["seelf-public"].Labels))
 		testutil.IsTrue(t, project.Networks["seelf-public"].External.External)
 
 		testutil.Equals(t, 1, len(project.Volumes))
-		testutil.Equals(t, "my-app-production_dbdata", project.Volumes["dbdata"].Name)
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-production_dbdata", appidLower), project.Volumes["dbdata"].Name)
 		testutil.DeepEquals(t, types.Labels{
 			docker.AppLabel:         string(app.ID()),
 			docker.EnvironmentLabel: string(domain.Production),
@@ -510,24 +530,26 @@ volumes:
 
 	t.Run("should correctly expose services from a compose file without SSL", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
-		testServices(t, opts, targetWithoutSSL)
+		assertDeployedProject(t, opts, targetWithoutSSL)
 	})
 
 	t.Run("should correctly expose services from a compose file with SSL", func(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
-		testServices(t, opts, targetWithSSL)
+		assertDeployedProject(t, opts, targetWithSSL)
 	})
 }
 
 type composeMockService struct {
 	api.Service
-	project *types.Project
-	options api.UpOptions
+	up struct {
+		project *types.Project
+		options api.UpOptions
+	}
 }
 
 func (c *composeMockService) Up(ctx context.Context, project *types.Project, options api.UpOptions) error {
-	c.project = project
-	c.options = options
+	c.up.project = project
+	c.up.options = options
 	return nil
 }
 
@@ -559,7 +581,23 @@ func (d *dockerMockService) Apply(ops ...command.DockerCliOption) error {
 
 func (d *dockerCliMockService) Close() error { return nil }
 
-func (d *dockerCliMockService) ImagesPrune(ctx context.Context, pruneFilter filters.Args) (dockertypes.ImagesPruneReport, error) {
+func (d *dockerCliMockService) ImagesPrune(_ context.Context, pruneFilter filters.Args) (dockertypes.ImagesPruneReport, error) {
 	d.pruneFilter = pruneFilter
 	return dockertypes.ImagesPruneReport{}, nil
+}
+
+func (d *dockerCliMockService) ContainerList(context.Context, dockertypes.ContainerListOptions) ([]dockertypes.Container, error) {
+	return nil, nil
+}
+
+func (d *dockerCliMockService) VolumeList(context.Context, volume.ListOptions) (volume.ListResponse, error) {
+	return volume.ListResponse{}, nil
+}
+
+func (d *dockerCliMockService) NetworkList(context.Context, dockertypes.NetworkListOptions) ([]dockertypes.NetworkResource, error) {
+	return nil, nil
+}
+
+func (d *dockerCliMockService) ImageList(context.Context, dockertypes.ImageListOptions) ([]dockertypes.ImageSummary, error) {
+	return nil, nil
 }

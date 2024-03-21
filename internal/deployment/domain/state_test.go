@@ -9,9 +9,9 @@ import (
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
-func Test_State(t *testing.T) {
+func Test_DeploymentState(t *testing.T) {
 	t.Run("should be created in pending state", func(t *testing.T) {
-		var state domain.State
+		var state domain.DeploymentState
 
 		testutil.Equals(t, domain.DeploymentStatusPending, state.Status())
 		testutil.IsFalse(t, state.ErrCode().HasValue())
@@ -22,7 +22,7 @@ func Test_State(t *testing.T) {
 
 	t.Run("could be marked as started", func(t *testing.T) {
 		var (
-			state domain.State
+			state domain.DeploymentState
 			err   error
 		)
 
@@ -36,7 +36,7 @@ func Test_State(t *testing.T) {
 
 	t.Run("could fail", func(t *testing.T) {
 		var (
-			state domain.State
+			state domain.DeploymentState
 			err   error
 		)
 
@@ -53,7 +53,7 @@ func Test_State(t *testing.T) {
 
 	t.Run("could succeed", func(t *testing.T) {
 		var (
-			state    domain.State
+			state    domain.DeploymentState
 			err      error
 			services domain.Services
 		)
@@ -75,7 +75,7 @@ func Test_State(t *testing.T) {
 	})
 
 	t.Run("should err if trying to start but not in pending state", func(t *testing.T) {
-		var state domain.State
+		var state domain.DeploymentState
 		testutil.IsNil(t, state.Started())
 
 		err := state.Started()
@@ -84,7 +84,7 @@ func Test_State(t *testing.T) {
 	})
 
 	t.Run("should err if trying to fail but not in runing state", func(t *testing.T) {
-		var state domain.State
+		var state domain.DeploymentState
 
 		err := state.Failed(errors.New("an error"))
 
@@ -92,10 +92,74 @@ func Test_State(t *testing.T) {
 	})
 
 	t.Run("should err if trying to succeed but not in runing state", func(t *testing.T) {
-		var state domain.State
+		var state domain.DeploymentState
 
 		err := state.Succeeded(domain.Services{})
 
 		testutil.ErrorIs(t, domain.ErrNotInRunningState, err)
+	})
+}
+
+func Test_TargetState(t *testing.T) {
+	t.Run("should be created in configuring state", func(t *testing.T) {
+		var state domain.TargetState
+
+		testutil.Equals(t, domain.TargetStatusConfiguring, state.Status())
+		testutil.IsTrue(t, state.Version().IsZero())
+		testutil.IsFalse(t, state.ErrCode().HasValue())
+		testutil.IsFalse(t, state.LastReadyVersion().HasValue())
+	})
+
+	t.Run("can be reconfigured", func(t *testing.T) {
+		var state domain.TargetState
+
+		state.Reconfigure()
+
+		testutil.Equals(t, domain.TargetStatusConfiguring, state.Status())
+		testutil.IsFalse(t, state.Version().IsZero())
+		testutil.IsFalse(t, state.ErrCode().HasValue())
+	})
+
+	t.Run("could be marked has done and sets the errcode and status appropriately", func(t *testing.T) {
+		var (
+			state     domain.TargetState
+			errFailed = errors.New("failed")
+		)
+		state.Reconfigure()
+
+		testutil.IsTrue(t, state.Configured(state.Version(), errFailed))
+
+		testutil.Equals(t, domain.TargetStatusFailed, state.Status())
+		testutil.Equals(t, errFailed.Error(), state.ErrCode().MustGet())
+		testutil.IsFalse(t, state.LastReadyVersion().HasValue())
+
+		state.Reconfigure()
+
+		testutil.IsTrue(t, state.Configured(state.Version(), nil))
+		testutil.Equals(t, state.Version(), state.LastReadyVersion().MustGet())
+
+		testutil.Equals(t, domain.TargetStatusReady, state.Status())
+		testutil.IsFalse(t, state.ErrCode().HasValue())
+	})
+
+	t.Run("should do nothing if the version does not match or if it has been already configured", func(t *testing.T) {
+		var state domain.TargetState
+		state.Reconfigure()
+
+		testutil.IsFalse(t, state.Configured(state.Version().Add(-1), nil))
+
+		testutil.Equals(t, domain.TargetStatusConfiguring, state.Status())
+		testutil.IsFalse(t, state.ErrCode().HasValue())
+		testutil.IsFalse(t, state.Version().IsZero())
+		testutil.IsFalse(t, state.LastReadyVersion().HasValue())
+
+		state.Configured(state.Version(), nil)
+
+		testutil.IsFalse(t, state.Configured(state.Version(), errors.New("should not happen")))
+
+		testutil.Equals(t, domain.TargetStatusReady, state.Status())
+		testutil.Equals(t, state.Version(), state.LastReadyVersion().MustGet())
+		testutil.IsFalse(t, state.ErrCode().HasValue())
+		testutil.IsFalse(t, state.Version().IsZero())
 	})
 }

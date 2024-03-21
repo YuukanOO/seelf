@@ -1,6 +1,8 @@
 package domain_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -10,6 +12,7 @@ import (
 
 func Test_Services(t *testing.T) {
 	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
+	appidLower := strings.ToLower(string(app.ID()))
 	domainUrl := must.Panic(domain.UrlFrom("http://docker.localhost"))
 	conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 
@@ -23,7 +26,7 @@ func Test_Services(t *testing.T) {
 
 		testutil.HasLength(t, s, 1)
 		testutil.Equals(t, "db", added.Name())
-		testutil.Equals(t, "my-app-production-db", added.QualifiedName())
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-production-db", appidLower), added.QualifiedName())
 		testutil.Equals(t, "postgres:14-alpine", added.Image())
 		testutil.IsFalse(t, added.Url().HasValue())
 	})
@@ -38,7 +41,7 @@ func Test_Services(t *testing.T) {
 
 		testutil.HasLength(t, s, 1)
 		testutil.Equals(t, "app", added.Name())
-		testutil.Equals(t, "my-app-production-app", added.QualifiedName())
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-production-app", appidLower), added.QualifiedName())
 		testutil.Equals(t, "my-app-production/app:1", added.Image())
 		testutil.Equals(t, "http://my-app.docker.localhost", added.Url().MustGet().String())
 	})
@@ -53,8 +56,8 @@ func Test_Services(t *testing.T) {
 
 		testutil.HasLength(t, s, 1)
 		testutil.Equals(t, "app", added.Name())
-		testutil.Equals(t, "my-app-production-app", added.QualifiedName())
-		testutil.Equals(t, "my-app/app:production", added.Image())
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-production-app", appidLower), added.QualifiedName())
+		testutil.Equals(t, fmt.Sprintf("my-app-%s/app:production", appidLower), added.Image())
 		testutil.Equals(t, "http://my-app.docker.localhost", added.Url().MustGet().String())
 	})
 
@@ -88,7 +91,7 @@ func Test_Services(t *testing.T) {
 		value, err := services.Value()
 
 		testutil.IsNil(t, err)
-		testutil.Equals(t, `[{"name":"internal","qualified_name":"my-app-production-internal","image":"an/image","url":null},{"name":"public","qualified_name":"my-app-production-public","image":"another/image","url":"http://my-app.docker.localhost"}]`, value.(string))
+		testutil.Equals(t, fmt.Sprintf(`[{"name":"internal","qualified_name":"my-app-%s-production-internal","image":"an/image","url":null},{"name":"public","qualified_name":"my-app-%s-production-public","image":"another/image","url":"http://my-app.docker.localhost"}]`, appidLower, appidLower), value.(string))
 	})
 
 	t.Run("should implement the scanner interface", func(t *testing.T) {

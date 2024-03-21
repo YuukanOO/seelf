@@ -29,13 +29,13 @@ func newService(conf DeploymentConfig, name, image string, url monad.Maybe[Url])
 
 	// Empty image name, let's build it based on the given configuration
 	if image == "" {
-		s.image = fmt.Sprintf("%s/%s:%s", conf.AppName(), name, conf.Environment())
+		s.image = conf.ImageName(name)
 	} else {
 		s.image = image
 	}
 
 	s.url = url
-	s.qualifiedName = fmt.Sprintf("%s-%s", conf.ProjectName(), name)
+	s.qualifiedName = conf.QualifiedName(name)
 	return s
 }
 

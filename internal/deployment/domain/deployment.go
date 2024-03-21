@@ -30,7 +30,7 @@ type (
 
 		id        DeploymentID
 		config    DeploymentConfig
-		state     State
+		state     DeploymentState
 		source    SourceData
 		requested shared.Action[domain.UserID]
 	}
@@ -39,9 +39,8 @@ type (
 
 	DeploymentsReader interface {
 		GetByID(context.Context, DeploymentID) (Deployment, error)
+		GetLastDeployment(context.Context, AppID, Environment) (Deployment, error)
 		GetNextDeploymentNumber(context.Context, AppID) (DeploymentNumber, error)
-		GetLatestSuccessfulDeployments(context.Context, AppID) ([]Deployment, error) // Retrieve the latest successful deployments for a particular app on all environments
-		//GetLatestSuccessfulDeployment(context.Context, AppID, Environment, ...DeploymentNumber) (Deployment, error)
 		GetRunningDeploymentsOnTargetCount(context.Context, TargetID) (RunningDeploymentsOnTargetCount, error)
 		GetRunningOrPendingDeploymentsCount(context.Context, AppID) (RunningOrPendingAppDeploymentsCount, error)
 	}
@@ -58,7 +57,7 @@ type (
 
 		ID        DeploymentID
 		Config    DeploymentConfig
-		State     State
+		State     DeploymentState
 		Source    SourceData
 		Requested shared.Action[domain.UserID]
 	}
@@ -67,7 +66,7 @@ type (
 		bus.Notification
 
 		ID    DeploymentID
-		State State
+		State DeploymentState
 	}
 )
 
@@ -117,6 +116,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	err = scanner.Scan(
 		&d.id.appID,
 		&d.id.deploymentNumber,
+		&d.config.appid,
 		&d.config.appname,
 		&d.config.environment,
 		&d.config.target,

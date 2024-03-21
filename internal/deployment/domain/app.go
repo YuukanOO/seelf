@@ -90,6 +90,7 @@ type (
 		ID          AppID
 		Environment Environment
 		Config      EnvironmentConfig
+		OldTarget   TargetID // Old target ID, used to ease the cleanup handling
 	}
 
 	AppVCSConfigured struct {
@@ -272,8 +273,10 @@ func (a *App) Delete(deployments RunningOrPendingAppDeploymentsCount) error {
 	return nil
 }
 
-func (a *App) ID() AppID                   { return a.id }
-func (a *App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
+func (a *App) ID() AppID                     { return a.id }
+func (a *App) VCS() monad.Maybe[VCSConfig]   { return a.vcs }
+func (a *App) Production() EnvironmentConfig { return a.production }
+func (a *App) Staging() EnvironmentConfig    { return a.staging }
 
 func (a *App) tryUpdateEnvironmentConfig(
 	env Environment,
@@ -315,6 +318,7 @@ func (a *App) tryUpdateEnvironmentConfig(
 		ID:          a.id,
 		Environment: env,
 		Config:      updatedConfig,
+		OldTarget:   existingConfig.target,
 	})
 
 	return nil

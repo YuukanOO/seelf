@@ -26,6 +26,9 @@ func init() {
 	bus.Marshallable.Register(Command{}, func(s string) (bus.Request, error) { return storage.UnmarshalJSON[Command](s) })
 }
 
+// Handle the deployment process.
+// If an unexpected error occurs during this process, it uses the bus.PreserveOrder function
+// to make sure all deployments are processed linearly.
 func Handler(
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
@@ -45,25 +48,44 @@ func Handler(
 		if err != nil {
 			// Deployment does not exist anymore, the app should have been deleted, return early
 			if errors.Is(err, apperr.ErrNotFound) {
-				return result, nil
+				return result, bus.Ignore(err)
 			}
 
-			return result, err
+			return result, bus.PreserveOrder(err)
+		}
+
+		// If the target does not exist, fail the deployment
+		// If the target is not ready, returns early without starting the deployment
+		target, targetErr := targetsReader.GetByID(ctx, depl.Config().Target())
+
+		if targetErr != nil && !errors.Is(targetErr, apperr.ErrNotFound) {
+			return result, bus.PreserveOrder(targetErr)
 		}
 
 		if err = depl.HasStarted(); err != nil {
 			// If the deployment could not be started, it probably means the
 			// application has been requested for cleanup and the deployment has been
 			// cancelled, so the deploy job will never succeed.
-			return result, nil
+			return result, bus.Ignore(err)
+		}
+
+		var targetAvailabilityErr error
+
+		if targetErr == nil {
+			_, targetAvailabilityErr = target.CheckAvailability()
+
+			// Target configuration is in progress, just retry the job later without writing
+			// the deployment, keep it in pending state
+			if errors.Is(targetAvailabilityErr, domain.ErrTargetConfigurationInProgress) {
+				return result, bus.PreserveOrder(targetAvailabilityErr)
+			}
 		}
 
 		if err = writer.Write(ctx, &depl); err != nil {
-			return result, err
+			return result, bus.PreserveOrder(err)
 		}
 
 		var (
-			target        domain.Target
 			deploymentCtx domain.DeploymentContext
 			services      domain.Services
 		)
@@ -76,26 +98,27 @@ func Handler(
 			// Since the deployment process could take some time, retrieve a fresh version of the
 			// deployment right now
 			if depl, err = reader.GetByID(ctx, depl.ID()); err != nil {
-				finalErr = err
+				if errors.Is(err, apperr.ErrNotFound) {
+					finalErr = bus.Ignore(err)
+				} else {
+					finalErr = bus.PreserveOrder(err)
+				}
 				return
 			}
 
+			// An error means it has already been handled
 			if err = depl.HasEnded(services, finalErr); err != nil {
-				finalErr = err
+				finalErr = bus.Ignore(err)
 				return
 			}
 
 			if err = writer.Write(ctx, &depl); err != nil {
-				finalErr = err
+				finalErr = bus.PreserveOrder(err)
 				return
 			}
 
-			finalErr = nil // Don't return any error, the deployment has ended and embed the error if any
+			finalErr = bus.Ignore(finalErr) // Ignore the error because it has been embedded in the deployment state
 		}()
-
-		if target, finalErr = targetsReader.GetByID(ctx, depl.Config().Target()); finalErr != nil {
-			return
-		}
 
 		// Prepare the build directory
 		if deploymentCtx, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
@@ -103,6 +126,18 @@ func Handler(
 		}
 
 		defer deploymentCtx.Logger().Close()
+
+		// If the target does not exist, let's fail the deployment correctly
+		if targetErr != nil {
+			finalErr = targetErr
+			return
+		}
+
+		// Target not available, fail the deployment
+		if targetAvailabilityErr != nil {
+			finalErr = targetAvailabilityErr
+			return
+		}
 
 		// Fetch deployment files
 		if finalErr = source.Fetch(ctx, deploymentCtx, depl); finalErr != nil {

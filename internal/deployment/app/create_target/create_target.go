@@ -14,7 +14,7 @@ type Command struct {
 	bus.Command[string]
 
 	Name     string `json:"name"`
-	Domain   string `json:"domain"`
+	Url      string `json:"url"`
 	Provider any    `json:"-"`
 }
 
@@ -26,11 +26,11 @@ func Handler(
 	provider domain.Provider,
 ) bus.RequestHandler[string, Command] {
 	return func(ctx context.Context, cmd Command) (string, error) {
-		var targetDomain domain.Url
+		var targetUrl domain.Url
 
 		if err := validate.Struct(validate.Of{
-			"name":   validate.Field(cmd.Name, strings.Required),
-			"domain": validate.Value(cmd.Domain, &targetDomain, domain.UrlFrom),
+			"name": validate.Field(cmd.Name, strings.Required),
+			"url":  validate.Value(cmd.Url, &targetUrl, domain.UrlFrom),
 		}); err != nil {
 			return "", err
 		}
@@ -42,7 +42,7 @@ func Handler(
 		}
 
 		// Validate availability of both the target domain and the config
-		domainAvailability, err := reader.GetDomainAvailability(ctx, targetDomain)
+		urlAvailability, err := reader.GetUrlAvailability(ctx, targetUrl)
 
 		if err != nil {
 			return "", err
@@ -55,7 +55,7 @@ func Handler(
 		}
 
 		if err = validate.Struct(validate.Of{
-			"domain":      domainAvailability.Error(),
+			"url":         urlAvailability.Error(),
 			config.Kind(): configAvailability.Error(),
 		}); err != nil {
 			return "", err
@@ -63,8 +63,8 @@ func Handler(
 
 		target, err := domain.NewTarget(
 			cmd.Name,
-			targetDomain,
-			domainAvailability,
+			targetUrl,
+			urlAvailability,
 			config,
 			configAvailability,
 			auth.CurrentUser(ctx).MustGet(),

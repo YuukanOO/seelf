@@ -31,6 +31,7 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 		SELECT
 			app_id
 			,deployment_number
+			,config_appid
 			,config_appname
 			,config_environment
 			,config_target
@@ -49,26 +50,13 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 		One(s.db, ctx, domain.DeploymentFrom)
 }
 
-func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID domain.AppID) (domain.DeploymentNumber, error) {
-	// FIXME: find a better way, on postgresql, I could have used a seq to increment the sequence to avoid any potential duplication
-	// of a job number but on sqlite, I could not find a way yet.
-	c, err := builder.
-		Query[uint]("SELECT COUNT(*) FROM deployments WHERE app_id = ?", appID).
-		Extract(s.db, ctx)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return domain.DeploymentNumber(c + 1), nil
-}
-
-func (s *deploymentsStore) GetLatestSuccessfulDeployments(ctx context.Context, appID domain.AppID) ([]domain.Deployment, error) {
+func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppID, env domain.Environment) (domain.Deployment, error) {
 	return builder.
 		Query[domain.Deployment](`
 		SELECT
 			app_id
-			,MAX(deployment_number) AS deployment_number
+			,deployment_number
+			,config_appid
 			,config_appname
 			,config_environment
 			,config_target
@@ -83,9 +71,24 @@ func (s *deploymentsStore) GetLatestSuccessfulDeployments(ctx context.Context, a
 			,requested_at
 			,requested_by
 		FROM deployments
-		WHERE app_id = ? AND state_status = ?
-		GROUP BY config_environment`, appID, domain.DeploymentStatusSucceeded).
-		All(s.db, ctx, domain.DeploymentFrom)
+		WHERE app_id = ? AND config_environment = ?
+		ORDER BY deployment_number DESC
+		LIMIT 1`, id, env).
+		One(s.db, ctx, domain.DeploymentFrom)
+}
+
+func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID domain.AppID) (domain.DeploymentNumber, error) {
+	// FIXME: find a better way, on postgresql, I could have used a seq to increment the sequence to avoid any potential duplication
+	// of a job number but on sqlite, I could not find a way yet.
+	c, err := builder.
+		Query[uint]("SELECT COUNT(*) FROM deployments WHERE app_id = ?", appID).
+		Extract(s.db, ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return domain.DeploymentNumber(c + 1), nil
 }
 
 func (s *deploymentsStore) GetRunningDeploymentsOnTargetCount(ctx context.Context, id domain.TargetID) (domain.RunningDeploymentsOnTargetCount, error) {
@@ -118,7 +121,7 @@ func (s *deploymentsStore) FailDeployments(ctx context.Context, status domain.De
 		"state_finished_at": now,
 	}).
 		F("WHERE state_status = ?", status).
-		S(builder.Array("app_id IN", appIDs)).
+		S(builder.Array("AND app_id IN", appIDs)).
 		Exec(s.db, ctx)
 }
 
@@ -130,6 +133,7 @@ func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deplo
 				Insert("deployments", builder.Values{
 					"app_id":               evt.ID.AppID(),
 					"deployment_number":    evt.ID.DeploymentNumber(),
+					"config_appid":         evt.Config.AppID(),
 					"config_appname":       evt.Config.AppName(),
 					"config_environment":   evt.Config.Environment(),
 					"config_target":        evt.Config.Target(),

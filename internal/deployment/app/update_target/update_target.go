@@ -15,7 +15,7 @@ type Command struct {
 
 	ID       string              `json:"-"`
 	Name     monad.Maybe[string] `json:"name"`
-	Domain   monad.Maybe[string] `json:"domain"`
+	Url      monad.Maybe[string] `json:"url"`
 	Provider any                 `json:"-"`
 }
 
@@ -27,12 +27,12 @@ func Handler(
 	provider domain.Provider,
 ) bus.RequestHandler[string, Command] {
 	return func(ctx context.Context, cmd Command) (string, error) {
-		var targetDomain domain.Url
+		var targetUrl domain.Url
 
 		if err := validate.Struct(validate.Of{
 			"name": validate.Maybe(cmd.Name, strings.Required),
-			"domain": validate.Maybe(cmd.Domain, func(s string) error {
-				return validate.Value(s, &targetDomain, domain.UrlFrom)
+			"url": validate.Maybe(cmd.Url, func(s string) error {
+				return validate.Value(s, &targetUrl, domain.UrlFrom)
 			}),
 		}); err != nil {
 			return "", err
@@ -50,19 +50,19 @@ func Handler(
 			}
 		}
 
-		if cmd.Domain.HasValue() {
-			// Validate availability of the target domain
-			availability, err := reader.GetDomainAvailability(ctx, targetDomain, target.ID())
+		if cmd.Url.HasValue() {
+			// Validate availability of the target url
+			availability, err := reader.GetUrlAvailability(ctx, targetUrl, target.ID())
 
 			if err != nil {
 				return "", err
 			}
 
 			if err = availability.Error(); err != nil {
-				return "", validate.Wrap(err, "domain")
+				return "", validate.Wrap(err, "url")
 			}
 
-			if err = target.HasDomain(targetDomain, availability); err != nil {
+			if err = target.HasUrl(targetUrl, availability); err != nil {
 				return "", err
 			}
 		}

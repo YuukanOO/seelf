@@ -13,54 +13,92 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
+	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
+type initialData struct {
+	deployments []*domain.Deployment
+	targets     []*domain.Target
+}
+
 func Test_Deploy(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	a := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("1"), domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "some-uid"))
 	logger, _ := log.NewLogger()
 
 	sut := func(
 		source domain.Source,
 		provider domain.Provider,
-		existingDeployments ...*domain.Deployment,
+		data initialData,
 	) bus.RequestHandler[bus.UnitType, deploy.Command] {
 		opts := config.Default(config.WithTestDefaults())
-		store := memory.NewDeploymentsStore(existingDeployments...)
+		store := memory.NewDeploymentsStore(data.deployments...)
+		targetsStore := memory.NewTargetsStore(data.targets...)
 		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return deploy.Handler(store, store, artifactManager, source, provider)
+		return deploy.Handler(store, store, artifactManager, source, provider, targetsStore)
 	}
 
-	t.Run("should returns early if the deployment does not exists", func(t *testing.T) {
-		uc := sut(source(nil), provider(nil))
+	t.Run("should fail silently if the deployment does not exists", func(t *testing.T) {
+		uc := sut(source(nil), provider(nil), initialData{})
 		r, err := uc(ctx, deploy.Command{})
 
-		testutil.IsNil(t, err)
+		testutil.Equals(t, bus.Ignore(apperr.ErrNotFound), err)
 		testutil.Equals(t, bus.Unit, r)
 	})
 
+	t.Run("should mark the deployment has failed if the target does not exist anymore", func(t *testing.T) {
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfig("1"),
+			domain.NewEnvironmentConfig("1"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "some-uid"))
+		src := source(nil)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+
+		uc := sut(src, provider(nil), initialData{
+			deployments: []*domain.Deployment{&depl},
+		})
+
+		_, err := uc(ctx, deploy.Command{
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
+		})
+
+		testutil.Equals(t, bus.Ignore(apperr.ErrNotFound), err)
+		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
+		testutil.Equals(t, apperr.ErrNotFound.Error(), evt.State.ErrCode().MustGet())
+	})
+
 	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target", must.Panic(domain.UrlFrom("http://localhost")), true, nil, true, "some-uid"))
+		created := testutil.EventIs[domain.TargetCreated](t, &target, 0)
+		target.Configured(created.State.Version(), nil)
+
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfig(target.ID()),
+			domain.NewEnvironmentConfig(target.ID()), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "some-uid"))
 		srcErr := errors.New("source_failed")
 		src := source(srcErr)
-		meta := must.Panic(src.Prepare(ctx, a, 42))
-		depl := must.Panic(a.NewDeployment(1, meta, domain.Production, "some-uid"))
-		uc := sut(src, provider(nil), &depl)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+		uc := sut(src, provider(nil), initialData{
+			deployments: []*domain.Deployment{&depl},
+			targets:     []*domain.Target{&target},
+		})
 
 		r, err := uc(ctx, deploy.Command{
 			AppID:            string(depl.ID().AppID()),
 			DeploymentNumber: int(depl.ID().DeploymentNumber()),
 		})
 
-		testutil.IsNil(t, err)
+		testutil.Equals(t, bus.Ignore(srcErr), err)
 		testutil.Equals(t, bus.Unit, r)
 
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
@@ -71,19 +109,29 @@ func Test_Deploy(t *testing.T) {
 	})
 
 	t.Run("should mark the deployment has failed if provider does not run the deployment successfully", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target", must.Panic(domain.UrlFrom("http://localhost")), true, nil, true, "some-uid"))
+		created := testutil.EventIs[domain.TargetCreated](t, &target, 0)
+		target.Configured(created.State.Version(), nil)
+
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfig(target.ID()),
+			domain.NewEnvironmentConfig(target.ID()), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "some-uid"))
 		providerErr := errors.New("run_failed")
 		be := provider(providerErr)
 		src := source(nil)
-		meta := must.Panic(src.Prepare(ctx, a, 42))
-		depl := must.Panic(a.NewDeployment(1, meta, domain.Production, "some-uid"))
-		uc := sut(src, be, &depl)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+		uc := sut(src, be, initialData{
+			deployments: []*domain.Deployment{&depl},
+			targets:     []*domain.Target{&target},
+		})
 
 		r, err := uc(ctx, deploy.Command{
 			AppID:            string(depl.ID().AppID()),
 			DeploymentNumber: int(depl.ID().DeploymentNumber()),
 		})
 
-		testutil.IsNil(t, err)
+		testutil.Equals(t, bus.Ignore(providerErr), err)
 		testutil.Equals(t, bus.Unit, r)
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
@@ -93,10 +141,20 @@ func Test_Deploy(t *testing.T) {
 	})
 
 	t.Run("should mark the deployment has succeeded if all is good", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target", must.Panic(domain.UrlFrom("http://localhost")), true, nil, true, "some-uid"))
+		created := testutil.EventIs[domain.TargetCreated](t, &target, 0)
+		target.Configured(created.State.Version(), nil)
+
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfig(target.ID()),
+			domain.NewEnvironmentConfig(target.ID()), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "some-uid"))
 		src := source(nil)
-		meta := must.Panic(src.Prepare(ctx, a, 42))
-		depl := must.Panic(a.NewDeployment(1, meta, domain.Production, "some-uid"))
-		uc := sut(src, provider(nil), &depl)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+		uc := sut(src, provider(nil), initialData{
+			deployments: []*domain.Deployment{&depl},
+			targets:     []*domain.Target{&target},
+		})
 
 		r, err := uc(ctx, deploy.Command{
 			AppID:            string(depl.ID().AppID()),
@@ -143,10 +201,10 @@ func (b *dummyProvider) Prepare(context.Context, any, ...domain.ProviderConfig) 
 	return nil, nil
 }
 
-func (b *dummyProvider) Run(context.Context, domain.DeploymentContext, domain.Deployment) (domain.Services, error) {
+func (b *dummyProvider) Run(context.Context, domain.DeploymentContext, domain.Deployment, domain.Target) (domain.Services, error) {
 	return domain.Services{}, b.err
 }
 
-func (b *dummyProvider) Cleanup(context.Context, domain.App) error {
+func (b *dummyProvider) Cleanup(context.Context, domain.AppID, domain.Target, domain.Environment) error {
 	return nil
 }

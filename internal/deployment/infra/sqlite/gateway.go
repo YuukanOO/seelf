@@ -132,9 +132,12 @@ func (s *gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]g
 		SELECT
 			targets.id
 			,targets.name
-			,targets.domain
+			,targets.url
 			,targets.provider_kind
 			,targets.provider
+			,targets.state_status
+			,targets.state_errcode
+			,targets.state_last_ready_version
 			,targets.delete_requested_at
 			,cusers.id
 			,cusers.email
@@ -154,9 +157,12 @@ func (s *gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_
 		SELECT
 			targets.id
 			,targets.name
-			,targets.domain
+			,targets.url
 			,targets.provider_kind
 			,targets.provider
+			,targets.state_status
+			,targets.state_errcode
+			,targets.state_last_ready_version
 			,targets.delete_requested_at
 			,cusers.id
 			,cusers.email
@@ -384,9 +390,12 @@ func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
 	err = scanner.Scan(
 		&t.ID,
 		&t.Name,
-		&t.Domain,
+		&t.Url,
 		&t.Provider.Kind,
 		&providerData,
+		&t.State.Status,
+		&t.State.ErrCode,
+		&t.State.LastReadyVersion,
 		&t.DeleteRequestedAt,
 		&deleteRequestedById,
 		&deleteRequestedByEmail,

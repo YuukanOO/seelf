@@ -36,21 +36,21 @@ func Test_CreateTarget(t *testing.T) {
 		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 	})
 
-	t.Run("should require a unique domain", func(t *testing.T) {
+	t.Run("should require a unique url", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget("target", must.Panic(domain.UrlFrom("http://example.com")), true, config, true, uid))
 
 		uc := sut(&target)
 
 		_, err := uc(ctx, create_target.Command{
 			Name:     "target",
-			Domain:   "http://example.com",
+			Url:      "http://example.com",
 			Provider: config,
 		})
 
 		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 		validateError, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrDomainAlreadyTaken, validateError["domain"])
+		testutil.ErrorIs(t, domain.ErrUrlAlreadyTaken, validateError["url"])
 		testutil.ErrorIs(t, domain.ErrConfigAlreadyTaken, validateError[config.Kind()])
 	})
 
@@ -58,8 +58,8 @@ func Test_CreateTarget(t *testing.T) {
 		uc := sut()
 
 		_, err := uc(ctx, create_target.Command{
-			Name:   "target",
-			Domain: "http://example.com",
+			Name: "target",
+			Url:  "http://example.com",
 		})
 
 		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
@@ -72,7 +72,7 @@ func Test_CreateTarget(t *testing.T) {
 
 		_, err := uc(ctx, create_target.Command{
 			Name:     "target",
-			Domain:   "http://another.example.com",
+			Url:      "http://another.example.com",
 			Provider: config,
 		})
 
@@ -87,7 +87,7 @@ func Test_CreateTarget(t *testing.T) {
 
 		id, err := uc(ctx, create_target.Command{
 			Name:     "target",
-			Domain:   "http://example.com",
+			Url:      "http://example.com",
 			Provider: config,
 		})
 
@@ -100,6 +100,7 @@ type (
 	dummyProvider struct {
 		domain.Provider
 	}
+
 	dummyConfig struct{}
 )
 
@@ -114,3 +115,4 @@ func (*dummyProvider) Prepare(ctx context.Context, payload any, existing ...doma
 func (dummyConfig) Fingerprint() string                   { return "dummy" }
 func (c dummyConfig) Equals(o domain.ProviderConfig) bool { return c == o }
 func (dummyConfig) Kind() string                          { return "dummy" }
+func (dummyConfig) String() string                        { return "dummy" }

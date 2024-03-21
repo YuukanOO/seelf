@@ -3,6 +3,7 @@ package testutil_test
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/YuukanOO/seelf/pkg/bus"
@@ -385,6 +386,43 @@ func Test_HasNEvents(t *testing.T) {
 				t.Fail()
 			}
 		})
+	}
+}
+
+func Test_FileEquals(t *testing.T) {
+	path := "testfile"
+
+	t.Cleanup(func() {
+		os.RemoveAll(path)
+	})
+
+	tests := []struct {
+		actual     string
+		expected   string
+		shouldFail bool
+	}{
+		{"test", "test", false},
+		{"test", "test2", true},
+		{"", "test", true},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v %v", test.actual, test.expected), func(t *testing.T) {
+			if test.actual != "" {
+				os.WriteFile(path, []byte(test.actual), 0644)
+			} else {
+				os.RemoveAll(path)
+			}
+
+			mock := new(testMock)
+
+			testutil.FileEquals(mock, path, test.expected)
+
+			if mock.hasFailed != test.shouldFail {
+				t.Fail()
+			}
+		})
+
 	}
 }
 

@@ -17,6 +17,7 @@ func Test_AppNameFrom(t *testing.T) {
 			{"  some-app", false},
 			{"some-app   ", false},
 			{"some-app-with-ç-special-char", false},
+			{"WITH-caps", false},
 			{"My app", false},
 			{"some-app-1337", true},
 			{"my-app", true},

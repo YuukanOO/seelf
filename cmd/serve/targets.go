@@ -15,7 +15,7 @@ import (
 
 type createTargetBody struct {
 	Name   string                   `json:"name"`
-	Domain string                   `json:"domain"`
+	Url    string                   `json:"url"`
 	Docker monad.Maybe[docker.Body] `json:"docker"`
 }
 
@@ -32,7 +32,7 @@ func (s *server) createTargetHandler() gin.HandlerFunc {
 
 		id, err := bus.Send(s.bus, ctx, create_target.Command{
 			Name:     body.Name,
-			Domain:   body.Domain,
+			Url:      body.Url,
 			Provider: payload,
 		})
 
@@ -54,7 +54,7 @@ func (s *server) createTargetHandler() gin.HandlerFunc {
 
 type updateTargetBody struct {
 	Name   monad.Maybe[string]      `json:"name"`
-	Domain monad.Maybe[string]      `json:"domain"`
+	Url    monad.Maybe[string]      `json:"url"`
 	Docker monad.Maybe[docker.Body] `json:"docker"`
 }
 
@@ -72,7 +72,7 @@ func (s *server) updateTargetHandler() gin.HandlerFunc {
 		id, err := bus.Send(s.bus, ctx, update_target.Command{
 			ID:       c.Param("id"),
 			Name:     body.Name,
-			Domain:   body.Domain,
+			Url:      body.Url,
 			Provider: payload,
 		})
 

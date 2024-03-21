@@ -1,6 +1,8 @@
 package domain_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -17,6 +19,7 @@ func Test_Config(t *testing.T) {
 
 	staging := domain.NewEnvironmentConfig("staging-target")
 	app := must.Panic(domain.NewApp("my-app", production, staging, domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
+	appidLower := strings.ToLower(string(app.ID()))
 
 	t.Run("could be created from an app", func(t *testing.T) {
 		conf, err := app.ConfigSnapshotFor(domain.Production)
@@ -62,9 +65,21 @@ func Test_Config(t *testing.T) {
 		testutil.Equals(t, "my-app-staging", conf.SubDomain())
 	})
 
-	t.Run("should expose a project name", func(t *testing.T) {
+	t.Run("should expose a unique project name", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Staging)
 
-		testutil.Equals(t, "my-app-staging", conf.ProjectName())
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-staging", appidLower), conf.ProjectName())
+	})
+
+	t.Run("should expose a unique image name for a service", func(t *testing.T) {
+		conf, _ := app.ConfigSnapshotFor(domain.Staging)
+
+		testutil.Equals(t, fmt.Sprintf("my-app-%s/app:staging", appidLower), conf.ImageName("app"))
+	})
+
+	t.Run("should expose a unique qualified name for a service", func(t *testing.T) {
+		conf, _ := app.ConfigSnapshotFor(domain.Staging)
+
+		testutil.Equals(t, fmt.Sprintf("my-app-%s-staging-app", appidLower), conf.QualifiedName("app"))
 	})
 }

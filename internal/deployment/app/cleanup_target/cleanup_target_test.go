@@ -22,7 +22,7 @@ func Test_CleanupTarget(t *testing.T) {
 		return cleanup_target.Handler(targetsStore, targetsStore, deploymentsStore, provider), provider
 	}
 
-	t.Run("should silently failed if the target does not exist anymore", func(t *testing.T) {
+	t.Run("should silently fail if the target does not exist anymore", func(t *testing.T) {
 		uc, provider := sut()
 
 		_, err := uc(context.Background(), cleanup_target.Command{})

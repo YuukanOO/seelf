@@ -56,11 +56,11 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		if err := handleCleanup(targetsReader, provider, ctx, app.ID(), app.Production().Target(), domain.Production); err != nil {
+		if err := handleCleanup(ctx, targetsReader, provider, app.ID(), app.Production().Target(), domain.Production); err != nil {
 			return bus.Unit, err
 		}
 
-		if err := handleCleanup(targetsReader, provider, ctx, app.ID(), app.Staging().Target(), domain.Staging); err != nil {
+		if err := handleCleanup(ctx, targetsReader, provider, app.ID(), app.Staging().Target(), domain.Staging); err != nil {
 			return bus.Unit, err
 		}
 
@@ -73,9 +73,9 @@ func Handler(
 }
 
 func handleCleanup(
+	ctx context.Context,
 	reader domain.TargetsReader,
 	provider domain.Provider,
-	ctx context.Context,
 	app domain.AppID,
 	id domain.TargetID,
 	env domain.Environment,

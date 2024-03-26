@@ -67,6 +67,8 @@ func Handler(
 			if err = writer.Write(ctx, &target); err != nil {
 				finalErr = err
 			}
+
+			finalErr = bus.Ignore(finalErr)
 		}()
 
 		finalErr = provider.Configure(ctx, target)

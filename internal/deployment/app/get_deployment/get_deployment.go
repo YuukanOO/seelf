@@ -34,6 +34,7 @@ type (
 	TargetSummary struct {
 		ID   string              `json:"id"`
 		Name monad.Maybe[string] `json:"name"` // Since the target could have been deleted, the name is nullable here.
+		Url  monad.Maybe[string] `json:"url"`
 	}
 
 	Source struct {
@@ -56,9 +57,10 @@ type (
 	Services []Service
 
 	Service struct {
-		Name  string              `json:"name"`
-		Image string              `json:"image"`
-		Url   monad.Maybe[string] `json:"url"`
+		Name      string              `json:"name"`
+		Image     string              `json:"image"`
+		Subdomain monad.Maybe[string] `json:"subdomain"`
+		Url       monad.Maybe[string] `json:"url"`
 	}
 )
 

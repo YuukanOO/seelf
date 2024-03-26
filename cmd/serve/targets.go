@@ -14,27 +14,20 @@ import (
 )
 
 type createTargetBody struct {
-	Name   string                   `json:"name"`
-	Url    string                   `json:"url"`
+	create_target.Command
+
 	Docker monad.Maybe[docker.Body] `json:"docker"`
 }
 
 func (s *server) createTargetHandler() gin.HandlerFunc {
 	return http.Bind(s, func(c *gin.Context, body createTargetBody) error {
-		var (
-			payload any
-			ctx     = c.Request.Context()
-		)
+		var ctx = c.Request.Context()
 
 		if dockerBody, isSet := body.Docker.TryGet(); isSet {
-			payload = dockerBody
+			body.Provider = dockerBody
 		}
 
-		id, err := bus.Send(s.bus, ctx, create_target.Command{
-			Name:     body.Name,
-			Url:      body.Url,
-			Provider: payload,
-		})
+		id, err := bus.Send(s.bus, ctx, body.Command)
 
 		if err != nil {
 			return err
@@ -53,28 +46,22 @@ func (s *server) createTargetHandler() gin.HandlerFunc {
 }
 
 type updateTargetBody struct {
-	Name   monad.Maybe[string]      `json:"name"`
-	Url    monad.Maybe[string]      `json:"url"`
+	update_target.Command
+
 	Docker monad.Maybe[docker.Body] `json:"docker"`
 }
 
 func (s *server) updateTargetHandler() gin.HandlerFunc {
 	return http.Bind(s, func(c *gin.Context, body updateTargetBody) error {
-		var (
-			payload any
-			ctx     = c.Request.Context()
-		)
+		var ctx = c.Request.Context()
+
+		body.ID = c.Param("id")
 
 		if dockerBody, isSet := body.Docker.TryGet(); isSet {
-			payload = dockerBody
+			body.Provider = dockerBody
 		}
 
-		id, err := bus.Send(s.bus, ctx, update_target.Command{
-			ID:       c.Param("id"),
-			Name:     body.Name,
-			Url:      body.Url,
-			Provider: payload,
-		})
+		id, err := bus.Send(s.bus, ctx, body.Command)
 
 		if err != nil {
 			return err

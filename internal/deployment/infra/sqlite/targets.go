@@ -118,7 +118,7 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 		case domain.TargetUrlChanged:
 			return builder.
 				Update("targets", builder.Values{
-					"domain": evt.Url,
+					"url": evt.Url,
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)

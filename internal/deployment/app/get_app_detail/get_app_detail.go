@@ -36,6 +36,7 @@ type (
 	TargetSummary struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
+		Url  string `json:"url"`
 	}
 
 	ServicesEnv map[string]map[string]string

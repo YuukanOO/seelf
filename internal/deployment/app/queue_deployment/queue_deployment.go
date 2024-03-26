@@ -15,7 +15,7 @@ type Command struct {
 	bus.Command[int]
 
 	AppID       string `json:"-"`
-	Environment string `json:"-"`
+	Environment string `json:"environment" form:"environment"`
 	Source      any    `json:"-"`
 }
 

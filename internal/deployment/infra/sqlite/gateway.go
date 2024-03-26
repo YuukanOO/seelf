@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_app_deployments"
@@ -53,9 +54,11 @@ func (s *gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get
 				,apps.vcs_token
 				,production_target.id
 				,production_target.name
+				,production_target.url
 				,apps.production_vars
 				,staging_target.id
 				,staging_target.name
+				,staging_target.url
 				,apps.staging_vars
 				,apps.cleanup_requested_at
 				,cusers.id
@@ -80,6 +83,7 @@ func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deploy
 			,deployments.config_environment
 			,deployments.config_target
 			,targets.name
+			,targets.url
 			,deployments.source_discriminator
 			,deployments.source
 			,deployments.state_status
@@ -109,6 +113,7 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Quer
 			,deployments.config_environment
 			,deployments.config_target
 			,targets.name
+			,targets.url
 			,deployments.source_discriminator
 			,deployments.source
 			,deployments.state_status
@@ -194,6 +199,7 @@ func newAppWithLastDeploymentsByEnvDataloader[T any](
 				,deployments.config_environment
 				,deployments.config_target
 				,targets.name
+				,targets.url
 				,deployments.source_discriminator
 				,deployments.source
 				,deployments.state_status
@@ -287,9 +293,11 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 		&token,
 		&a.Production.Target.ID,
 		&a.Production.Target.Name,
+		&a.Production.Target.Url,
 		&a.Production.Vars,
 		&a.Staging.Target.ID,
 		&a.Staging.Target.Name,
+		&a.Staging.Target.Url,
 		&a.Staging.Vars,
 		&a.CleanupRequestedAt,
 		&cleanupRequestedById,
@@ -328,6 +336,7 @@ func lastDeploymentMapper(s storage.Scanner) (d get_deployment.Deployment, err e
 		&d.Environment,
 		&d.Target.ID,
 		&d.Target.Name,
+		&d.Target.Url,
 		&d.Source.Discriminator,
 		&sourceData,
 		&d.State.Status,
@@ -347,6 +356,8 @@ func lastDeploymentMapper(s storage.Scanner) (d get_deployment.Deployment, err e
 
 	d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
 
+	populateServicesUrls(d.Target.Url, d.State.Services)
+
 	return d, err
 }
 
@@ -359,6 +370,7 @@ func deploymentMapper(scanner storage.Scanner) (d get_deployment.Deployment, err
 		&d.Environment,
 		&d.Target.ID,
 		&d.Target.Name,
+		&d.Target.Url,
 		&d.Source.Discriminator,
 		&sourceData,
 		&d.State.Status,
@@ -377,7 +389,35 @@ func deploymentMapper(scanner storage.Scanner) (d get_deployment.Deployment, err
 
 	d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
 
+	populateServicesUrls(d.Target.Url, d.State.Services)
+
 	return d, err
+}
+
+// Since the target domain is dynamic, compute exposed service urls based on the presence
+// of the given current target url.
+func populateServicesUrls(targetUrl monad.Maybe[string], services monad.Maybe[get_deployment.Services]) {
+	ss, hasServices := services.TryGet()
+	url, hasUrl := targetUrl.TryGet()
+
+	if !hasUrl || !hasServices {
+		return
+	}
+
+	idx := strings.Index(url, "://")
+	scheme, host := url[:idx+3], url[idx+3:]
+
+	for i, s := range ss {
+		subdomain, isExposed := s.Subdomain.TryGet()
+
+		if !isExposed {
+			continue
+		}
+
+		s.Url.Set(scheme + subdomain + "." + host)
+
+		ss[i] = s
+	}
 }
 
 func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {

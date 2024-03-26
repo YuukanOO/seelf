@@ -1,7 +1,6 @@
 package version
 
 import (
-	"fmt"
 	"runtime/debug"
 )
 
@@ -14,7 +13,7 @@ func Current() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {
-				suffix = fmt.Sprintf("-%s", setting.Value)
+				suffix = "-" + setting.Value
 				break
 			}
 		}

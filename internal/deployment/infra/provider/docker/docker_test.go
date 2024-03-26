@@ -239,16 +239,22 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		testutil.IsNil(t, err)
 
 		project := compose.up.project
+
+		networkName := fmt.Sprintf("seelf-gateway-%s", strings.ToLower(string(targetWithoutSSL.ID())))
+		projectName := fmt.Sprintf("seelf-internal-%s", strings.ToLower(string(targetWithoutSSL.ID())))
+
 		testutil.IsNotNil(t, project)
-		testutil.Equals(t, "seelf-internal", project.Name)
+		testutil.Equals(t, projectName, project.Name)
 		testutil.HasLength(t, project.Services, 1)
-		testutil.Equals(t, "balancer", project.Services[0].Name)
+		testutil.Equals(t, "proxy", project.Services[0].Name)
 		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
-		testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
+		testutil.Equals(t, "traefik:v2.11", project.Services[0].Image)
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
-			"--providers.docker.network=seelf-public",
+			fmt.Sprintf("--providers.docker.network=%s", networkName),
 			"--providers.docker.exposedbydefault=false",
+			fmt.Sprintf("--providers.docker.constraints=Label(`%s`,`%s`)", docker.TargetLabel, targetWithoutSSL.ID()),
+			fmt.Sprintf("--providers.docker.defaultrule=Host(`{{ index .Labels %s}}.docker.localhost`)", fmt.Sprintf(`"%s"`, docker.SubdomainLabel)),
 		}, project.Services[0].Command)
 		testutil.HasLength(t, project.Services[0].Ports, 1)
 		testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
@@ -258,7 +264,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
 
 		testutil.Equals(t, 1, len(project.Networks))
-		testutil.Equals(t, "seelf-public", project.Networks["default"].Name)
+		testutil.Equals(t, networkName, project.Networks["default"].Name)
 	})
 
 	t.Run("should be able to configure a target with ssl", func(t *testing.T) {
@@ -270,22 +276,30 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		testutil.IsNil(t, err)
 
 		project := compose.up.project
+
+		networkName := fmt.Sprintf("seelf-gateway-%s", strings.ToLower(string(targetWithSSL.ID())))
+		projectName := fmt.Sprintf("seelf-internal-%s", strings.ToLower(string(targetWithSSL.ID())))
+		certResolverName := fmt.Sprintf("seelf-resolver-%s", strings.ToLower(string(targetWithSSL.ID())))
+
 		testutil.IsNotNil(t, project)
-		testutil.Equals(t, "seelf-internal", project.Name)
+		testutil.Equals(t, projectName, project.Name)
 		testutil.HasLength(t, project.Services, 1)
-		testutil.Equals(t, "balancer", project.Services[0].Name)
+		testutil.Equals(t, "proxy", project.Services[0].Name)
 		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
-		testutil.Equals(t, "traefik:v2.6", project.Services[0].Image)
+		testutil.Equals(t, "traefik:v2.11", project.Services[0].Image)
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
-			"--providers.docker.network=seelf-public",
+			fmt.Sprintf("--providers.docker.network=%s", networkName),
 			"--providers.docker.exposedbydefault=false",
+			fmt.Sprintf("--providers.docker.constraints=Label(`%s`,`%s`)", docker.TargetLabel, targetWithSSL.ID()),
+			fmt.Sprintf("--providers.docker.defaultrule=Host(`{{ index .Labels %s}}.docker.localhost`)", fmt.Sprintf(`"%s"`, docker.SubdomainLabel)),
 			"--entrypoints.web.address=:80",
 			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
 			"--entrypoints.web.http.redirections.entryPoint.scheme=https",
 			"--entrypoints.websecure.address=:443",
-			"--certificatesresolvers.seelfresolver.acme.tlschallenge=true",
-			"--certificatesresolvers.seelfresolver.acme.storage=/letsencrypt/acme.json",
+			fmt.Sprintf("--certificatesresolvers.%s.acme.tlschallenge=true", certResolverName),
+			fmt.Sprintf("--certificatesresolvers.%s.acme.storage=/letsencrypt/acme.json", certResolverName),
+			fmt.Sprintf("--entrypoints.websecure.http.tls.certresolver=%s", certResolverName),
 		}, project.Services[0].Command)
 		testutil.HasLength(t, project.Services[0].Ports, 2)
 		testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
@@ -299,10 +313,10 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		testutil.Equals(t, "/letsencrypt", project.Services[0].Volumes[1].Target)
 
 		testutil.Equals(t, 1, len(project.Networks))
-		testutil.Equals(t, "seelf-public", project.Networks["default"].Name)
+		testutil.Equals(t, networkName, project.Networks["default"].Name)
 
 		testutil.Equals(t, 1, len(project.Volumes))
-		testutil.Equals(t, "seelf-internal_letsencrypt", project.Volumes["letsencrypt"].Name)
+		testutil.Equals(t, fmt.Sprintf("%s_letsencrypt", projectName), project.Volumes["letsencrypt"].Name)
 	})
 
 	t.Run("should be able to cleanup a target", func(t *testing.T) {
@@ -339,6 +353,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		dsn := "postgres://prodapp:passprod@db/app?sslmode=disable"
 		postgresUser := "prodapp"
 		postgresPassword := "passprod"
+		targetNetworkName := fmt.Sprintf("seelf-gateway-%s", strings.ToLower(string(target.ID())))
 
 		config := domain.NewEnvironmentConfig(target.ID())
 		config.HasEnvironmentVariables(domain.ServicesEnv{
@@ -409,27 +424,19 @@ volumes:
 		testutil.HasLength(t, services, 3)
 		testutil.Equals(t, "app", services[0].Name())
 		testutil.Equals(t, fmt.Sprintf("my-app-%s/app:production", appidLower), services[0].Image())
-		if target.Url().UseSSL() {
-			testutil.Equals(t, "https://my-app.docker.localhost", services[0].Url().MustGet().String())
-		} else {
-			testutil.Equals(t, "http://my-app.docker.localhost", services[0].Url().MustGet().String())
-		}
+		testutil.Equals(t, "my-app", services[0].Subdomain().MustGet())
 
 		testutil.Equals(t, "db", services[1].Name())
 		testutil.Equals(t, "postgres:14-alpine", services[1].Image())
-		testutil.IsFalse(t, services[1].Url().HasValue())
+		testutil.IsFalse(t, services[1].Subdomain().HasValue())
 
 		testutil.Equals(t, "sidecar", services[2].Name())
 		testutil.Equals(t, "traefik/whoami", services[2].Image())
-		if target.Url().UseSSL() {
-			testutil.Equals(t, "https://sidecar.my-app.docker.localhost", services[2].Url().MustGet().String())
-		} else {
-			testutil.Equals(t, "http://sidecar.my-app.docker.localhost", services[2].Url().MustGet().String())
-		}
+		testutil.Equals(t, "sidecar.my-app", services[2].Subdomain().MustGet())
 
 		project := composeMock.up.project
 		testutil.IsNotNil(t, project)
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-production", appidLower), project.Name)
+		testutil.Equals(t, fmt.Sprintf("my-app-production-%s", appidLower), project.Name)
 
 		for _, service := range project.Services {
 			switch service.Name {
@@ -439,35 +446,27 @@ volumes:
 				testutil.Equals(t, types.PullPolicyBuild, service.PullPolicy)
 				testutil.DeepEquals(t, types.Labels{
 					docker.AppLabel:         string(app.ID()),
+					docker.TargetLabel:      string(target.ID()),
 					docker.EnvironmentLabel: string(domain.Production),
 				}, service.Build.Labels)
 				testutil.HasLength(t, service.Ports, 0)
 				testutil.DeepEquals(t, types.MappingWithEquals{
 					"DSN": &dsn,
 				}, service.Environment)
-				if target.Url().UseSSL() {
-					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:         string(app.ID()),
-						docker.EnvironmentLabel: string(domain.Production),
-						"traefik.enable":        "true",
-						fmt.Sprintf("traefik.http.services.my-app-%s-production-app.loadbalancer.server.port", appidLower): "8080",
-						fmt.Sprintf("traefik.http.routers.my-app-%s-production-app.rule", appidLower):                      "Host(`my-app.docker.localhost`)",
-						fmt.Sprintf("traefik.http.routers.my-app-%s-production-app.tls.certresolver", appidLower):          "seelfresolver",
-					}, service.Labels)
-				} else {
-					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:         string(app.ID()),
-						docker.EnvironmentLabel: string(domain.Production),
-						"traefik.enable":        "true",
-						fmt.Sprintf("traefik.http.services.my-app-%s-production-app.loadbalancer.server.port", appidLower): "8080",
-						fmt.Sprintf("traefik.http.routers.my-app-%s-production-app.rule", appidLower):                      "Host(`my-app.docker.localhost`)",
-					}, service.Labels)
-				}
+				testutil.DeepEquals(t, types.Labels{
+					docker.AppLabel:         string(app.ID()),
+					docker.TargetLabel:      string(target.ID()),
+					docker.EnvironmentLabel: string(domain.Production),
+					docker.SubdomainLabel:   "my-app",
+					"traefik.enable":        "true",
+					fmt.Sprintf("traefik.http.services.my-app-production-%s-app.loadbalancer.server.port", appidLower): "8080",
+				}, service.Labels)
 			case "db":
 				testutil.Equals(t, "postgres:14-alpine", service.Image)
 				testutil.Equals(t, types.RestartPolicyUnlessStopped, service.Restart)
 				testutil.DeepEquals(t, types.Labels{
 					docker.AppLabel:         string(app.ID()),
+					docker.TargetLabel:      string(target.ID()),
 					docker.EnvironmentLabel: string(domain.Production),
 				}, service.Labels)
 				testutil.DeepEquals(t, types.MappingWithEquals{
@@ -481,49 +480,42 @@ volumes:
 				testutil.Equals(t, "traefik/whoami", service.Image)
 				testutil.HasLength(t, service.Ports, 0)
 				testutil.DeepEquals(t, types.MappingWithEquals{}, service.Environment)
-				if target.Url().UseSSL() {
-					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:         string(app.ID()),
-						docker.EnvironmentLabel: string(domain.Production),
-						"traefik.enable":        "true",
-						fmt.Sprintf("traefik.http.services.my-app-%s-production-sidecar.loadbalancer.server.port", appidLower): "80",
-						fmt.Sprintf("traefik.http.routers.my-app-%s-production-sidecar.rule", appidLower):                      "Host(`sidecar.my-app.docker.localhost`)",
-						fmt.Sprintf("traefik.http.routers.my-app-%s-production-sidecar.tls.certresolver", appidLower):          "seelfresolver",
-					}, service.Labels)
-				} else {
-					testutil.DeepEquals(t, types.Labels{
-						docker.AppLabel:         string(app.ID()),
-						docker.EnvironmentLabel: string(domain.Production),
-						"traefik.enable":        "true",
-						fmt.Sprintf("traefik.http.services.my-app-%s-production-sidecar.loadbalancer.server.port", appidLower): "80",
-						fmt.Sprintf("traefik.http.routers.my-app-%s-production-sidecar.rule", appidLower):                      "Host(`sidecar.my-app.docker.localhost`)",
-					}, service.Labels)
-				}
+				testutil.DeepEquals(t, types.Labels{
+					docker.AppLabel:         string(app.ID()),
+					docker.TargetLabel:      string(target.ID()),
+					docker.SubdomainLabel:   "sidecar.my-app",
+					docker.EnvironmentLabel: string(domain.Production),
+					"traefik.enable":        "true",
+					fmt.Sprintf("traefik.http.services.my-app-production-%s-sidecar.loadbalancer.server.port", appidLower): "80",
+				}, service.Labels)
 			default:
 				t.Fatal("no other service expected")
 			}
 		}
 
 		testutil.Equals(t, 2, len(project.Networks))
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-production_default", appidLower), project.Networks["default"].Name)
+		testutil.Equals(t, fmt.Sprintf("my-app-production-%s_default", appidLower), project.Networks["default"].Name)
 		testutil.DeepEquals(t, types.Labels{
 			docker.AppLabel:         string(app.ID()),
+			docker.TargetLabel:      string(target.ID()),
 			docker.EnvironmentLabel: string(domain.Production),
 		}, project.Networks["default"].Labels)
-		testutil.Equals(t, "seelf-public", project.Networks["seelf-public"].Name)
-		testutil.Equals(t, 0, len(project.Networks["seelf-public"].Labels))
-		testutil.IsTrue(t, project.Networks["seelf-public"].External.External)
+		testutil.Equals(t, targetNetworkName, project.Networks[targetNetworkName].Name)
+		testutil.Equals(t, 0, len(project.Networks[targetNetworkName].Labels))
+		testutil.IsTrue(t, project.Networks[targetNetworkName].External.External)
 
 		testutil.Equals(t, 1, len(project.Volumes))
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-production_dbdata", appidLower), project.Volumes["dbdata"].Name)
+		testutil.Equals(t, fmt.Sprintf("my-app-production-%s_dbdata", appidLower), project.Volumes["dbdata"].Name)
 		testutil.DeepEquals(t, types.Labels{
 			docker.AppLabel:         string(app.ID()),
+			docker.TargetLabel:      string(target.ID()),
 			docker.EnvironmentLabel: string(domain.Production),
 		}, project.Volumes["dbdata"].Labels)
 
 		testutil.DeepEquals(t, filters.NewArgs(
 			filters.Arg("dangling", "true"),
 			filters.Arg("label", fmt.Sprintf("%s=%s", docker.AppLabel, app.ID())),
+			filters.Arg("label", fmt.Sprintf("%s=%s", docker.TargetLabel, target.ID())),
 			filters.Arg("label", fmt.Sprintf("%s=%s", docker.EnvironmentLabel, domain.Production)),
 		), cliMock.pruneFilter)
 	}

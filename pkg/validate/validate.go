@@ -1,7 +1,6 @@
 package validate
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -20,7 +19,7 @@ func (e FieldErrors) Error() string {
 	var builder strings.Builder
 
 	for name, err := range e {
-		builder.WriteString(fmt.Sprintf("\n\t%s: %s", name, err))
+		builder.WriteString("\n\t" + name + ": " + err.Error())
 	}
 
 	return builder.String()

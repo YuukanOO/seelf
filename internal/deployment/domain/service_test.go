@@ -13,7 +13,6 @@ import (
 func Test_Services(t *testing.T) {
 	app := must.Panic(domain.NewApp("my-app", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 	appidLower := strings.ToLower(string(app.ID()))
-	domainUrl := must.Panic(domain.UrlFrom("http://docker.localhost"))
 	conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
 
 	t.Run("should be able to add a private service", func(t *testing.T) {
@@ -22,13 +21,13 @@ func Test_Services(t *testing.T) {
 			added domain.Service
 		)
 
-		s, added = s.Internal(conf, "db", "postgres:14-alpine")
+		s, added = s.Append(conf, "db", "postgres:14-alpine", false)
 
 		testutil.HasLength(t, s, 1)
 		testutil.Equals(t, "db", added.Name())
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-production-db", appidLower), added.QualifiedName())
+		testutil.Equals(t, fmt.Sprintf("my-app-production-%s-db", appidLower), added.QualifiedName())
 		testutil.Equals(t, "postgres:14-alpine", added.Image())
-		testutil.IsFalse(t, added.Url().HasValue())
+		testutil.IsFalse(t, added.Subdomain().HasValue())
 	})
 
 	t.Run("should be able to add a public service", func(t *testing.T) {
@@ -37,13 +36,13 @@ func Test_Services(t *testing.T) {
 			added domain.Service
 		)
 
-		s, added = s.Public(domainUrl, conf, "app", "my-app-production/app:1")
+		s, added = s.Append(conf, "app", "my-app-production/app:1", true)
 
 		testutil.HasLength(t, s, 1)
 		testutil.Equals(t, "app", added.Name())
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-production-app", appidLower), added.QualifiedName())
+		testutil.Equals(t, fmt.Sprintf("my-app-production-%s-app", appidLower), added.QualifiedName())
 		testutil.Equals(t, "my-app-production/app:1", added.Image())
-		testutil.Equals(t, "http://my-app.docker.localhost", added.Url().MustGet().String())
+		testutil.Equals(t, "my-app", added.Subdomain().MustGet())
 	})
 
 	t.Run("should generates an image name if no one is provided", func(t *testing.T) {
@@ -52,13 +51,13 @@ func Test_Services(t *testing.T) {
 			added domain.Service
 		)
 
-		s, added = s.Public(domainUrl, conf, "app", "")
+		s, added = s.Append(conf, "app", "", true)
 
 		testutil.HasLength(t, s, 1)
 		testutil.Equals(t, "app", added.Name())
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-production-app", appidLower), added.QualifiedName())
+		testutil.Equals(t, fmt.Sprintf("my-app-production-%s-app", appidLower), added.QualifiedName())
 		testutil.Equals(t, fmt.Sprintf("my-app-%s/app:production", appidLower), added.Image())
-		testutil.Equals(t, "http://my-app.docker.localhost", added.Url().MustGet().String())
+		testutil.Equals(t, "my-app", added.Subdomain().MustGet())
 	})
 
 	t.Run("should handle multiple service on the same domain by adding a prefix if needed", func(t *testing.T) {
@@ -68,52 +67,51 @@ func Test_Services(t *testing.T) {
 			other   domain.Service
 		)
 
-		s, _ = s.Internal(conf, "db", "postgres:14-alpine")
-		s, mainApp = s.Public(domainUrl, conf, "app", "my-app-production/app:1")
-		s, other = s.Public(domainUrl, conf, "other-service", "my-app-production/other-service:1")
+		s, _ = s.Append(conf, "db", "postgres:14-alpine", false)
+		s, mainApp = s.Append(conf, "app", "my-app-production/app:1", true)
+		s, other = s.Append(conf, "other-service", "my-app-production/other-service:1", true)
 
 		testutil.HasLength(t, s, 3)
 		testutil.Equals(t, "app", mainApp.Name())
 		testutil.Equals(t, "my-app-production/app:1", mainApp.Image())
-		testutil.Equals(t, "http://my-app.docker.localhost", mainApp.Url().MustGet().String())
+		testutil.Equals(t, "my-app", mainApp.Subdomain().MustGet())
 
 		testutil.Equals(t, "other-service", other.Name())
 		testutil.Equals(t, "my-app-production/other-service:1", other.Image())
-		testutil.Equals(t, "http://other-service.my-app.docker.localhost", other.Url().MustGet().String())
+		testutil.Equals(t, "other-service.my-app", other.Subdomain().MustGet())
 	})
 
 	t.Run("should implement the valuer interface", func(t *testing.T) {
 		var services domain.Services
 
-		services, _ = services.Internal(conf, "internal", "an/image")
-		services, _ = services.Public(domainUrl, conf, "public", "another/image")
+		services, _ = services.Append(conf, "internal", "an/image", false)
+		services, _ = services.Append(conf, "public", "another/image", true)
 
 		value, err := services.Value()
 
 		testutil.IsNil(t, err)
-		testutil.Equals(t, fmt.Sprintf(`[{"name":"internal","qualified_name":"my-app-%s-production-internal","image":"an/image","url":null},{"name":"public","qualified_name":"my-app-%s-production-public","image":"another/image","url":"http://my-app.docker.localhost"}]`, appidLower, appidLower), value.(string))
+		testutil.Equals(t, fmt.Sprintf(`[{"name":"internal","qualified_name":"my-app-production-%s-internal","image":"an/image","subdomain":null},{"name":"public","qualified_name":"my-app-production-%s-public","image":"another/image","subdomain":"my-app"}]`, appidLower, appidLower), value.(string))
 	})
 
 	t.Run("should implement the scanner interface", func(t *testing.T) {
 		var services domain.Services
 
-		err := services.Scan(`[{"name":"internal","qualified_name":"my-app-production-internal","image":"an/image","url":null},{"name":"public","qualified_name":"my-app-production-public","image":"another/image","url":"http://my-app.docker.localhost"}]`)
+		err := services.Scan(`[{"name":"internal","qualified_name":"my-app-production-internal","image":"an/image","subdomain":null},{"name":"public","qualified_name":"my-app-production-public","image":"another/image","subdomain":"my-app"}]`)
 
 		testutil.IsNil(t, err)
 		testutil.HasLength(t, services, 2)
 
 		s := services[0]
-		testutil.IsFalse(t, s.Url().HasValue())
+		testutil.IsFalse(t, s.Subdomain().HasValue())
 		testutil.Equals(t, "internal", s.Name())
 		testutil.Equals(t, "my-app-production-internal", s.QualifiedName())
 		testutil.Equals(t, "an/image", s.Image())
 
 		s = services[1]
-		testutil.IsTrue(t, s.Url().HasValue())
+		testutil.IsTrue(t, s.Subdomain().HasValue())
 		testutil.Equals(t, "public", s.Name())
 		testutil.Equals(t, "my-app-production-public", s.QualifiedName())
 		testutil.Equals(t, "another/image", s.Image())
-		url := s.Url().MustGet()
-		testutil.Equals(t, "http://my-app.docker.localhost", url.String())
+		testutil.Equals(t, "my-app", s.Subdomain().MustGet())
 	})
 }

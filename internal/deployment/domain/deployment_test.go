@@ -90,7 +90,7 @@ func Test_Deployment(t *testing.T) {
 		)
 
 		dpl := must.Panic(app.NewDeployment(number, nonVcsMeta, domain.Production, uid))
-		services, _ = services.Internal(dpl.Config(), "aservice", "an/image")
+		services, _ = services.Append(dpl.Config(), "aservice", "an/image", false)
 		dpl.HasStarted()
 
 		err = dpl.HasEnded(services, nil)

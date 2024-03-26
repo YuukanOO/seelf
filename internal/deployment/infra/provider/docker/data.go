@@ -2,7 +2,7 @@ package docker
 
 import (
 	"database/sql/driver"
-	"fmt"
+	"strconv"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_target"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -32,7 +32,7 @@ func (c Data) Equals(other domain.ProviderConfig) bool { return c == other }
 
 func (c Data) String() string {
 	if host, isRemote := c.Host.TryGet(); isRemote {
-		return fmt.Sprintf("%s@%s:%d", c.User.Get(defaultUser), host, c.Port.Get(defaultPort))
+		return c.User.Get(defaultUser) + "@" + string(host) + ":" + strconv.Itoa(c.Port.Get(defaultPort))
 	}
 
 	return "local"

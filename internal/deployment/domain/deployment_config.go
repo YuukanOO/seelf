@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -69,28 +68,35 @@ func (c DeploymentConfig) EnvironmentVariablesFor(service string) (m monad.Maybe
 	return m
 }
 
-// Returns the subdomain that will be used to expose services of an app.
-func (c DeploymentConfig) SubDomain() string {
-	if c.environment.IsProduction() {
-		return string(c.appname)
+// Returns the subdomain that will be used to expose a specific service.
+func (c DeploymentConfig) SubDomain(service string, hasExposedServices bool) string {
+	subdomain := string(c.appname)
 
+	if !c.environment.IsProduction() {
+		subdomain += "-" + string(c.environment)
 	}
 
-	return fmt.Sprintf("%s-%s", c.appname, c.environment)
+	// If the default domain has already been taken by another service, build a
+	// unique subdomain with the service name being exposed.
+	if hasExposedServices {
+		subdomain = service + "." + subdomain
+	}
+
+	return subdomain
 }
 
 // Builds a unique image name for the given service.
 func (c DeploymentConfig) ImageName(service string) string {
-	return fmt.Sprintf("%s-%s/%s:%s", c.appname, strings.ToLower(string(c.appid)), service, c.environment)
+	return string(c.appname) + "-" + strings.ToLower(string(c.appid)) + "/" + service + ":" + string(c.environment)
 }
 
 // Builds a qualified name, truly unique, for the given service.
 func (c DeploymentConfig) QualifiedName(service string) string {
-	return fmt.Sprintf("%s-%s", c.ProjectName(), service)
+	return c.ProjectName() + "-" + service
 }
 
 // Retrieve the name of the project wich is the combination of the appname, environment and appid
 // targeted by this configuration.
 func (c DeploymentConfig) ProjectName() string {
-	return fmt.Sprintf("%s-%s-%s", c.appname, strings.ToLower(string(c.appid)), c.environment)
+	return string(c.appname) + "-" + string(c.environment) + "-" + strings.ToLower(string(c.appid))
 }

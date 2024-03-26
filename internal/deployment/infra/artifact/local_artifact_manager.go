@@ -3,9 +3,9 @@ package artifact
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -100,7 +100,7 @@ func (a *localArtifactManager) Cleanup(ctx context.Context, app domain.App) erro
 	}
 
 	// Remove all logs for this app
-	logsPattern := filepath.Join(a.logsDirectory, fmt.Sprintf("*%s*.deployment.log", app.ID()))
+	logsPattern := filepath.Join(a.logsDirectory, "*"+string(app.ID())+"*.deployment.log")
 	a.logger.Debugw("removing app logs", "pattern", logsPattern)
 	return ostools.RemovePattern(logsPattern)
 }
@@ -108,8 +108,13 @@ func (a *localArtifactManager) Cleanup(ctx context.Context, app domain.App) erro
 func (a *localArtifactManager) LogPath(ctx context.Context, depl domain.Deployment) string {
 	return filepath.Join(
 		a.logsDirectory,
-		fmt.Sprintf("%d-%s-%d.deployment.log",
-			depl.Requested().At().Unix(), depl.ID().AppID(), depl.ID().DeploymentNumber()))
+		strconv.FormatInt(depl.Requested().At().Unix(), 10)+
+			"-"+
+			string(depl.ID().AppID())+
+			"-"+
+			strconv.Itoa(int(depl.ID().DeploymentNumber()))+
+			".deployment.log",
+	)
 }
 
 func (a *localArtifactManager) appPath(appID domain.AppID) string {

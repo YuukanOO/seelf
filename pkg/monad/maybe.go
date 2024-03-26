@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 
 	"gopkg.in/yaml.v3"
 )
@@ -159,7 +158,7 @@ func (m *Maybe[T]) UnmarshalYAML(value *yaml.Node) error {
 func (m *Maybe[T]) UnmarshalEnvironmentValue(data string) error {
 	// If the value is a string, it should be quoted for the json.Unmarshal to work correctly
 	if _, isString := any(&m.value).(*string); data != "" && isString {
-		data = fmt.Sprintf(`"%s"`, data)
+		data = `"` + data + `"`
 	}
 
 	if err := json.Unmarshal([]byte(data), &m.value); err != nil {

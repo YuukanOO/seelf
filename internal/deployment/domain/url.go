@@ -3,7 +3,6 @@ package domain
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 	"net/url"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -37,7 +36,7 @@ func (u Url) Equals(other Url) bool { return u.value.String() == other.value.Str
 func (u Url) SubDomain(subdomain string) Url {
 	url := *u.value
 	// FIXME: should we validate the given subdomain here? Or at least encode it
-	url.Host = fmt.Sprintf("%s.%s", subdomain, u.Host())
+	url.Host = subdomain + "." + u.Host()
 	return Url{&url}
 }
 

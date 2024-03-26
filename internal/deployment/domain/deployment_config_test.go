@@ -53,22 +53,24 @@ func Test_Config(t *testing.T) {
 		testutil.IsFalse(t, conf.EnvironmentVariablesFor("app").HasValue())
 	})
 
-	t.Run("should have a subdomain equals to app name if env is production", func(t *testing.T) {
+	t.Run("should generate a subdomain equals to app name if env is production", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Production)
 
-		testutil.Equals(t, "my-app", conf.SubDomain())
+		testutil.Equals(t, "my-app", conf.SubDomain("app", false))
+		testutil.Equals(t, "db.my-app", conf.SubDomain("db", true))
 	})
 
-	t.Run("should have a subdomain suffixed by the env if not production", func(t *testing.T) {
+	t.Run("should generate a subdomain suffixed by the env if not production", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Staging)
 
-		testutil.Equals(t, "my-app-staging", conf.SubDomain())
+		testutil.Equals(t, "my-app-staging", conf.SubDomain("app", false))
+		testutil.Equals(t, "db.my-app-staging", conf.SubDomain("db", true))
 	})
 
 	t.Run("should expose a unique project name", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Staging)
 
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-staging", appidLower), conf.ProjectName())
+		testutil.Equals(t, fmt.Sprintf("my-app-staging-%s", appidLower), conf.ProjectName())
 	})
 
 	t.Run("should expose a unique image name for a service", func(t *testing.T) {
@@ -80,6 +82,6 @@ func Test_Config(t *testing.T) {
 	t.Run("should expose a unique qualified name for a service", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Staging)
 
-		testutil.Equals(t, fmt.Sprintf("my-app-%s-staging-app", appidLower), conf.QualifiedName("app"))
+		testutil.Equals(t, fmt.Sprintf("my-app-staging-%s-app", appidLower), conf.QualifiedName("app"))
 	})
 }

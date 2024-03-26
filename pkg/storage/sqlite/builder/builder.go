@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -96,11 +95,11 @@ func Insert(table string, values Values) QueryBuilder[any] {
 		i++
 	}
 
-	b.WriteString(fmt.Sprintf("INSERT INTO %s (", table))
+	b.WriteString("INSERT INTO " + table + " (")
 	b.WriteString(strings.Join(columns, ","))
 
 	placeholders := strings.Repeat(",?", size)[1:] // Remove the first comma
-	b.WriteString(fmt.Sprintf(") VALUES (%s)", placeholders))
+	b.WriteString(") VALUES (" + placeholders + ")")
 
 	return Command(b.String(), args...)
 }
@@ -116,12 +115,12 @@ func Update(table string, values Values) QueryBuilder[any] {
 	)
 
 	for field, value := range values {
-		statements[i] = fmt.Sprintf("%s = ?", field)
+		statements[i] = field + " = ?"
 		args[i] = value
 		i++
 	}
 
-	b.WriteString(fmt.Sprintf("UPDATE %s SET ", table))
+	b.WriteString("UPDATE " + table + " SET ")
 	b.WriteString(strings.Join(statements, ","))
 
 	return Command(b.String(), args...)

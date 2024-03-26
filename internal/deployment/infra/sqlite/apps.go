@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -155,8 +154,8 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 			// own code.
 			return builder.
 				Update("apps", builder.Values{
-					fmt.Sprintf("%s_target", evt.Environment): evt.Config.Target(),
-					fmt.Sprintf("%s_vars", evt.Environment):   evt.Config.Vars(),
+					string(evt.Environment) + "_target": evt.Config.Target(),
+					string(evt.Environment) + "_vars":   evt.Config.Vars(),
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)

@@ -2,11 +2,11 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -211,12 +211,12 @@ func (c configuration) AcmeEmail() string {
 
 // Gets the connection string to be used.
 func (c configuration) ConnectionString() string {
-	return fmt.Sprintf("file:%s", path.Join(c.Data.Path, databaseFilename))
+	return "file:" + path.Join(c.Data.Path, databaseFilename)
 }
 
 // Returns the address to bind the HTTP server to.
 func (c configuration) ListenAddress() string {
-	return fmt.Sprintf("%s:%d", c.Http.Host, c.Http.Port)
+	return c.Http.Host + ":" + strconv.Itoa(c.Http.Port)
 }
 
 func (c *configuration) PostLoad() error {
@@ -261,7 +261,7 @@ func (c *configuration) checkNonSupportedConfigChanges(logger log.Logger) error 
 // Generates a random data directory path to avoid conflicts with other tests.
 func WithTestDefaults() ConfigurationBuilder {
 	return func(c *configuration) {
-		c.Data.Path = fmt.Sprintf("__testdata_%s", id.New[string]())
+		c.Data.Path = "__testdata_" + id.New[string]()
 	}
 }
 

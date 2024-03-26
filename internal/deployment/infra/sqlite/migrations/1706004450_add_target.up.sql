@@ -32,7 +32,6 @@ INSERT INTO targets (
     ,provider
     ,state_status
     ,state_version
-    ,state_last_ready_version
     ,created_at
     ,created_by
 )
@@ -43,12 +42,29 @@ SELECT
     ,'docker'
     ,''
     ,'{}'
-    ,2
-    ,DATETIME()
-    ,DATETIME()
+    ,0
+    ,'2024-01-23T10:07:30Z'
     ,DATETIME()
     ,(SELECT id FROM users LIMIT 1)
 FROM apps LIMIT 1;
+
+-- Schedule a target configuration if a target was created above
+INSERT INTO scheduled_jobs (
+    id
+    ,dedupe_name
+    ,message_name
+    ,message_data
+    ,queued_at
+    ,retrieved
+)
+SELECT
+    id
+    ,'deployment.target.operation.' || id
+    ,'deployment.command.configure_target'
+    ,'{"id":"' || id || '","version":"2024-01-23T10:07:30Z"}'
+    ,DATETIME()
+    ,false
+FROM targets;
 
 -- Rename the old apps table since it will be recreated with proper NOT NULL columns
 ALTER TABLE apps RENAME TO tmp_apps;

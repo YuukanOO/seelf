@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -50,6 +49,6 @@ func Array[T any](prefix string, values []T) Statement {
 			args[i] = value
 		}
 
-		builder.apply(fmt.Sprintf("%s (%s)", prefix, placeholders), args...)
+		builder.apply(prefix+" ("+placeholders+")", args...)
 	}
 }

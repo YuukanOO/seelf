@@ -60,7 +60,7 @@ func Test_DeploymentState(t *testing.T) {
 
 		app := must.Panic(domain.NewApp("app1", domain.NewEnvironmentConfig("production-target"), domain.NewEnvironmentConfig("staging-target"), domain.AppNamingProductionAvailable|domain.AppNamingStagingAvailable, "uid"))
 		conf := must.Panic(app.ConfigSnapshotFor(domain.Production))
-		services, _ = services.Internal(conf, "name1", "image1")
+		services, _ = services.Append(conf, "name1", "image1", false)
 		testutil.IsNil(t, state.Started())
 
 		err = state.Succeeded(services)

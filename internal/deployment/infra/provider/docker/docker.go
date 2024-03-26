@@ -45,12 +45,9 @@ var (
 )
 
 const (
-	balancerProjectName = "seelf-internal"
-	balancerServiceName = "balancer"
-	certResolverName    = "seelfresolver"
-	publicNetworkName   = "seelf-public"
-
 	AppLabel         = "app.seelf.application"
+	TargetLabel      = "app.seelf.target"
+	SubdomainLabel   = "app.seelf.subdomain"
 	EnvironmentLabel = "app.seelf.environment"
 )
 
@@ -214,21 +211,31 @@ func (d *docker) Configure(ctx context.Context, target domain.Target) (err error
 
 	defer cli.Client().Close()
 
+	var (
+		targetIdLower = strings.ToLower(string(id))
+		projectName   = "seelf-internal-" + targetIdLower
+		networkName   = targetPublicNetworkName(id)
+	)
+
 	// Append seelf specific labels to be able to clean up resources if the target is deleted
-	labels := types.Labels{AppLabel: balancerServiceName}
+	labels := types.Labels{
+		TargetLabel: string(id),
+	}
 
 	project := &types.Project{
-		Name: balancerProjectName,
+		Name: projectName,
 		Services: []types.ServiceConfig{
 			{
-				Name:    balancerServiceName,
+				Name:    "proxy",
 				Labels:  labels,
-				Image:   "traefik:v2.6",
+				Image:   "traefik:v2.11",
 				Restart: types.RestartPolicyUnlessStopped,
 				Command: []string{
 					"--providers.docker",
-					fmt.Sprintf("--providers.docker.network=%s", publicNetworkName),
+					"--providers.docker.network=" + networkName,
 					"--providers.docker.exposedbydefault=false",
+					"--providers.docker.constraints=Label(`" + TargetLabel + "`,`" + string(id) + "`)",
+					"--providers.docker.defaultrule=Host(`{{ index .Labels " + `"` + SubdomainLabel + `"` + "}}." + target.Url().Host() + "`)",
 				},
 				Ports: []types.ServicePortConfig{
 					{Target: 80, Published: "80"},
@@ -236,25 +243,28 @@ func (d *docker) Configure(ctx context.Context, target domain.Target) (err error
 				Volumes: []types.ServiceVolumeConfig{
 					{Type: types.VolumeTypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
 				},
-				CustomLabels: getProjectCustomLabels(balancerProjectName, balancerServiceName, ""),
+				CustomLabels: getProjectCustomLabels(projectName, "proxy", ""),
 			},
 		},
 		Networks: types.Networks{
 			"default": types.NetworkConfig{
-				Name:   publicNetworkName,
+				Name:   networkName,
 				Labels: labels,
 			},
 		},
 	}
 
 	if target.Url().UseSSL() {
+		certResolverName := "seelf-resolver-" + targetIdLower
+
 		project.Services[0].Command = append(project.Services[0].Command,
 			"--entrypoints.web.address=:80",
 			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
 			"--entrypoints.web.http.redirections.entryPoint.scheme=https",
 			"--entrypoints.websecure.address=:443",
-			fmt.Sprintf("--certificatesresolvers.%s.acme.tlschallenge=true", certResolverName),
-			fmt.Sprintf("--certificatesresolvers.%s.acme.storage=/letsencrypt/acme.json", certResolverName),
+			"--certificatesresolvers."+certResolverName+".acme.tlschallenge=true",
+			"--certificatesresolvers."+certResolverName+".acme.storage=/letsencrypt/acme.json",
+			"--entrypoints.websecure.http.tls.certresolver="+certResolverName,
 		)
 		project.Services[0].Ports = append(project.Services[0].Ports, types.ServicePortConfig{
 			Target: 443, Published: "443",
@@ -304,9 +314,7 @@ func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext
 
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
-	url := target.Url()
-
-	project, services, err := generateProject(depl, deploymentCtx.BuildDirectory(), logger, url)
+	project, services, err := generateProject(depl, deploymentCtx.BuildDirectory(), logger)
 
 	if err != nil {
 		return nil, err
@@ -327,15 +335,16 @@ func (d *docker) Run(ctx context.Context, deploymentCtx domain.DeploymentContext
 		return nil, ErrComposeFailed
 	}
 
-	if url.UseSSL() {
+	if target.Url().UseSSL() {
 		logger.Infof("you may have to wait for certificates to be generated before your app is available")
 	}
 
 	// Remove dangling images
 	pruneResult, err := client.ImagesPrune(ctx, filters.NewArgs(
 		filters.Arg("dangling", "true"),
-		filters.Arg("label", fmt.Sprintf("%s=%s", AppLabel, depl.ID().AppID())),
-		filters.Arg("label", fmt.Sprintf("%s=%s", EnvironmentLabel, depl.Config().Environment())),
+		filters.Arg("label", AppLabel+"="+string(depl.ID().AppID())),
+		filters.Arg("label", TargetLabel+"="+string(target.ID())),
+		filters.Arg("label", EnvironmentLabel+"="+string(depl.Config().Environment())),
 	))
 
 	if err == nil {
@@ -361,10 +370,10 @@ func (d *docker) CleanupTarget(ctx context.Context, target domain.Target, strate
 				return
 			}
 
-			d.logger.Errorw(fmt.Sprintf(`Could not connect to the target but the cleanup was forced. The configuration
+			d.logger.Errorw(`Could not connect to the target but the cleanup was forced. The configuration
 associated with this target will be removed.
 
-If you wish to remove docker resources allocated by seelf yourself, you can use: docker <resource> --filters label=%s`, AppLabel),
+If you wish to remove docker resources allocated by seelf yourself, you can use: docker <resource> --filters label=`+TargetLabel+`=`+string(target.ID()),
 				"target", target.ID(),
 				"config", target.Provider().String())
 		}
@@ -382,7 +391,7 @@ If you wish to remove docker resources allocated by seelf yourself, you can use:
 
 	// Remove all resources managed by seelf
 	if err = d.removeResources(ctx, client, filters.NewArgs(
-		filters.Arg("label", AppLabel),
+		filters.Arg("label", TargetLabel+"="+string(target.ID())),
 	)); err != nil {
 		return
 	}
@@ -402,8 +411,9 @@ func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Ta
 	defer client.Close()
 
 	return d.removeResources(ctx, client, filters.NewArgs(
-		filters.Arg("label", fmt.Sprintf("%s=%s", AppLabel, app)),
-		filters.Arg("label", fmt.Sprintf("%s=%s", EnvironmentLabel, env)),
+		filters.Arg("label", AppLabel+"="+string(app)),
+		filters.Arg("label", TargetLabel+"="+string(target.ID())),
+		filters.Arg("label", EnvironmentLabel+"="+string(env)),
 	))
 }
 
@@ -606,15 +616,16 @@ func loadProject(composePath, projectName string, env domain.Environment) (*type
 func findServiceFile(dir string, env domain.Environment) (string, error) {
 	var (
 		composeFilepath      string
+		envStr               = string(env)
 		serviceFilesAffinity = []string{
-			fmt.Sprintf("compose.seelf.%s.yml", env),
-			fmt.Sprintf("compose.seelf.%s.yaml", env),
-			fmt.Sprintf("docker-compose.seelf.%s.yml", env),
-			fmt.Sprintf("docker-compose.seelf.%s.yaml", env),
-			fmt.Sprintf("compose.%s.yml", env),
-			fmt.Sprintf("compose.%s.yaml", env),
-			fmt.Sprintf("docker-compose.%s.yml", env),
-			fmt.Sprintf("docker-compose.%s.yaml", env),
+			"compose.seelf." + envStr + ".yml",
+			"compose.seelf." + envStr + ".yaml",
+			"docker-compose.seelf." + envStr + ".yml",
+			"docker-compose.seelf." + envStr + ".yaml",
+			"compose." + envStr + ".yml",
+			"compose." + envStr + ".yaml",
+			"docker-compose." + envStr + ".yml",
+			"docker-compose." + envStr + ".yaml",
 			"compose.seelf.yml",
 			"compose.seelf.yaml",
 			"docker-compose.seelf.yml",
@@ -675,12 +686,13 @@ func getProjectCustomLabels(project, service, workingDir string, composeFiles ..
 //
 // The goal is really for the user to provide a docker-compose file which runs fine locally
 // and we should do our best to expose it accordingly without the user providing anything.
-func generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger, url domain.Url) (*types.Project, domain.Services, error) {
+func generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger) (*types.Project, domain.Services, error) {
 	var (
 		services    domain.Services
 		config      = depl.Config()
 		seelfLabels = types.Labels{
 			AppLabel:         string(depl.ID().AppID()),
+			TargetLabel:      string(config.Target()),
 			EnvironmentLabel: string(config.Environment()),
 		}
 	)
@@ -725,6 +737,8 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 
 	slices.Sort(orderedNames)
 
+	publicNetworkName := targetPublicNetworkName(config.Target())
+
 	// Let's transform the project to expose needed services
 	for _, name := range orderedNames {
 		var (
@@ -733,11 +747,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 			deployedService domain.Service
 		)
 
-		if len(service.Ports) == 0 {
-			services, deployedService = services.Internal(config, service.Name, service.Image)
-		} else {
-			services, deployedService = services.Public(url, config, service.Name, service.Image)
-		}
+		services, deployedService = services.Append(config, service.Name, service.Image, len(service.Ports) > 0)
 
 		if service.Restart == "" {
 			logger.Warnf("no restart policy sets for service %s, the service will not be restarted automatically", service.Name)
@@ -774,12 +784,13 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 		}
 
 		// Not exposed, no need to go further
-		if !deployedService.IsExposed() {
+		subdomain, isExposed := deployedService.Subdomain().TryGet()
+
+		if !isExposed {
 			project.Services[i] = service
 			continue
 		}
 
-		url := deployedService.Url().MustGet()
 		serviceQualifiedName := deployedService.QualifiedName()
 
 		if len(service.Ports) > 1 {
@@ -796,14 +807,8 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 		service.Networks[publicNetworkName] = nil // nil here because there's no additional options to give
 
 		service.Labels["traefik.enable"] = "true"
-		service.Labels[fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", serviceQualifiedName)] = strconv.FormatUint(containerPort, 10)
-		service.Labels[fmt.Sprintf("traefik.http.routers.%s.rule", serviceQualifiedName)] =
-			fmt.Sprintf("Host(`%s`)", url.Host())
-
-		if url.UseSSL() {
-			service.Labels[fmt.Sprintf("traefik.http.routers.%s.tls.certresolver", serviceQualifiedName)] =
-				certResolverName
-		}
+		service.Labels[SubdomainLabel] = subdomain
+		service.Labels["traefik.http.services."+serviceQualifiedName+".loadbalancer.server.port"] = strconv.FormatUint(containerPort, 10)
 
 		project.Services[i] = service
 	}
@@ -834,4 +839,9 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 	}
 
 	return project, services, nil
+}
+
+// Retrieve the network name of a specific target
+func targetPublicNetworkName(id domain.TargetID) string {
+	return "seelf-gateway-" + strings.ToLower(string(id))
 }

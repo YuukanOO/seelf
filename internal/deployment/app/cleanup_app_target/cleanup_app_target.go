@@ -28,6 +28,7 @@ func init() {
 
 func Handler(
 	reader domain.TargetsReader,
+	deploymentsReader domain.DeploymentsReader,
 	provider domain.Provider,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
@@ -41,20 +42,31 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		beenReadyAtLeastOnce, err := target.CheckAvailability()
+		var (
+			appid   = domain.AppID(cmd.AppID)
+			env     = domain.Environment(cmd.Environment)
+			filters domain.GetDeploymentsCountFilters
+		)
 
-		// Target configuration has failed but the target has never been reachable so no need
-		// to cleanup anything or the target is being deleted, everything will be removed, no need to
-		// case about it
-		if (errors.Is(err, domain.ErrTargetConfigurationFailed) && !beenReadyAtLeastOnce) ||
-			errors.Is(err, domain.ErrTargetDeleteRequested) {
-			return bus.Unit, nil
-		}
+		filters.Target.Set(target.ID())
+		filters.Environment.Set(env)
+
+		count, err := deploymentsReader.GetRunningDeploymentsOnTargetCount(ctx, target.ID(), filters)
 
 		if err != nil {
 			return bus.Unit, err
 		}
 
-		return bus.Unit, provider.Cleanup(ctx, domain.AppID(cmd.AppID), target, domain.Environment(cmd.Environment))
+		strategy, err := target.AppCleanupAllowed(count)
+
+		if err != nil {
+			return bus.Unit, err
+		}
+
+		if strategy == domain.TargetCleanupStrategySkip {
+			return bus.Unit, nil
+		}
+
+		return bus.Unit, provider.Cleanup(ctx, appid, target, env)
 	}
 }

@@ -45,7 +45,11 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		count, err := deploymentsReader.GetRunningOrPendingDeploymentsCount(ctx, app.ID())
+		count, err := deploymentsReader.GetRunningOrPendingDeploymentsCount(
+			ctx,
+			app.ID(),
+			domain.GetDeploymentsCountFilters{},
+		)
 
 		if err != nil {
 			return bus.Unit, err
@@ -56,11 +60,27 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		if err := handleCleanup(ctx, targetsReader, provider, app.ID(), app.Production().Target(), domain.Production); err != nil {
+		if err := handleCleanup(
+			ctx,
+			targetsReader,
+			provider,
+			app.ID(),
+			app.Production().Target(),
+			domain.Production,
+			count,
+		); err != nil {
 			return bus.Unit, err
 		}
 
-		if err := handleCleanup(ctx, targetsReader, provider, app.ID(), app.Staging().Target(), domain.Staging); err != nil {
+		if err := handleCleanup(
+			ctx,
+			targetsReader,
+			provider,
+			app.ID(),
+			app.Staging().Target(),
+			domain.Staging,
+			count,
+		); err != nil {
 			return bus.Unit, err
 		}
 
@@ -79,6 +99,7 @@ func handleCleanup(
 	app domain.AppID,
 	id domain.TargetID,
 	env domain.Environment,
+	count domain.RunningOrPendingAppDeploymentsCount,
 ) error {
 	target, err := reader.GetByID(ctx, id)
 
@@ -92,18 +113,14 @@ func handleCleanup(
 		return err
 	}
 
-	beenReadyAtLeastOnce, err := target.CheckAvailability()
-
-	// Target configuration has failed but the target has never been reachable so no need
-	// to cleanup anything or the target is being deleted, everything will be removed, no need to
-	// case about it
-	if (errors.Is(err, domain.ErrTargetConfigurationFailed) && !beenReadyAtLeastOnce) ||
-		errors.Is(err, domain.ErrTargetDeleteRequested) {
-		return nil
-	}
+	strategy, err := target.AppCleanupAllowed(count)
 
 	if err != nil {
 		return err
+	}
+
+	if strategy == domain.TargetCleanupStrategySkip {
+		return nil
 	}
 
 	return provider.Cleanup(ctx, app, target, env)

@@ -275,27 +275,20 @@ func (t *Target) HasProvider(provider ProviderConfig, availability TargetConfigA
 }
 
 // Check the target availability and returns an appropriate error.
-// The boolean returned indicates if the target has been ready at least once
-// in the past.
-func (t *Target) CheckAvailability() (beenReadyAtLeastOnce bool, err error) {
-	beenReadyAtLeastOnce = t.state.lastReadyVersion.HasValue()
-
+func (t *Target) CheckAvailability() error {
 	if t.state.status == TargetStatusConfiguring {
-		err = ErrTargetConfigurationInProgress
-		return
+		return ErrTargetConfigurationInProgress
 	}
 
 	if t.deleteRequested.HasValue() {
-		err = ErrTargetDeleteRequested
-		return
+		return ErrTargetDeleteRequested
 	}
 
 	if t.state.status != TargetStatusReady {
-		err = ErrTargetConfigurationFailed
-		return
+		return ErrTargetConfigurationFailed
 	}
 
-	return
+	return nil
 }
 
 // Force the target reconfiguration.
@@ -339,10 +332,35 @@ func (t *Target) RequestDelete(apps AppsOnTargetCount, by auth.UserID) error {
 	return nil
 }
 
+// Check if an app can be cleaned up on this target based on its internal state and
+// the current number of deployments targetting that specific target for the app.
+func (t *Target) AppCleanupAllowed(appDeployments RunningOrPendingAppDeploymentsCount) (TargetCleanupStrategy, error) {
+	// Target configuration has failed and never reached or target is being deleted,
+	// no need to cleanup anything.
+	if t.deleteRequested.HasValue() ||
+		(t.state.status == TargetStatusFailed && !t.state.lastReadyVersion.HasValue()) {
+		return TargetCleanupStrategySkip, nil
+	}
+
+	if t.state.status == TargetStatusConfiguring {
+		return TargetCleanupStrategyDefault, ErrTargetConfigurationInProgress
+	}
+
+	if t.state.status != TargetStatusReady {
+		return TargetCleanupStrategyDefault, ErrTargetConfigurationFailed
+	}
+
+	// Still running deployments on the target for the app, do not allow the cleanup yet
+	if appDeployments > 0 {
+		return TargetCleanupStrategyDefault, ErrTargetInUse
+	}
+
+	return TargetCleanupStrategyDefault, nil
+}
+
 // Deletes the target. It will fails if there are at least one deployment using it currently or if the
 // target status does not allow the deletion at that moment.
 func (t *Target) Delete(deployments RunningDeploymentsOnTargetCount) (TargetCleanupStrategy, error) {
-
 	if !t.deleteRequested.HasValue() {
 		return TargetCleanupStrategyDefault, ErrTargetDeleteRequestNeeded
 	}

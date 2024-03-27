@@ -9,6 +9,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
@@ -37,12 +38,17 @@ type (
 
 	// RELATED SERVICES
 
+	GetDeploymentsCountFilters struct {
+		Target      monad.Maybe[TargetID]
+		Environment monad.Maybe[Environment]
+	}
+
 	DeploymentsReader interface {
 		GetByID(context.Context, DeploymentID) (Deployment, error)
 		GetLastDeployment(context.Context, AppID, Environment) (Deployment, error)
 		GetNextDeploymentNumber(context.Context, AppID) (DeploymentNumber, error)
 		GetRunningDeploymentsOnTargetCount(context.Context, TargetID) (RunningDeploymentsOnTargetCount, error)
-		GetRunningOrPendingDeploymentsCount(context.Context, AppID) (RunningOrPendingAppDeploymentsCount, error)
+		GetRunningOrPendingDeploymentsCount(context.Context, AppID, GetDeploymentsCountFilters) (RunningOrPendingAppDeploymentsCount, error)
 	}
 
 	DeploymentsWriter interface {

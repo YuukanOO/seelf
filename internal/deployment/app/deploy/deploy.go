@@ -72,7 +72,7 @@ func Handler(
 		var targetAvailabilityErr error
 
 		if targetErr == nil {
-			_, targetAvailabilityErr = target.CheckAvailability()
+			targetAvailabilityErr = target.CheckAvailability()
 
 			// Target configuration is in progress, just retry the job later without writing
 			// the deployment, keep it in pending state

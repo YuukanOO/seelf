@@ -4,15 +4,20 @@
 
 I mean, for real!
 
+> [!IMPORTANT]
+> [v2 is right around the corner](https://github.com/YuukanOO/seelf/milestone/2) and will include **remote docker deployments** and **better documentation**, release expected around **April 2024**!
+
 https://github.com/YuukanOO/seelf/assets/939842/d234bf40-1927-4057-a62b-8357c935506b
 
-_The seelf initial public version has some limitation (only local Docker engine, single user mostly) but you can check out [the roadmap](https://github.com/YuukanOO/seelf/milestone/1) to see what's planned!_
+> [!NOTE]
+> seelf v1 has some limitations (only local Docker engine, single user mostly) but you can check out [the roadmap](https://github.com/YuukanOO/seelf/milestone/1) to see what's planned!
 
 ## Goal
 
 Got an already working docker compose file for your project ? Just send it to your [seelf](https://github.com/YuukanOO/seelf) instance and _boom_, that's live on your own infrastructure with all services correctly deployed and exposed on nice urls as needed! See [the documentation](DOCUMENTATION.md) for more information.
 
-_Althought Docker is the only backend supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example._
+> [!NOTE]
+> Althought Docker is the only backend supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example.
 
 ## Prerequisites
 

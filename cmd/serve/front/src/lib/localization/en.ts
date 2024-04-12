@@ -18,7 +18,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'app.delete.failed': 'Deletion failed',
 	'app.no_deployments': 'No deployments yet',
 	'app.name.help':
-		"The application name will determine the subdomain from which deployments will be available. That's why you should <strong>only</strong> use <strong>alphanumeric characters</strong> and a <strong>unique name</strong> accross seelf.",
+		"The application name will determine the subdomain from which deployments will be available. That's why you should <strong>only</strong> use <strong>alphanumeric characters</strong> and a <strong>unique name</strong> across seelf.",
 	'app.how': 'How does seelf expose services?',
 	'app.how.placeholder': '<app-name>',
 	'app.how.description':
@@ -139,7 +139,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	password: 'Password',
 	required: 'Required',
 	invalid_email: 'Invalid email',
-	unexpected_error: 'An unexpected error occured.',
+	unexpected_error: 'An unexpected error occurred.',
 	'unexpected_error.description': `<p>Looks like something went wrong. Try refreshing the page.</p><p>If the problem persists, please contact the administrator to investigate.</p>`,
 	app_name_already_taken: 'App name is already taken',
 	git_branch_not_found: 'Branch not found',

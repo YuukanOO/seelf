@@ -1,0 +1,79 @@
+import { defineConfig } from "vitepress";
+
+// https://vitepress.dev/reference/site-config
+export default defineConfig({
+  base: "/seelf/",
+  ignoreDeadLinks: "localhostLinks",
+  title: "seelf documentation",
+  head: [["link", { rel: "icon", href: "/seelf/favicon.svg" }]],
+  description: "Lightweight self-hosted deployment platform written in Go.",
+  themeConfig: {
+    siteTitle: false,
+    search: {
+      provider: "local",
+    },
+    logo: {
+      light: "/logo-light.svg",
+      dark: "/logo-dark.svg",
+      alt: "seelf",
+    },
+    // https://vitepress.dev/reference/default-theme-config
+    nav: [
+      { text: "Home", link: "/" },
+      { text: "Docs", link: "/guide/quickstart" },
+    ],
+
+    sidebar: [
+      {
+        text: "Guide",
+        items: [
+          { text: "Quickstart", link: "/guide/quickstart" },
+          { text: "Installation", link: "/guide/installation" },
+          { text: "Updating", link: "/guide/updating" },
+          { text: "Configuration", link: "/guide/configuration" },
+        ],
+      },
+      {
+        text: "Reference",
+        items: [
+          {
+            text: "Targets",
+            link: "/reference/targets",
+          },
+          {
+            text: "Providers",
+            link: "/reference/targets#providers",
+          },
+          {
+            text: "Applications",
+            link: "/reference/applications",
+          },
+          {
+            text: "Deployments",
+            link: "/reference/deployments",
+          },
+          {
+            text: "Sources",
+            link: "/reference/deployments#sources",
+          },
+          {
+            text: "Jobs",
+            link: "/reference/jobs",
+          },
+          {
+            text: "FAQ",
+            link: "/reference/faq",
+          },
+        ],
+      },
+      {
+        text: "Contributing",
+        items: [{ text: "Introduction", link: "/contributing/" }],
+      },
+    ],
+
+    socialLinks: [
+      { icon: "github", link: "https://github.com/YuukanOO/seelf" },
+    ],
+  },
+});

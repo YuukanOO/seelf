@@ -19,10 +19,12 @@ import (
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/ssh"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/compose-spec/compose-go/types"
+	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/compose/v2/pkg/api"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 )
@@ -243,22 +245,22 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 
 		testutil.IsNotNil(t, project)
 		testutil.Equals(t, projectName, project.Name)
-		testutil.HasLength(t, project.Services, 1)
-		testutil.Equals(t, "proxy", project.Services[0].Name)
-		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
-		testutil.Equals(t, "traefik:v2.11", project.Services[0].Image)
+		testutil.Equals(t, len(project.Services), 1)
+		testutil.Equals(t, "proxy", project.Services["proxy"].Name)
+		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services["proxy"].Restart)
+		testutil.Equals(t, "traefik:v2.11", project.Services["proxy"].Image)
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
 			fmt.Sprintf("--providers.docker.network=%s", networkName),
 			fmt.Sprintf("--providers.docker.constraints=Label(`%s`, `%s`) || Label(`%s`, `true`)", docker.TargetLabel, targetWithoutSSL.ID(), docker.ExposedLabel),
 			fmt.Sprintf("--providers.docker.defaultrule=Host(`{{ index .Labels %s}}.docker.localhost`)", fmt.Sprintf(`"%s"`, docker.SubdomainLabel)),
-		}, project.Services[0].Command)
-		testutil.HasLength(t, project.Services[0].Ports, 1)
-		testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
-		testutil.Equals(t, 80, project.Services[0].Ports[0].Target)
-		testutil.HasLength(t, project.Services[0].Volumes, 1)
-		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Source)
-		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
+		}, project.Services["proxy"].Command)
+		testutil.HasLength(t, project.Services["proxy"].Ports, 1)
+		testutil.Equals(t, "80", project.Services["proxy"].Ports[0].Published)
+		testutil.Equals(t, 80, project.Services["proxy"].Ports[0].Target)
+		testutil.HasLength(t, project.Services["proxy"].Volumes, 1)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services["proxy"].Volumes[0].Source)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services["proxy"].Volumes[0].Target)
 
 		testutil.Equals(t, 1, len(project.Networks))
 		testutil.Equals(t, networkName, project.Networks["default"].Name)
@@ -280,10 +282,10 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 
 		testutil.IsNotNil(t, project)
 		testutil.Equals(t, projectName, project.Name)
-		testutil.HasLength(t, project.Services, 1)
-		testutil.Equals(t, "proxy", project.Services[0].Name)
-		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services[0].Restart)
-		testutil.Equals(t, "traefik:v2.11", project.Services[0].Image)
+		testutil.Equals(t, len(project.Services), 1)
+		testutil.Equals(t, "proxy", project.Services["proxy"].Name)
+		testutil.Equals(t, types.RestartPolicyUnlessStopped, project.Services["proxy"].Restart)
+		testutil.Equals(t, "traefik:v2.11", project.Services["proxy"].Image)
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
 			fmt.Sprintf("--providers.docker.network=%s", networkName),
@@ -296,17 +298,17 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 			fmt.Sprintf("--certificatesresolvers.%s.acme.tlschallenge=true", certResolverName),
 			fmt.Sprintf("--certificatesresolvers.%s.acme.storage=/letsencrypt/acme.json", certResolverName),
 			fmt.Sprintf("--entrypoints.websecure.http.tls.certresolver=%s", certResolverName),
-		}, project.Services[0].Command)
-		testutil.HasLength(t, project.Services[0].Ports, 2)
-		testutil.Equals(t, "80", project.Services[0].Ports[0].Published)
-		testutil.Equals(t, 80, project.Services[0].Ports[0].Target)
-		testutil.Equals(t, "443", project.Services[0].Ports[1].Published)
-		testutil.Equals(t, 443, project.Services[0].Ports[1].Target)
-		testutil.HasLength(t, project.Services[0].Volumes, 2)
-		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Source)
-		testutil.Equals(t, "/var/run/docker.sock", project.Services[0].Volumes[0].Target)
-		testutil.Equals(t, "letsencrypt", project.Services[0].Volumes[1].Source)
-		testutil.Equals(t, "/letsencrypt", project.Services[0].Volumes[1].Target)
+		}, project.Services["proxy"].Command)
+		testutil.HasLength(t, project.Services["proxy"].Ports, 2)
+		testutil.Equals(t, "80", project.Services["proxy"].Ports[0].Published)
+		testutil.Equals(t, 80, project.Services["proxy"].Ports[0].Target)
+		testutil.Equals(t, "443", project.Services["proxy"].Ports[1].Published)
+		testutil.Equals(t, 443, project.Services["proxy"].Ports[1].Target)
+		testutil.HasLength(t, project.Services["proxy"].Volumes, 2)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services["proxy"].Volumes[0].Source)
+		testutil.Equals(t, "/var/run/docker.sock", project.Services["proxy"].Volumes[0].Target)
+		testutil.Equals(t, "letsencrypt", project.Services["proxy"].Volumes[1].Source)
+		testutil.Equals(t, "/letsencrypt", project.Services["proxy"].Volumes[1].Target)
 
 		testutil.Equals(t, 1, len(project.Networks))
 		testutil.Equals(t, networkName, project.Networks["default"].Name)
@@ -495,7 +497,7 @@ volumes:
 		}, project.Networks["default"].Labels)
 		testutil.Equals(t, targetNetworkName, project.Networks[targetNetworkName].Name)
 		testutil.Equals(t, 0, len(project.Networks[targetNetworkName].Labels))
-		testutil.IsTrue(t, project.Networks[targetNetworkName].External.External)
+		testutil.IsTrue(t, project.Networks[targetNetworkName].External)
 
 		testutil.Equals(t, 1, len(project.Volumes))
 		testutil.Equals(t, fmt.Sprintf("my-app-production-%s_dbdata", appidLower), project.Volumes["dbdata"].Name)
@@ -560,7 +562,7 @@ func (d *dockerMockService) Client() client.APIClient {
 	return d.cli
 }
 
-func (d *dockerMockService) Apply(ops ...command.DockerCliOption) error {
+func (d *dockerMockService) Apply(ops ...command.CLIOption) error {
 	return nil
 }
 
@@ -571,7 +573,7 @@ func (d *dockerCliMockService) ImagesPrune(_ context.Context, pruneFilter filter
 	return dockertypes.ImagesPruneReport{}, nil
 }
 
-func (d *dockerCliMockService) ContainerList(context.Context, dockertypes.ContainerListOptions) ([]dockertypes.Container, error) {
+func (d *dockerCliMockService) ContainerList(context.Context, container.ListOptions) ([]dockertypes.Container, error) {
 	return nil, nil
 }
 
@@ -583,6 +585,6 @@ func (d *dockerCliMockService) NetworkList(context.Context, dockertypes.NetworkL
 	return nil, nil
 }
 
-func (d *dockerCliMockService) ImageList(context.Context, dockertypes.ImageListOptions) ([]dockertypes.ImageSummary, error) {
+func (d *dockerCliMockService) ImageList(context.Context, dockertypes.ImageListOptions) ([]image.Summary, error) {
 	return nil, nil
 }

@@ -17,11 +17,7 @@
 				</Link>
 			</li>
 			<li>
-				<Link
-					href="https://github.com/YuukanOO/seelf/blob/main/DOCUMENTATION.md"
-					external
-					newWindow
-				>
+				<Link href="https://yuukanoo.github.io/seelf/guide/quickstart.html" external newWindow>
 					{l.translate('footer.documentation')}
 				</Link>
 			</li>

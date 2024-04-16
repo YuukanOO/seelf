@@ -22,9 +22,8 @@ import (
 	"github.com/YuukanOO/seelf/pkg/validate"
 	"github.com/YuukanOO/seelf/pkg/validate/numbers"
 	vstrings "github.com/YuukanOO/seelf/pkg/validate/strings"
-	"github.com/compose-spec/compose-go/cli"
-	"github.com/compose-spec/compose-go/loader"
-	"github.com/compose-spec/compose-go/types"
+	"github.com/compose-spec/compose-go/v2/cli"
+	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/flags"
 	"github.com/docker/compose/v2/pkg/api"
@@ -35,6 +34,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
+	"golang.org/x/exp/maps"
 )
 
 var (
@@ -223,13 +223,13 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) error {
 
 	project := &types.Project{
 		Name: projectName,
-		Services: []types.ServiceConfig{
-			{
+		Services: types.Services{
+			"proxy": types.ServiceConfig{
 				Name:    "proxy",
 				Labels:  labels,
 				Image:   "traefik:v2.11",
 				Restart: types.RestartPolicyUnlessStopped,
-				Command: []string{
+				Command: types.ShellCommand{
 					"--providers.docker",
 					"--providers.docker.network=" + networkName,
 					constraintsLabel,
@@ -255,7 +255,8 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) error {
 	if target.Url().UseSSL() {
 		certResolverName := "seelf-resolver-" + targetIdLower
 
-		project.Services[0].Command = append(project.Services[0].Command,
+		proxyService := project.Services["proxy"]
+		proxyService.Command = append(project.Services["proxy"].Command,
 			"--entrypoints.web.address=:80",
 			"--entrypoints.web.http.redirections.entryPoint.to=websecure",
 			"--entrypoints.web.http.redirections.entryPoint.scheme=https",
@@ -264,24 +265,22 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) error {
 			"--certificatesresolvers."+certResolverName+".acme.storage=/letsencrypt/acme.json",
 			"--entrypoints.websecure.http.tls.certresolver="+certResolverName,
 		)
-		project.Services[0].Ports = append(project.Services[0].Ports, types.ServicePortConfig{
+		proxyService.Ports = append(proxyService.Ports, types.ServicePortConfig{
 			Target: 443, Published: "443",
 		})
-		project.Services[0].Volumes = append(project.Services[0].Volumes, types.ServiceVolumeConfig{
+		proxyService.Volumes = append(proxyService.Volumes, types.ServiceVolumeConfig{
 			Type:   types.VolumeTypeVolume,
 			Source: "letsencrypt",
 			Target: "/letsencrypt",
 		})
+		project.Services["proxy"] = proxyService
 
 		project.Volumes = types.Volumes{
 			"letsencrypt": types.VolumeConfig{
+				Name:   projectName + "_letsencrypt",
 				Labels: labels,
 			},
 		}
-	}
-
-	if err = loader.Normalize(project); err != nil {
-		return err
 	}
 
 	return compose.Up(ctx, project, api.UpOptions{
@@ -344,7 +343,7 @@ func (d *docker) Deploy(ctx context.Context, deploymentCtx domain.DeploymentCont
 
 	logger.Stepf("configuring seelf docker project for environment: %s", depl.Config().Environment())
 
-	project, services, err := generateProject(depl, deploymentCtx.BuildDirectory(), logger)
+	project, services, err := generateProject(ctx, depl, deploymentCtx.BuildDirectory(), logger)
 
 	if err != nil {
 		return nil, err
@@ -499,7 +498,7 @@ func (d *docker) connect(ctx context.Context, logger domain.DeploymentLogger, ta
 // Remove all resources matching the given filters
 func (d *docker) removeResources(ctx context.Context, client client.APIClient, criterias filters.Args) error {
 	// List and stop all containers related to this application
-	containers, err := client.ContainerList(ctx, dockertypes.ContainerListOptions{
+	containers, err := client.ContainerList(ctx, dockercontainer.ListOptions{
 		All:     true,
 		Filters: criterias,
 	})
@@ -518,7 +517,7 @@ func (d *docker) removeResources(ctx context.Context, client client.APIClient, c
 
 	for _, container := range containers {
 		d.logger.Debugw("removing container", "id", container.ID)
-		if err = client.ContainerRemove(ctx, container.ID, dockertypes.ContainerRemoveOptions{}); err != nil {
+		if err = client.ContainerRemove(ctx, container.ID, dockercontainer.RemoveOptions{}); err != nil {
 			return err
 		}
 	}
@@ -592,9 +591,10 @@ func appendLabels(target types.Labels, labelsToAdd types.Labels) types.Labels {
 }
 
 // Load a project from a given compose path.
-func loadProject(composePath, projectName string, env domain.Environment) (*types.Project, error) {
+func loadProject(ctx context.Context, composePath, projectName string, env domain.Environment) (*types.Project, error) {
 	opts, err := cli.NewProjectOptions([]string{composePath},
 		cli.WithName(projectName),
+		cli.WithNormalization(true),
 		cli.WithProfiles([]string{string(env)}),
 	)
 
@@ -602,7 +602,7 @@ func loadProject(composePath, projectName string, env domain.Environment) (*type
 		return nil, err
 	}
 
-	project, err := cli.ProjectFromOptions(opts)
+	project, err := cli.ProjectFromOptions(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -690,7 +690,7 @@ func getProjectCustomLabels(project, service, workingDir string, composeFiles ..
 //
 // The goal is really for the user to provide a docker-compose file which runs fine locally
 // and we should do our best to expose it accordingly without the user providing anything.
-func generateProject(depl domain.Deployment, dir string, logger domain.DeploymentLogger) (*types.Project, domain.Services, error) {
+func generateProject(ctx context.Context, depl domain.Deployment, dir string, logger domain.DeploymentLogger) (*types.Project, domain.Services, error) {
 	var (
 		services    domain.Services
 		config      = depl.Config()
@@ -710,35 +710,20 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 
 	logger.Stepf("reading project from %s", composeFilepath)
 
-	project, err := loadProject(composeFilepath, config.ProjectName(), config.Environment())
+	project, err := loadProject(ctx, composeFilepath, config.ProjectName(), config.Environment())
 
 	if err != nil {
 		logger.Error(err)
 		return nil, nil, ErrLoadProjectFailed
 	}
 
-	disabledServicesCount := len(project.DisabledServices)
-
-	if disabledServicesCount > 0 {
-		disabledServicesNames := make([]string, disabledServicesCount)
-
-		for i, service := range project.DisabledServices {
-			disabledServicesNames[i] = service.Name
-		}
-
-		logger.Infof("some services have been disabled by the %s profile: %s", config.Environment(), strings.Join(disabledServicesNames, ", "))
+	if len(project.DisabledServices) > 0 {
+		logger.Infof("some services have been disabled by the %s profile: %s", config.Environment(), strings.Join(maps.Keys(project.DisabledServices), ", "))
 	}
 
 	// Sort services by alphabetical order so that we know how where the default subdomain (ie. the one without a service suffix)
 	// will be.
-	orderedNames := make([]string, len(project.Services))
-	namesToIndex := make(map[string]int, len(project.Services))
-
-	for i, service := range project.Services {
-		orderedNames[i] = service.Name
-		namesToIndex[service.Name] = i
-	}
-
+	orderedNames := maps.Keys(project.Services)
 	slices.Sort(orderedNames)
 
 	publicNetworkName := targetPublicNetworkName(config.Target())
@@ -746,8 +731,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 	// Let's transform the project to expose needed services
 	for _, name := range orderedNames {
 		var (
-			i               = namesToIndex[name]
-			service         = project.Services[i]
+			service         = project.Services[name]
 			deployedService domain.Service
 		)
 
@@ -791,7 +775,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 		subdomain, isExposed := deployedService.Subdomain().TryGet()
 
 		if !isExposed {
-			project.Services[i] = service
+			project.Services[name] = service
 			continue
 		}
 
@@ -813,7 +797,7 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 		service.Labels[SubdomainLabel] = subdomain
 		service.Labels["traefik.http.services."+serviceQualifiedName+".loadbalancer.server.port"] = strconv.FormatUint(containerPort, 10)
 
-		project.Services[i] = service
+		project.Services[name] = service
 	}
 
 	// Add labels to network and volumes to make it easy to find them
@@ -835,10 +819,8 @@ func generateProject(depl domain.Deployment, dir string, logger domain.Deploymen
 	}
 
 	project.Networks[publicNetworkName] = types.NetworkConfig{
-		Name: publicNetworkName,
-		External: types.External{
-			External: true,
-		},
+		Name:     publicNetworkName,
+		External: true,
 	}
 
 	return project, services, nil

@@ -8,7 +8,7 @@ import (
 
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/ostools"
-	"github.com/YuukanOO/ssh_config"
+	"github.com/kevinburke/ssh_config"
 )
 
 type (

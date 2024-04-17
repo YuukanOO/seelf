@@ -61,6 +61,10 @@ export default defineConfig({
             link: "/reference/jobs",
           },
           {
+            text: "API",
+            link: "/reference/api",
+          },
+          {
             text: "FAQ",
             link: "/reference/faq",
           },
@@ -68,7 +72,11 @@ export default defineConfig({
       },
       {
         text: "Contributing",
-        items: [{ text: "Introduction", link: "/contributing/" }],
+        items: [
+          { text: "Docs", link: "/contributing/docs" },
+          { text: "Backend", link: "/contributing/backend" },
+          { text: "Frontend", link: "/contributing/frontend" },
+        ],
       },
     ],
 

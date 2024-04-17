@@ -3,7 +3,7 @@
 Whatever installation method you choose, you **MUST** have:
 
 - [Docker >= v18.0.9](https://docs.docker.com/get-docker/) installed (2019-09-03)
-- A DNS correctly configured with a wildcard redirecting to the [target](/reference/targets)
+- A DNS correctly configured with a wildcard redirecting to the [target host](/reference/targets)
 
 **Compose** and **Git** are packaged inside seelf itself so you don't have to bother with them.
 

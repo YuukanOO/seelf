@@ -73,3 +73,25 @@ When deploying this project on seelf, it will:
 - run the `db` service without exposing it because it does not have port mappings defined and has such will be kept private and use any environment variables defined for the `db` service in the production environment.
 
 To expose those services, seelf will add the needed traefik labels based on the target's url you've set when configuring it. If your domain starts with `https://`, Let's encrypt certificates will be generated for you.
+
+## Docker labels appended by seelf
+
+To identify which resources are managed by seelf, some **docker labels** are appended during the deployment process.
+
+| Name                  | Description                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| app.seelf.exposed     | Only used to identify the seelf container when exposing it through a local target      |
+| app.seelf.application | ID of the application                                                                  |
+| app.seelf.environment | [Environment](/reference/applications#environments) of the resource                    |
+| app.seelf.target      | ID of the target on which the container must be exposed                                |
+| app.seelf.subdomain   | Subdomain on which a container will be available, used as a default rule for the proxy |
+
+Using those labels, you can easily filter resources managed by seelf, such as:
+
+```sh
+docker container ls --filter "label=app.seelf.target"
+```
+
+## Integrating seelf in your CI
+
+See the [API related page](/reference/api#ci) for more information on how to do it.

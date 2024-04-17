@@ -353,7 +353,9 @@ func (d *docker) Deploy(ctx context.Context, deploymentCtx domain.DeploymentCont
 
 	if err = compose.Up(ctx, project, api.UpOptions{
 		Create: api.CreateOptions{
-			Build:         &api.BuildOptions{},
+			Build: &api.BuildOptions{
+				Quiet: true,
+			},
 			RemoveOrphans: true,
 		},
 		Start: api.StartOptions{

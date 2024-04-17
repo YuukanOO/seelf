@@ -21,5 +21,5 @@ features:
   - title: Tiny & Efficient
     details: Both in size and in resource usage, don't waste your precious server resources!
   - title: Reliable
-    details: Works as you might expect, take care of the hasle for you.
+    details: Works as you might expect, take care of the hassle for you.
 ---

@@ -4,7 +4,7 @@
 
 I mean, for real!
 
-https://github.com/YuukanOO/seelf/assets/939842/d234bf40-1927-4057-a62b-8357c935506b
+https://github.com/YuukanOO/seelf/assets/939842/0fb8c833-1dba-4a75-87d5-94b92155795e
 
 ## Goal
 

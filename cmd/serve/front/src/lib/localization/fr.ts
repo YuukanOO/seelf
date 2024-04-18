@@ -88,6 +88,7 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées sur 
 		'target.name.help': `Le nom est utilisé uniquement pour l'affichage. Vous pouvez choisir ce que vous voulez.`,
 		'target.url.help': `Toutes les applications déployées sur cette cible seront disponibles en tant que <strong>sous-domaine</strong> de cette URL racine (sans sous-chemin). Elle doit être <strong>unique</strong> parmi les cibles. Vous <strong>DEVEZ</strong> configurer un <strong>DNS wildcard</strong> pour les sous-domaines de telle sorte que <code>*.&lt;url configurée&gt;</code> redirige vers l'IP de cette cible.`,
 		'target.provider': 'Fournisseur',
+		'target.provider.docker.help': "Docker engine <strong>DOIT</strong> être installé sur l'hôte.",
 		'target.docker.is_remote': 'Docker distant',
 		'target.docker.is_remote.help':
 			'Se connecter à un démon docker distant en SSH. <strong>Ne peut pas être changé</strong> après la création.',

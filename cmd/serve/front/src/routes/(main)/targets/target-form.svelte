@@ -128,7 +128,11 @@
 						bind:value={provider}
 						options={providerTypes}
 						remoteError={isRemote ? undefined : errors?.docker}
-					/>
+					>
+						{#if provider === 'docker'}
+							<p>{@html l.translate('target.provider.docker.help')}</p>
+						{/if}
+					</Dropdown>
 
 					{#if provider === 'docker'}
 						<Checkbox

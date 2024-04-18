@@ -1,10 +1,10 @@
 # API
 
-This part is currently being worked on. For now, only routes related to the deployment can be accessed with the API Token retrieved from the **profile page**. For more information, you can check the [`api.http` file](https://github.com/YuukanOO/seelf/blob/main/api.http) in the source code.
+This part is currently being worked on. For now, only routes related to the deployment can be accessed with the API Key retrieved from the **profile page**. For more information, you can check the [`api.http` file](https://github.com/YuukanOO/seelf/blob/main/api.http) in the source code.
 
 Every other routes use a cookie authentication.
 
-## Allow API access routes
+## Allowed API access routes
 
 The following routes are allowed with an header `Authorization: Bearer <user API Key>`.
 

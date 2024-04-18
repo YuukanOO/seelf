@@ -192,12 +192,10 @@ func WriteAndDispatch[T event.Source](
 		}
 
 		if finalErr != nil {
-			db.logger.Debug("rollbacking transaction")
 			if err := tx.Rollback(); err != nil {
 				finalErr = err
 			}
 		} else {
-			db.logger.Debug("commiting transaction")
 			finalErr = tx.Commit()
 		}
 	}()

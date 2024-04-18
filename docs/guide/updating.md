@@ -3,7 +3,7 @@
 This procedure depends on the method you choose when [installing seelf](/guide/installation) initially.
 
 ::: warning
-When switching from a major version to another one (ex. `v1.x.x` to `v2.x.x`), check the [Releases page](https://github.com/YuukanOO/seelf/releases) for additional instructions.
+When switching from a major version to another one (ex. `v1.x.x` to `v2.x.x`), check the [Migration page](/guide/migration) for additional instructions.
 :::
 
 ## With Compose
@@ -15,7 +15,7 @@ docker compose pull && docker compose up -d
 ```
 
 ::: info
-If you use a specific image version, you must update the tag in the compose file before running the above command.
+If you use a specific image version, you **must** update the tag in the compose file before running the above command.
 :::
 
 ## With Docker

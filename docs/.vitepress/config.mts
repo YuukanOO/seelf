@@ -31,6 +31,7 @@ export default defineConfig({
           { text: "Installation", link: "/guide/installation" },
           { text: "Updating", link: "/guide/updating" },
           { text: "Configuration", link: "/guide/configuration" },
+          { text: "Migrating major versions", link: "/guide/migration" },
         ],
       },
       {

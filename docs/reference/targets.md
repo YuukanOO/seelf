@@ -10,9 +10,21 @@ For now, only one target per host is allowed.
 
 You must choose one provider kind when creating a target. Some providers have specific parameters for you to configure how things work.
 
+::: warning
+Whatever provider you choose, you should make sure your **DNS is correctly configured with a wildcard redirecting to the target host**.
+:::
+
 ### Docker
 
-The only supported provider for now. Uses Docker Compose to launch your services by looking in the project root for specific files, see [services exposal](/reference/faq#services-exposal).
+The only supported provider for now. Uses **Docker Compose** to launch your services by looking in the project root for specific files, see [services exposal](/reference/faq#services-exposal).
+
+::: warning
+[Docker >= (v18.0.9) must be installed](https://docs.docker.com/get-docker/) on the target!
+:::
+
+## Remote targets
+
+When configuring a remote target, you'll **have to add** the public key associated with the private one you'll be using to connect to the host to the `~/.ssh/authorized_keys` file. You can check the [Digital Ocean documentation](https://docs.digitalocean.com/products/droplets/how-to/add-ssh-keys/to-existing-droplet/#with-ssh) for more information.
 
 ## Configuration {#configuration}
 

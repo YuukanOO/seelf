@@ -83,6 +83,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'target.url.help':
 		'All applications deployed on this target will be available as a <strong>subdomain</strong> on this root URL (without path). It should be <strong>unique</strong> among targets. You <strong>MUST</strong> configure a <strong>wildcard DNS</strong> for subdomains such as <code>*.&lt;url above&gt;</code> redirects to this target IP.',
 	'target.provider': 'Provider',
+	'target.provider.docker.help': 'Docker engine <strong>MUST</strong> be installed on the target.',
 	'target.docker.is_remote': 'Remote docker daemon',
 	'target.docker.is_remote.help':
 		'Connect to a remote docker daemon using SSH. <strong>Cannot be changed</strong> after creation.',

@@ -2,17 +2,16 @@ package domain
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"reflect"
-	"regexp"
+	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 var (
 	ErrInvalidEnvironmentName = apperr.New("invalid_environment_name")
-	allowedEnvironmentRe      = regexp.MustCompile("^(production|staging)$") // For now, limit to production / staging
 )
 
 const (
@@ -22,69 +21,72 @@ const (
 	Staging Environment = "staging"
 )
 
-type Environment string
+type (
+	Environment string             // Represents a valid environment name
+	EnvVars     map[string]string  // Environment variables key pair
+	ServicesEnv map[string]EnvVars // Environment variables per service name
+
+	// Represents a specific environment configuration.
+	// The version field is used during the cleanup process to check for successfull deployments
+	// during a specific interval (the last target change).
+	EnvironmentConfig struct {
+		target  TargetID
+		version time.Time
+		vars    monad.Maybe[ServicesEnv]
+	}
+)
 
 // Creates a new environment value object from a raw value.
 func EnvironmentFrom(value string) (Environment, error) {
-	if !allowedEnvironmentRe.MatchString(value) {
+	switch Environment(value) {
+	case Production:
+		return Production, nil
+	case Staging:
+		return Staging, nil
+	default:
 		return "", ErrInvalidEnvironmentName
 	}
-
-	return Environment(value), nil
 }
 
 // Returns true if the given environment represents the production one.
 func (e Environment) IsProduction() bool { return e == Production }
 
-type (
-	EnvVars         map[string]string           // Environment variables key pair
-	ServicesEnv     map[string]EnvVars          // Environment variables per service name
-	EnvironmentsEnv map[Environment]ServicesEnv // Environment variables per deployment environment
-)
+// Builds a new environment config targetting the specificied target.
+func NewEnvironmentConfig(target TargetID) EnvironmentConfig {
+	return EnvironmentConfig{
+		target:  target,
+		version: time.Now().UTC(),
+	}
+}
 
-// Builds the map of environment variables per env and per service from a raw value.
-func EnvironmentsEnvFrom(raw map[string]map[string]map[string]string) (EnvironmentsEnv, error) {
-	result := EnvironmentsEnv{}
+// Add the given environment variables per service to this configuration.
+func (e *EnvironmentConfig) HasEnvironmentVariables(vars ServicesEnv) {
+	e.vars.Set(vars)
+}
 
-	for envname, services := range raw {
-		env, err := EnvironmentFrom(envname)
+// Check if two environment config are equals, does not compare version.
+func (e EnvironmentConfig) Equals(other EnvironmentConfig) bool {
+	return e.target == other.target && reflect.DeepEqual(e.vars, other.vars)
+}
 
-		if err != nil {
-			return EnvironmentsEnv{}, err
+func (e EnvironmentConfig) Target() TargetID               { return e.target }
+func (e EnvironmentConfig) Version() time.Time             { return e.version }
+func (e EnvironmentConfig) Vars() monad.Maybe[ServicesEnv] { return e.vars }
+
+// Builds the map of services variables from a raw value.
+func ServicesEnvFrom(raw map[string]map[string]string) ServicesEnv {
+	result := make(ServicesEnv, len(raw))
+
+	for service, vars := range raw {
+		if vars == nil {
+			continue
 		}
 
-		servicesEnv := ServicesEnv{}
-
-		for service, vars := range services {
-			servicesEnv[service] = vars
-		}
-
-		result[env] = servicesEnv
+		result[service] = vars
 	}
 
-	return result, nil
+	return result
 }
 
-func (e EnvironmentsEnv) Equals(other EnvironmentsEnv) bool {
-	return reflect.DeepEqual(e, other) // Using DeepEqual here is much more simpler
-}
-
-func (e EnvironmentsEnv) Value() (driver.Value, error) {
-	r, err := json.Marshal(e)
-
-	return string(r), err
-}
-
-func (e *EnvironmentsEnv) Scan(value any) error {
-	return storage.ScanJSON(value, &e)
-}
-
-func (e ServicesEnv) Value() (driver.Value, error) {
-	r, err := json.Marshal(e)
-
-	return string(r), err
-}
-
-func (e *ServicesEnv) Scan(value any) error {
-	return storage.ScanJSON(value, &e)
-}
+func (e ServicesEnv) Value() (driver.Value, error) { return storage.ValueJSON(e) }
+func (e *ServicesEnv) Scan(value any) error        { return storage.ScanJSON(value, e) }

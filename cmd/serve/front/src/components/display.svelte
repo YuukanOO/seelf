@@ -11,13 +11,14 @@
 </script>
 
 <div class={className}>
-	<h3 class="label">{l.translate(label)}</h3>
-	<Prose class="value"><slot /></Prose>
+	<dt class="label">{l.translate(label)}</dt>
+	<Prose as="dd" class="value"><slot /></Prose>
 </div>
 
 <style module>
 	.label {
 		font: var(--ty-caption);
+		color: var(--co-text-4);
 	}
 
 	.value {

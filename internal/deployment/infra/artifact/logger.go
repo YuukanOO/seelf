@@ -41,5 +41,5 @@ func (l *stepLogger) Close() error {
 }
 
 func (l *stepLogger) print(prefix string, format string, args []any) {
-	l.Write([]byte(fmt.Sprintf("%s %s\n", prefix, fmt.Sprintf(format, args...))))
+	l.Write([]byte(prefix + " " + fmt.Sprintf(format, args...) + "\n"))
 }

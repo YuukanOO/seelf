@@ -2,14 +2,14 @@ package domain
 
 import (
 	"context"
-	"errors"
 
+	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 var (
-	ErrNoValidSourceFound   = errors.New("no_valid_source_found")
-	ErrInvalidSourcePayload = errors.New("invalid_source_payload")
+	ErrNoValidSourceFound   = apperr.New("no_valid_source_found")
+	ErrInvalidSourcePayload = apperr.New("invalid_source_payload")
 
 	SourceDataTypes = storage.NewDiscriminatedMapper(func(sd SourceData) string { return sd.Kind() })
 )
@@ -19,12 +19,12 @@ type (
 	// The inner data depends on the Source which has been requested.
 	SourceData interface {
 		Kind() string
-		NeedVCS() bool
+		NeedVersionControl() bool
 	}
 
 	// Represents a source which has initiated a deployment.
 	Source interface {
-		Prepare(App, any) (SourceData, error)                              // Prepare the given payload for the given application, doing any needed validation
-		Fetch(context.Context, string, DeploymentLogger, Deployment) error // Retrieve deployment data and store them in the given path before passing in to a backend
+		Prepare(context.Context, App, any) (SourceData, error)      // Prepare the given payload for the given application, doing any needed validation
+		Fetch(context.Context, DeploymentContext, Deployment) error // Retrieve deployment data and store them in the given path before passing in to a provider
 	}
 )

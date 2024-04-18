@@ -1,15 +1,18 @@
 <script lang="ts">
-	import { DeploymentStatus, type DeploymentData } from '$lib/resources/deployments';
+	import { DeploymentStatus, type Deployment } from '$lib/resources/deployments';
 	import Loader from '$components/loader.svelte';
 	import Stack from '$components/stack.svelte';
 	import DeploymentPill from '$components/deployment-pill.svelte';
+	import StatusIndicator from './status-indicator.svelte';
 	import l from '$lib/localization';
+	import select from '$lib/select';
+	import type { ComponentProps } from 'svelte';
 
-	export let data: Maybe<DeploymentData[]> = undefined;
+	export let data: Maybe<Deployment[]> = undefined;
 	export let variant: 'env' | 'detail';
 
 	/** Retrieve the metadata information based on the deployment status */
-	function metadataFromStatus(depl: DeploymentData): string {
+	function metadataFromStatus(depl: Deployment): string {
 		switch (depl.state.status) {
 			case DeploymentStatus.Succeeded:
 				return `${l.datetime(depl.state.finished_at!)} (${l.duration(
@@ -30,21 +33,25 @@
 				return l.datetime(depl.requested_at);
 		}
 	}
+
+	function stateFromStatus(status: DeploymentStatus) {
+		return select<DeploymentStatus, ComponentProps<StatusIndicator>['state']>(status, {
+			[DeploymentStatus.Succeeded]: 'success',
+			[DeploymentStatus.Failed]: 'failed',
+			[DeploymentStatus.Running]: 'running',
+			[DeploymentStatus.Pending]: 'pending'
+		});
+	}
 </script>
 
 <div class="container" class:loading={!data}>
 	{#if data}
 		{#if data.length > 0}
 			<ul class="deployments">
-				{#each data as depl}
+				{#each data as depl (depl.deployment_number)}
 					<Stack as="li" gap={2} justify="space-between">
 						<Stack gap={2} class="hide-overflow">
-							<span
-								class="status"
-								class:success={depl.state.status === DeploymentStatus.Succeeded}
-								class:failed={depl.state.status === DeploymentStatus.Failed}
-								class:running={depl.state.status === DeploymentStatus.Running}
-							/>
+							<StatusIndicator state={stateFromStatus(depl.state.status)} />
 							<div class="hide-overflow">
 								<div class="title">
 									{variant === 'env' ? depl.environment : l.datetime(depl.requested_at)}
@@ -107,45 +114,5 @@
 
 	.hide-overflow {
 		overflow: hidden;
-	}
-
-	.status {
-		box-shadow: inset 0 0 0 2px var(--co-background-4);
-		background-color: var(--co-pending-4);
-		border-color: var(--co-pending-4);
-		border-width: 2px;
-		border-style: solid;
-		display: block;
-		flex-shrink: 0;
-		height: var(--sp-4);
-		width: var(--sp-4);
-		border-radius: 50%;
-		position: relative;
-		z-index: 1;
-	}
-
-	.status.success {
-		background-color: var(--co-success-4);
-		border-color: var(--co-success-4);
-	}
-
-	.status.failed {
-		background-color: var(--co-error-4);
-		border-color: var(--co-error-4);
-	}
-
-	.status.running {
-		background-color: var(--co-running-4);
-		border-color: var(--co-running-4) var(--co-running-4) var(--co-background-4);
-		animation: rotation 1s linear infinite;
-	}
-
-	@keyframes rotation {
-		0% {
-			transform: rotate(0deg);
-		}
-		100% {
-			transform: rotate(360deg);
-		}
 	}
 </style>

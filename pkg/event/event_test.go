@@ -21,6 +21,8 @@ type (
 
 	domainEventB struct {
 		bus.Notification
+
+		data string
 	}
 )
 
@@ -50,32 +52,22 @@ func Test_Emitter(t *testing.T) {
 	// 	testutil.HasLength(t, Unwrap(&ent), 0)
 	// })
 
-	t.Run("should mutate the right array in a pure entity", func(t *testing.T) {
+	t.Run("should replace an event if it already exists", func(t *testing.T) {
 		ent := domainEntity{}
-		evt1 := domainEventA{}
-		evt2 := domainEventB{}
 
-		ent1 := ent.apply(evt1)
-		ent2 := ent1.apply(evt2)
+		ent.apply(domainEventA{})
+		ent.apply(domainEventB{})
+		ent.apply(domainEventA{})
 
-		events := event.Unwrap(&ent)
-		events1 := event.Unwrap(&ent1)
-		events2 := event.Unwrap(&ent2)
+		event.Replace(&ent, domainEventB{data: "updated one"})
 
-		testutil.Equals(t, "", ent.name)
-		testutil.HasLength(t, events, 0)
-		testutil.Equals(t, "eventA", ent1.name)
-		testutil.HasLength(t, events1, 1)
-		testutil.Equals(t, evt1, events1[0].(domainEventA))
-
-		testutil.Equals(t, "eventB", ent2.name)
-		testutil.HasLength(t, events2, 2)
-		testutil.Equals(t, evt1, events2[0].(domainEventA))
-		testutil.Equals(t, evt2, events2[1].(domainEventB))
+		testutil.HasNEvents(t, &ent, 3)
+		evt := testutil.EventIs[domainEventB](t, &ent, 2)
+		testutil.Equals(t, "updated one", evt.data)
 	})
 }
 
-func (d domainEntity) apply(e event.Event) domainEntity {
+func (d *domainEntity) apply(e event.Event) {
 	switch e.(type) {
 	case domainEventA:
 		d.name = "eventA"
@@ -83,6 +75,5 @@ func (d domainEntity) apply(e event.Event) domainEntity {
 		d.name = "eventB"
 	}
 
-	event.Store(&d, e)
-	return d
+	event.Store(d, e)
 }

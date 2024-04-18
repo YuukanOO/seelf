@@ -17,12 +17,23 @@
 	let touched = false;
 
 	export let label: AppTranslationsString;
+	export let disabled = false;
 	export let options: DropdownOption<T>[] = [];
 	export let value: Maybe<string> = undefined;
+	export let remoteError: Maybe<string> = undefined;
 </script>
 
-<InputAdorner hasHelp={!!$$slots.default} {label}>
-	<select class="input" class:touched bind:value on:blur={() => (touched = true)}>
+<InputAdorner hasHelp={!!$$slots.default} {remoteError} {label}>
+	<select
+		class="input"
+		{disabled}
+		class:touched
+		bind:value
+		on:blur={() => {
+			touched = true;
+			remoteError = undefined;
+		}}
+	>
 		{#each options as option}
 			{#if typeof option === 'string'}
 				<option value={option}>{option}</option>
@@ -31,7 +42,9 @@
 			{/if}
 		{/each}
 	</select>
-	<ArrowDown />
+	{#if !disabled}
+		<ArrowDown />
+	{/if}
 	<slot slot="help" />
 </InputAdorner>
 

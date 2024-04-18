@@ -5,11 +5,12 @@
 
 	export let label: AppTranslationsString;
 	export let type: HtmlInputType = 'text';
-	export let value: Maybe<string> = undefined;
+	export let value: Maybe<string | number> = undefined;
 	export let autofocus: Maybe<boolean> = false;
 	export let autocomplete: Maybe<HtmlInputAutoComplete> = undefined;
 	export let required = false;
 	export let readonly = false;
+	export let disabled = false;
 	export let placeholder: Maybe<string> = undefined;
 	export let remoteError: Maybe<string> = undefined;
 
@@ -32,6 +33,7 @@
 	<input
 		{required}
 		{readonly}
+		{disabled}
 		{placeholder}
 		{autofocus}
 		{autocomplete}

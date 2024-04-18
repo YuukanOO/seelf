@@ -2,7 +2,6 @@ package apperr
 
 import (
 	"errors"
-	"fmt"
 )
 
 var ErrNotFound = New("not_found") // Common error used when a resource could not be found.
@@ -30,7 +29,7 @@ func (e Error) Error() string {
 		return e.Code
 	}
 
-	return fmt.Sprintf("%s:%s", e.Code, e.Detail)
+	return e.Code + ":" + e.Detail.Error()
 }
 
 func (e Error) Unwrap() error { return e.Detail }
@@ -65,4 +64,15 @@ func As[T error](err error) (T, bool) {
 	var target T
 	ok := errors.As(err, &target)
 	return target, ok
+}
+
+// Returns the first non nil error
+func Any(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

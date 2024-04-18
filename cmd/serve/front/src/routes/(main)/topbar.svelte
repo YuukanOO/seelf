@@ -2,25 +2,27 @@
 	import type { Profile } from '$lib/resources/users';
 	import Link from '$components/link.svelte';
 	import Account from './account.svelte';
-	import Brand from './brand.svelte';
 	import Stack from '$components/stack.svelte';
 	import Menu from '$assets/icons/menu.svelte';
 	import routes from '$lib/path';
 	import l from '$lib/localization';
+	import Logo from '$assets/logo-dark.svelte';
 
 	export let user: Profile;
-	export let version: string;
 </script>
 
 <Stack class="topbar" gap={10} justify="space-between">
-	<Brand {version} />
-
+	<a href="/" class="logo" title={l.translate('breadcrumb.home')}>
+		<Logo />
+	</a>
 	<div class="menu-container">
 		<input id="menu" type="checkbox" />
-		<label class="menu-toggle" aria-label="Show menu" for="menu"><Menu /></label>
+		<label class="menu-toggle" aria-label={l.translate('menu.toggle')} for="menu"><Menu /></label>
 		<div class="menu-content">
 			<nav class="nav">
 				<Link href={routes.apps} class="link">{l.translate('breadcrumb.applications')}</Link>
+				<Link href={routes.targets} class="link">{l.translate('breadcrumb.targets')}</Link>
+				<Link href={routes.jobs} class="link">{l.translate('breadcrumb.jobs')}</Link>
 			</nav>
 			<Account {user} />
 		</div>
@@ -34,10 +36,16 @@
 		margin: 0 calc(var(--sp-4) * -1);
 	}
 
+	.logo svg {
+		display: block;
+		height: 1.5rem;
+		width: auto;
+	}
+
 	.nav {
 		display: flex;
-		align-items: flex-start;
-		justify-content: center;
+		flex-direction: column;
+		align-items: center;
 		flex: 1;
 		gap: var(--sp-6);
 	}
@@ -54,6 +62,7 @@
 	}
 
 	.menu-toggle svg {
+		display: block;
 		height: 1.5rem;
 		width: 1.5rem;
 	}
@@ -73,10 +82,12 @@
 		opacity: 0;
 		transform: translateX(100%);
 		transition: all 0.2s ease-in-out;
+		box-shadow: 0 10px 10px var(--co-background-4);
 	}
 
 	#menu {
 		appearance: none;
+		position: absolute;
 	}
 
 	#menu:checked ~ .menu-content {
@@ -106,6 +117,7 @@
 		}
 
 		.nav {
+			flex-direction: row;
 			justify-content: flex-start;
 			align-items: center;
 		}

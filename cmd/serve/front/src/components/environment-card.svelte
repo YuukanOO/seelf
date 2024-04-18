@@ -1,11 +1,11 @@
 <script lang="ts">
-	import service, { type DeploymentData } from '$lib/resources/deployments';
+	import service, { type Deployment } from '$lib/resources/deployments';
 	import DeploymentsList from '$components/deployments-list.svelte';
 	import DeploymentCard from '$components/deployment-card.svelte';
 	import Stack from '$components/stack.svelte';
 	import Pagination from '$components/pagination.svelte';
 
-	export let data: DeploymentData;
+	export let data: Deployment;
 
 	let page = 1;
 

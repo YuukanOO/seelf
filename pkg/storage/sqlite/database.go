@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"io/fs"
 
 	"github.com/YuukanOO/seelf/pkg/bus"
@@ -72,7 +71,7 @@ func (db *Database) Migrate(modules ...MigrationsModule) error {
 		}
 
 		driver, err := sqlite3.WithInstance(db.conn, &sqlite3.Config{
-			MigrationsTable: fmt.Sprintf("%s_%s", module.name, sqlite3.DefaultMigrationsTable),
+			MigrationsTable: module.name + "_" + sqlite3.DefaultMigrationsTable,
 		})
 
 		if err != nil {
@@ -193,12 +192,10 @@ func WriteAndDispatch[T event.Source](
 		}
 
 		if finalErr != nil {
-			db.logger.Debug("rollbacking transaction")
 			if err := tx.Rollback(); err != nil {
 				finalErr = err
 			}
 		} else {
-			db.logger.Debug("commiting transaction")
 			finalErr = tx.Commit()
 		}
 	}()

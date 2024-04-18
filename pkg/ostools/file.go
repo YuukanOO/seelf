@@ -1,11 +1,12 @@
 package ostools
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 )
 
-const defaultPermissions = 0744
+const defaultPermissions fs.FileMode = 0744
 
 // Open or create the file to append data only. It also creates intermediate directories as needed.
 func OpenAppend(name string) (*os.File, error) {
@@ -18,12 +19,19 @@ func OpenAppend(name string) (*os.File, error) {
 
 // Tiny wrapper around the default os.WriteFile but creates any directory
 // needed before attempting to write the file.
-func WriteFile(name string, data []byte) error {
+// If the file mode is not given, it will default to 0744.
+func WriteFile(name string, data []byte, perm ...fs.FileMode) error {
 	if err := MkdirAll(filepath.Dir(name)); err != nil {
 		return err
 	}
 
-	return os.WriteFile(name, data, defaultPermissions)
+	filePermissions := defaultPermissions
+
+	if len(perm) > 0 {
+		filePermissions = perm[0]
+	}
+
+	return os.WriteFile(name, data, filePermissions)
 }
 
 // Remove all files matching the given pattern.

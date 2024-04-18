@@ -14,7 +14,6 @@ import (
 
 	"github.com/YuukanOO/seelf/cmd/startup"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
-	deployment "github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/gin-contrib/sessions"
@@ -36,15 +35,15 @@ type (
 		Secret() []byte
 		IsSecure() bool
 		ListenAddress() string
-		Domain() deployment.Url
 	}
 
 	server struct {
-		options     ServerOptions
-		router      *gin.Engine
-		bus         bus.Dispatcher
-		logger      log.Logger
-		usersReader domain.UsersReader
+		options            ServerOptions
+		router             *gin.Engine
+		bus                bus.Dispatcher
+		logger             log.Logger
+		usersReader        domain.UsersReader
+		scheduledJobsStore bus.ScheduledJobsStore
 	}
 )
 
@@ -52,11 +51,12 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	gin.SetMode(gin.ReleaseMode)
 
 	s := &server{
-		options:     options,
-		router:      gin.New(),
-		usersReader: root.UsersReader(),
-		bus:         root.Bus(),
-		logger:      root.Logger(),
+		options:            options,
+		router:             gin.New(),
+		usersReader:        root.UsersReader(),
+		scheduledJobsStore: root.ScheduledJobsStore(),
+		bus:                root.Bus(),
+		logger:             root.Logger(),
 	}
 
 	s.router.SetTrustedProxies(nil)
@@ -81,14 +81,24 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	// Authenticated routes
 	v1secured := v1.Group("", s.authenticate(false))
 	v1secured.DELETE("/session", s.deleteSessionHandler())
+	v1secured.GET("/jobs", s.listJobsHandler())
+	v1secured.DELETE("/jobs/:id", s.deleteJobsHandler())
+	v1secured.GET("/profile", s.getProfileHandler())
+	v1secured.PATCH("/profile", s.updateProfileHandler())
+	v1secured.POST("/targets", s.createTargetHandler())
+	v1secured.PATCH("/targets/:id", s.updateTargetHandler())
+	v1secured.POST("/targets/:id/reconfigure", s.reconfigureTargetHandler())
+	v1secured.GET("/targets", s.listTargetsHandler())
+	v1secured.GET("/targets/:id", s.getTargetByIDHandler())
+	v1secured.DELETE("/targets/:id", s.deleteTargetHandler())
+	v1secured.GET("/apps", s.listAppsHandler())
+	v1secured.POST("/apps", s.createAppHandler())
+	v1secured.PATCH("/apps/:id", s.updateAppHandler())
+	v1secured.DELETE("/apps/:id", s.requestAppCleanupHandler())
 
+	// Allow API Key authentication for those routes
+	// FIXME: in the future, maybe all the API should be accessible, but not before https://github.com/YuukanOO/seelf/issues/45
 	v1securedAllowApi := v1.Group("", s.authenticate(true))
-	v1securedAllowApi.GET("/profile", s.getProfileHandler())
-	v1securedAllowApi.PATCH("/profile", s.updateProfileHandler())
-	v1securedAllowApi.GET("/apps", s.listAppsHandler())
-	v1securedAllowApi.POST("/apps", s.createAppHandler())
-	v1securedAllowApi.PATCH("/apps/:id", s.updateAppHandler())
-	v1securedAllowApi.DELETE("/apps/:id", s.requestAppCleanupHandler())
 	v1securedAllowApi.GET("/apps/:id", s.getAppByIDHandler())
 	v1securedAllowApi.POST("/apps/:id/deployments", s.queueDeploymentHandler())
 	v1securedAllowApi.GET("/apps/:id/deployments", s.listDeploymentsByAppHandler())
@@ -112,16 +122,17 @@ func (s *server) Listen() (finalErr error) {
 		"address", srv.Addr,
 	)
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			finalErr = err
+			quit <- syscall.SIGTERM
 		}
 	}()
 
 	// Let's handle the graceful shutdown of the http server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	<-quit
 	s.logger.Info("shutting down the web server, please wait")
 

@@ -6,8 +6,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 // Update a user profile.
@@ -29,12 +29,12 @@ func Handler(
 	return func(ctx context.Context, cmd Command) (string, error) {
 		var email domain.Email
 
-		if err := validation.Check(validation.Of{
-			"email": validation.Maybe(cmd.Email, func(mail string) error {
-				return validation.Value(mail, &email, domain.EmailFrom)
+		if err := validate.Struct(validate.Of{
+			"email": validate.Maybe(cmd.Email, func(mail string) error {
+				return validate.Value(mail, &email, domain.EmailFrom)
 			}),
-			"password": validation.Maybe(cmd.Password, func(password string) error {
-				return validation.Is(password, strings.Required)
+			"password": validate.Maybe(cmd.Password, func(password string) error {
+				return validate.Field(password, strings.Required)
 			}),
 		}); err != nil {
 			return "", err
@@ -47,13 +47,15 @@ func Handler(
 		}
 
 		if cmd.Email.HasValue() {
-			uniqueEmail, err := reader.IsEmailUniqueForUser(ctx, user.ID(), email)
+			emailRequirement, err := reader.CheckEmailAvailability(ctx, email, user.ID())
 
 			if err != nil {
 				return "", err
 			}
 
-			user.HasEmail(uniqueEmail)
+			if err = user.HasEmail(emailRequirement); err != nil {
+				return "", validate.Wrap(err, "email")
+			}
 		}
 
 		if newPassword, isSet := cmd.Password.TryGet(); isSet {

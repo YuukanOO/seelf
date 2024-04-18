@@ -3,10 +3,10 @@ package domain
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 	"net/url"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
 const schemeHttps = "https"
@@ -29,14 +29,39 @@ func UrlFrom(raw string) (Url, error) {
 	return Url{u}, nil
 }
 
-func (u Url) Host() string { return u.value.Host }
-func (u Url) UseSSL() bool { return u.value.Scheme == schemeHttps }
+func (u Url) Host() string          { return u.value.Host }
+func (u Url) UseSSL() bool          { return u.value.Scheme == schemeHttps }
+func (u Url) Equals(other Url) bool { return u.value.String() == other.value.String() }
+
+// Returns the user part of the url if any.
+func (u Url) User() (m monad.Maybe[string]) {
+	if u.value.User != nil {
+		m.Set(u.value.User.Username())
+	}
+
+	return m
+}
+
+// Returns the root part of an url.
+func (u Url) Root() Url {
+	url := *u.value
+	url.RawQuery = ""
+	url.Path = ""
+	return Url{&url}
+}
 
 // Returns a new url representing a subdomain.
 func (u Url) SubDomain(subdomain string) Url {
 	url := *u.value
 	// FIXME: should we validate the given subdomain here? Or at least encode it
-	url.Host = fmt.Sprintf("%s.%s", subdomain, u.Host())
+	url.Host = subdomain + "." + u.Host()
+	return Url{&url}
+}
+
+// Returns a new url without the user part.
+func (u Url) WithoutUser() Url {
+	url := *u.value
+	url.User = nil
 	return Url{&url}
 }
 

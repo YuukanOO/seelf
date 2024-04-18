@@ -16,51 +16,90 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
+type initialData struct {
+	deployments []*domain.Deployment
+	targets     []*domain.Target
+}
+
 func Test_Deploy(t *testing.T) {
 	ctx := auth.WithUserID(context.Background(), "some-uid")
-	a := domain.NewApp("my-app", "some-uid")
 	logger, _ := log.NewLogger()
 
 	sut := func(
 		source domain.Source,
-		backend domain.Backend,
-		existingDeployments ...*domain.Deployment,
+		provider domain.Provider,
+		data initialData,
 	) bus.RequestHandler[bus.UnitType, deploy.Command] {
 		opts := config.Default(config.WithTestDefaults())
-		store := memory.NewDeploymentsStore(existingDeployments...)
+		store := memory.NewDeploymentsStore(data.deployments...)
+		targetsStore := memory.NewTargetsStore(data.targets...)
 		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return deploy.Handler(store, store, artifactManager, source, backend)
+		return deploy.Handler(store, store, artifactManager, source, provider, targetsStore)
 	}
 
-	t.Run("should fail if the deployment does not exists", func(t *testing.T) {
-		uc := sut(source(nil), backend(nil))
+	t.Run("should fail silently if the deployment does not exists", func(t *testing.T) {
+		uc := sut(source(nil), provider(nil), initialData{})
 		r, err := uc(ctx, deploy.Command{})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 	})
 
-	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
-		srcErr := errors.New("source_failed")
-		src := source(srcErr)
-		meta, _ := src.Prepare(a, 42)
-		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
-		uc := sut(src, backend(nil), &depl)
+	t.Run("should mark the deployment has failed if the target does not exist anymore", func(t *testing.T) {
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "some-uid"))
+		src := source(nil)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
 
-		r, err := uc(ctx, deploy.Command{
-			AppID:            string(a.ID()),
-			DeploymentNumber: 1,
+		uc := sut(src, provider(nil), initialData{
+			deployments: []*domain.Deployment{&depl},
 		})
 
-		testutil.ErrorIs(t, srcErr, err)
+		_, err := uc(ctx, deploy.Command{
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
+		})
+
+		testutil.IsNil(t, err)
+		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
+		testutil.Equals(t, apperr.ErrNotFound.Error(), evt.State.ErrCode().MustGet())
+	})
+
+	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
+		target.Configured(target.CurrentVersion(), nil)
+
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "some-uid"))
+		srcErr := errors.New("source_failed")
+		src := source(srcErr)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+		uc := sut(src, provider(nil), initialData{
+			deployments: []*domain.Deployment{&depl},
+			targets:     []*domain.Target{&target},
+		})
+
+		r, err := uc(ctx, deploy.Command{
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
+		})
+
+		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
@@ -70,37 +109,59 @@ func Test_Deploy(t *testing.T) {
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 	})
 
-	t.Run("should mark the deployment has failed if backend does not run the deployment successfuly", func(t *testing.T) {
-		backendErr := errors.New("run_failed")
-		be := backend(backendErr)
-		src := source(nil)
-		meta, _ := src.Prepare(a, 42)
-		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
-		uc := sut(src, be, &depl)
+	t.Run("should mark the deployment has failed if provider does not run the deployment successfully", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
+		target.Configured(target.CurrentVersion(), nil)
 
-		r, err := uc(ctx, deploy.Command{
-			AppID:            string(a.ID()),
-			DeploymentNumber: 1,
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "some-uid"))
+		providerErr := errors.New("run_failed")
+		be := provider(providerErr)
+		src := source(nil)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+		uc := sut(src, be, initialData{
+			deployments: []*domain.Deployment{&depl},
+			targets:     []*domain.Target{&target},
 		})
 
-		testutil.ErrorIs(t, backendErr, err)
+		r, err := uc(ctx, deploy.Command{
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
+		})
+
+		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
 		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
 		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
-		testutil.Equals(t, backendErr.Error(), evt.State.ErrCode().MustGet())
+		testutil.Equals(t, providerErr.Error(), evt.State.ErrCode().MustGet())
 		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
 	})
 
 	t.Run("should mark the deployment has succeeded if all is good", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
+			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
+		target.Configured(target.CurrentVersion(), nil)
+
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "some-uid"))
 		src := source(nil)
-		meta, _ := src.Prepare(a, 42)
-		depl, _ := a.NewDeployment(1, meta, domain.Production, "some-uid")
-		uc := sut(src, backend(nil), &depl)
+		meta := must.Panic(src.Prepare(ctx, app, 42))
+		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+		uc := sut(src, provider(nil), initialData{
+			deployments: []*domain.Deployment{&depl},
+			targets:     []*domain.Target{&target},
+		})
 
 		r, err := uc(ctx, deploy.Command{
-			AppID:            string(a.ID()),
-			DeploymentNumber: 1,
+			AppID:            string(depl.ID().AppID()),
+			DeploymentNumber: int(depl.ID().DeploymentNumber()),
 		})
 
 		testutil.IsNil(t, err)
@@ -120,26 +181,29 @@ func source(failedWithErr error) domain.Source {
 	return &dummySource{failedWithErr}
 }
 
-func (*dummySource) Prepare(domain.App, any) (domain.SourceData, error) {
+func (*dummySource) Prepare(context.Context, domain.App, any) (domain.SourceData, error) {
 	return raw.Data(""), nil
 }
 
-func (t *dummySource) Fetch(context.Context, string, domain.DeploymentLogger, domain.Deployment) error {
+func (t *dummySource) Fetch(context.Context, domain.DeploymentContext, domain.Deployment) error {
 	return t.err
 }
 
-type dummyBackend struct {
+type dummyProvider struct {
+	domain.Provider
 	err error
 }
 
-func backend(failedWithErr error) domain.Backend {
-	return &dummyBackend{failedWithErr}
+func provider(failedWithErr error) domain.Provider {
+	return &dummyProvider{
+		err: failedWithErr,
+	}
 }
 
-func (b *dummyBackend) Run(context.Context, string, domain.DeploymentLogger, domain.Deployment) (domain.Services, error) {
+func (b *dummyProvider) Prepare(context.Context, any, ...domain.ProviderConfig) (domain.ProviderConfig, error) {
+	return nil, nil
+}
+
+func (b *dummyProvider) Deploy(context.Context, domain.DeploymentContext, domain.Deployment, domain.Target) (domain.Services, error) {
 	return domain.Services{}, b.err
-}
-
-func (b *dummyBackend) Cleanup(context.Context, domain.App) error {
-	return nil
 }

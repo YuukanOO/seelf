@@ -16,6 +16,10 @@ COPY --from=front_builder /app/build ./cmd/serve/front/build
 RUN go build -ldflags="-s -w" -o seelf
 
 FROM alpine:3.16
+LABEL org.opencontainers.image.authors="julien@leicher.me" \
+    org.opencontainers.image.source="https://github.com/YuukanOO/seelf"
+RUN apk add --update-cache openssh-client && \
+    rm -rf /var/cache/apk/*
 ENV DATA_PATH=/seelf/data
 WORKDIR /app
 COPY --from=builder /app/seelf ./

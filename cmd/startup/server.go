@@ -2,19 +2,25 @@ package startup
 
 import (
 	"context"
-	"slices"
 	"time"
 
+	"github.com/YuukanOO/seelf/internal/auth/app/create_first_account"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	authinfra "github.com/YuukanOO/seelf/internal/auth/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
+	"github.com/YuukanOO/seelf/internal/deployment/app/configure_target"
+	"github.com/YuukanOO/seelf/internal/deployment/app/delete_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
+	"github.com/YuukanOO/seelf/internal/deployment/app/expose_seelf_container"
+	deploymentdomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
-	"github.com/YuukanOO/seelf/pkg/async"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/memory"
 	bussqlite "github.com/YuukanOO/seelf/pkg/bus/sqlite"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 )
 
@@ -25,24 +31,29 @@ type (
 		Bus() bus.Dispatcher
 		Logger() log.Logger
 		UsersReader() domain.UsersReader
+		ScheduledJobsStore() bus.ScheduledJobsStore
 	}
 
 	ServerOptions interface {
 		deploymentinfra.Options
-		authinfra.Options
 
+		AppExposedUrl() monad.Maybe[deploymentdomain.Url]
+		DefaultEmail() string
+		DefaultPassword() string
 		RunnersPollInterval() time.Duration
 		RunnersDeploymentCount() int
+		RunnersCleanupCount() int
 		ConnectionString() string
 	}
 
 	serverRoot struct {
-		options     ServerOptions
-		bus         bus.Bus
-		logger      log.Logger
-		db          *sqlite.Database
-		usersReader domain.UsersReader
-		pool        async.Pool[bus.ScheduledJob]
+		options        ServerOptions
+		bus            bus.Bus
+		logger         log.Logger
+		db             *sqlite.Database
+		usersReader    domain.UsersReader
+		schedulerStore bus.ScheduledJobsStore
+		scheduler      bus.RunnableScheduler
 	}
 )
 
@@ -64,18 +75,31 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 
 	s.db = db
 
-	adapter := bussqlite.NewSchedulerAdapter(s.db)
+	s.schedulerStore = bussqlite.NewScheduledJobsStore(s.db)
 
-	if err = adapter.Setup(); err != nil {
+	if err = s.schedulerStore.Setup(); err != nil {
 		return nil, err
 	}
 
-	scheduler := bus.NewScheduler(adapter, s.logger, s.bus)
+	s.scheduler = bus.NewScheduler(s.schedulerStore, s.logger, s.bus, s.options.RunnersPollInterval(),
+		bus.WorkerGroup{
+			Size:     s.options.RunnersDeploymentCount(),
+			Messages: []string{deploy.Command{}.Name_()},
+		},
+		bus.WorkerGroup{
+			Size: s.options.RunnersCleanupCount(),
+			Messages: []string{
+				cleanup_app.Command{}.Name_(),
+				delete_app.Command{}.Name_(),
+				configure_target.Command{}.Name_(),
+				cleanup_target.Command{}.Name_(),
+				delete_target.Command{}.Name_(),
+			},
+		},
+	)
 
 	// Setup auth infrastructure
-	s.usersReader, err = authinfra.Setup(s.options, s.logger, s.db, s.bus)
-
-	if err != nil {
+	if s.usersReader, err = authinfra.Setup(s.logger, s.db, s.bus); err != nil {
 		return nil, err
 	}
 
@@ -85,40 +109,50 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		s.logger,
 		s.db,
 		s.bus,
-		scheduler,
+		s.scheduler,
 	); err != nil {
 		return nil, err
 	}
 
-	// Names of jobs to process in a specific group since they can take a long time
-	deploymentNames := []string{
-		deploy.Command{}.Name_(),
-		cleanup_app.Command{}.Name_(),
+	// Create the first account if needed
+	uid, err := bus.Send(s.bus, context.Background(), create_first_account.Command{
+		Email:    options.DefaultEmail(),
+		Password: options.DefaultPassword(),
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	s.pool = async.NewPool(
-		s.logger,
-		async.Poll(s.options.RunnersPollInterval(), scheduler.GetNextPendingJobs),
-		async.GroupFunc(
-			s.options.RunnersDeploymentCount(),
-			scheduler.Process,
-			func(ctx context.Context, job bus.ScheduledJob) bool {
-				return slices.Contains(deploymentNames, job.Message().Name_())
-			},
-		),
-	)
+	// Create the target needed to expose seelf itself and manage certificates if needed
+	if exposedUrl, isSet := s.options.AppExposedUrl().TryGet(); isSet {
+		container := exposedUrl.User().Get("")
 
-	return s, s.pool.Start()
+		s.logger.Infow("exposing seelf container using the local target, creating it if needed, the container will restart once done",
+			"container", container)
+
+		if _, err := bus.Send(s.bus, domain.WithUserID(context.Background(), domain.UserID(uid)), expose_seelf_container.Command{
+			Container: container,
+			Url:       exposedUrl.WithoutUser().String(),
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	s.scheduler.Start()
+
+	return s, nil
 }
 
 func (s *serverRoot) Cleanup() error {
 	s.logger.Debug("cleaning server services")
 
-	s.pool.Stop()
+	s.scheduler.Stop()
 
 	return s.db.Close()
 }
 
-func (s *serverRoot) Bus() bus.Dispatcher             { return s.bus }
-func (s *serverRoot) Logger() log.Logger              { return s.logger }
-func (s *serverRoot) UsersReader() domain.UsersReader { return s.usersReader }
+func (s *serverRoot) Bus() bus.Dispatcher                        { return s.bus }
+func (s *serverRoot) Logger() log.Logger                         { return s.logger }
+func (s *serverRoot) UsersReader() domain.UsersReader            { return s.usersReader }
+func (s *serverRoot) ScheduledJobsStore() bus.ScheduledJobsStore { return s.schedulerStore }

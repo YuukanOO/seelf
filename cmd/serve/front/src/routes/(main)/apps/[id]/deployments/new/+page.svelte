@@ -16,7 +16,7 @@
 	import service, {
 		type Environment,
 		type SourceDataDiscriminator,
-		type QueueDeploymentData
+		type QueueDeployment
 	} from '$lib/resources/deployments';
 	import select from '$lib/select';
 	import l from '$lib/localization';
@@ -24,7 +24,7 @@
 	export let data;
 
 	let environment: Environment = 'production';
-	let kind: SourceDataDiscriminator = data.app.vcs ? 'git' : 'raw';
+	let kind: SourceDataDiscriminator = data.app.version_control ? 'git' : 'raw';
 	let raw = '';
 	let archive: Maybe<FileList> = undefined;
 	let branch = '';
@@ -37,10 +37,10 @@
 			{ label: l.translate('deployment.payload.archive'), value: 'archive' },
 			{ label: l.translate('deployment.payload.vcs'), value: 'git' }
 		] satisfies DropdownOption<SourceDataDiscriminator>[]
-	).filter((k) => (!data.app.vcs ? k.value !== 'git' : true));
+	).filter((k) => (!data.app.version_control ? k.value !== 'git' : true));
 
 	async function submit() {
-		const payload = select<SourceDataDiscriminator, () => QueueDeploymentData>(kind, {
+		const payload = select<SourceDataDiscriminator, () => QueueDeployment>(kind, {
 			archive: () =>
 				buildFormData({
 					environment,
@@ -102,7 +102,7 @@
 		]}
 	>
 		{#if data.app.cleanup_requested_at}
-			<CleanupNotice data={data.app} />
+			<CleanupNotice requested_at={data.app.cleanup_requested_at} />
 		{:else}
 			<Button type="submit" loading={submitting} text="deployment.deploy" />
 		{/if}
@@ -134,7 +134,7 @@
 							required
 							label="deployment.payload.raw.content"
 							bind:value={raw}
-							remoteError={errors?.content}
+							remoteError={errors?.['raw.content']}
 						>
 							<p>{l.translate('deployment.payload.raw.content.help')}</p>
 						</TextArea>
@@ -143,12 +143,12 @@
 							label="deployment.payload.vcs.branch"
 							bind:value={branch}
 							required
-							remoteError={errors?.branch}
+							remoteError={errors?.['git.branch']}
 						/>
 						<TextInput
 							label="deployment.payload.vcs.commit"
 							bind:value={hash}
-							remoteError={errors?.hash}
+							remoteError={errors?.['git.hash']}
 						>
 							<p>{l.translate('deployment.payload.vcs.commit.help')}</p>
 						</TextInput>

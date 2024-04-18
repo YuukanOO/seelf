@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,7 +19,8 @@ type Maybe[T any] struct {
 
 // Instantiates a monad with a defined value.
 func Value[T any](value T) (m Maybe[T]) {
-	return m.WithValue(value)
+	m.Set(value)
+	return m
 }
 
 // Instantiates an empty monad for the given type.
@@ -28,18 +28,15 @@ func None[T any]() (m Maybe[T]) {
 	return m
 }
 
-// Assign the given value and returns the monad.
-func (m Maybe[T]) WithValue(value T) Maybe[T] {
+// Assign the given value to the monad.
+func (m *Maybe[T]) Set(value T) {
 	m.hasValue = true
 	m.value = value
-	return m
 }
 
 // Unset this monad value.
-func (m Maybe[T]) None() Maybe[T] {
+func (m *Maybe[T]) Unset() {
 	m.hasValue = false
-	// No need to set the m.value here because .Get will fail if trying to access it.
-	return m
 }
 
 // Has a value been set on this monad?
@@ -161,7 +158,7 @@ func (m *Maybe[T]) UnmarshalYAML(value *yaml.Node) error {
 func (m *Maybe[T]) UnmarshalEnvironmentValue(data string) error {
 	// If the value is a string, it should be quoted for the json.Unmarshal to work correctly
 	if _, isString := any(&m.value).(*string); data != "" && isString {
-		data = fmt.Sprintf(`"%s"`, data)
+		data = `"` + data + `"`
 	}
 
 	if err := json.Unmarshal([]byte(data), &m.value); err != nil {

@@ -3,9 +3,9 @@ package artifact
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -56,15 +56,15 @@ func NewLocal(options LocalOptions, logger log.Logger) domain.ArtifactManager {
 func (a *localArtifactManager) PrepareBuild(
 	ctx context.Context,
 	depl domain.Deployment,
-) (buildDirectory string, logger domain.DeploymentLogger, err error) {
+) (domain.DeploymentContext, error) {
 	logfile, err := ostools.OpenAppend(a.LogPath(ctx, depl))
 
 	if err != nil {
 		a.logger.Error(err)
-		return "", nil, ErrArtifactOpenLoggerFailed
+		return domain.DeploymentContext{}, ErrArtifactOpenLoggerFailed
 	}
 
-	logger = newLogger(logfile)
+	logger := newLogger(logfile)
 
 	defer func() {
 		if err == nil {
@@ -76,29 +76,31 @@ func (a *localArtifactManager) PrepareBuild(
 		logger.Close()                               // And close the logger right now
 	}()
 
-	if buildDirectory, err = a.deploymentPath(depl); err != nil {
-		return
+	buildDirectory, err := a.deploymentPath(depl)
+
+	if err != nil {
+		return domain.DeploymentContext{}, err
 	}
 
 	logger.Infof("preparing build directory %s", buildDirectory)
 
 	if err = ostools.EmptyDir(buildDirectory); err != nil {
-		return
+		return domain.DeploymentContext{}, err
 	}
 
-	return
+	return domain.NewDeploymentContext(buildDirectory, logger), nil
 }
 
-func (a *localArtifactManager) Cleanup(ctx context.Context, app domain.App) error {
+func (a *localArtifactManager) Cleanup(ctx context.Context, id domain.AppID) error {
 	// Remove all app directory
-	appDir := a.appPath(app.ID())
+	appDir := a.appPath(id)
 	a.logger.Debugw("removing app directory", "path", appDir)
 	if err := os.RemoveAll(appDir); err != nil {
 		return err
 	}
 
 	// Remove all logs for this app
-	logsPattern := filepath.Join(a.logsDirectory, fmt.Sprintf("*%s*.deployment.log", app.ID()))
+	logsPattern := filepath.Join(a.logsDirectory, "*"+string(id)+"*.deployment.log")
 	a.logger.Debugw("removing app logs", "pattern", logsPattern)
 	return ostools.RemovePattern(logsPattern)
 }
@@ -106,8 +108,13 @@ func (a *localArtifactManager) Cleanup(ctx context.Context, app domain.App) erro
 func (a *localArtifactManager) LogPath(ctx context.Context, depl domain.Deployment) string {
 	return filepath.Join(
 		a.logsDirectory,
-		fmt.Sprintf("%d-%s-%d.deployment.log",
-			depl.Requested().At().Unix(), depl.ID().AppID(), depl.ID().DeploymentNumber()))
+		strconv.FormatInt(depl.Requested().At().Unix(), 10)+
+			"-"+
+			string(depl.ID().AppID())+
+			"-"+
+			strconv.Itoa(int(depl.ID().DeploymentNumber()))+
+			".deployment.log",
+	)
 }
 
 func (a *localArtifactManager) appPath(appID domain.AppID) string {

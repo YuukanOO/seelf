@@ -4,17 +4,26 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_User(t *testing.T) {
+	t.Run("should fail if the email is not available", func(t *testing.T) {
+		_, err := domain.NewUser(domain.NewEmailRequirement("an@email.com", false), "password", "apikey")
+		testutil.Equals(t, domain.ErrEmailAlreadyTaken, err)
+	})
+
 	t.Run("could be created", func(t *testing.T) {
-		email := domain.UniqueEmail("some@email.com")
-		password := domain.PasswordHash("someHashedPassword")
-		key := domain.APIKey("someapikey")
+		var (
+			email    domain.Email        = "some@email.com"
+			password domain.PasswordHash = "someHashedPassword"
+			key      domain.APIKey       = "someapikey"
+		)
 
-		u := domain.NewUser(email, password, key)
+		u, err := domain.NewUser(domain.NewEmailRequirement(email, true), password, key)
 
+		testutil.IsNil(t, err)
 		testutil.Equals(t, password, u.Password())
 		testutil.NotEquals(t, "", u.ID())
 
@@ -26,11 +35,18 @@ func Test_User(t *testing.T) {
 		testutil.Equals(t, key, registeredEvent.Key)
 	})
 
-	t.Run("should be able to change email", func(t *testing.T) {
-		u := domain.NewUser("some@email.com", "someHashedPassword", "")
+	t.Run("should fail if trying to change for a non available email", func(t *testing.T) {
+		u := must.Panic(domain.NewUser(domain.NewEmailRequirement("some@email.com", true), "someHashedPassword", "apikey"))
 
-		u.HasEmail("some@email.com") // no change, should not trigger events
-		u.HasEmail("newone@email.com")
+		err := u.HasEmail(domain.NewEmailRequirement("one@email.com", false))
+		testutil.Equals(t, domain.ErrEmailAlreadyTaken, err)
+	})
+
+	t.Run("should be able to change email", func(t *testing.T) {
+		u := must.Panic(domain.NewUser(domain.NewEmailRequirement("some@email.com", true), "someHashedPassword", "apikey"))
+
+		u.HasEmail(domain.NewEmailRequirement("some@email.com", true)) // no change, should not trigger events
+		u.HasEmail(domain.NewEmailRequirement("newone@email.com", true))
 
 		testutil.HasNEvents(t, &u, 2)
 		evt := testutil.EventIs[domain.UserEmailChanged](t, &u, 1)
@@ -39,7 +55,7 @@ func Test_User(t *testing.T) {
 	})
 
 	t.Run("should be able to change password", func(t *testing.T) {
-		u := domain.NewUser("some@email.com", "someHashedPassword", "")
+		u := must.Panic(domain.NewUser(domain.NewEmailRequirement("some@email.com", true), "someHashedPassword", "apikey"))
 
 		u.HasPassword("someHashedPassword") // no change, should not trigger events
 		u.HasPassword("anotherPassword")

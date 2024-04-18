@@ -3,7 +3,6 @@ package domain
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -20,57 +19,41 @@ type (
 		name          string
 		qualifiedName string
 		image         string
-		url           monad.Maybe[Url]
+		subdomain     monad.Maybe[string]
 	}
 )
 
-func newService(conf Config, name, image string, url monad.Maybe[Url]) (s Service) {
-	s.name = name
+func (s Service) Name() string                   { return s.name }
+func (s Service) Image() string                  { return s.image }
+func (s Service) Subdomain() monad.Maybe[string] { return s.subdomain }
+func (s Service) QualifiedName() string          { return s.qualifiedName } // Returns the service qualified name which identifies it uniquely
+
+// Append a new service to the current array using the provided configuration.
+// If the service is exposed, a subdomain will be generated for it.
+func (s Services) Append(conf DeploymentConfig, name, image string, exposed bool) (Services, Service) {
+	var service Service
+
+	service.name = name
 
 	// Empty image name, let's build it based on the given configuration
 	if image == "" {
-		s.image = fmt.Sprintf("%s/%s:%s", conf.AppName(), name, conf.Environment())
+		service.image = conf.ImageName(name)
 	} else {
-		s.image = image
+		service.image = image
 	}
 
-	s.url = url
-	s.qualifiedName = fmt.Sprintf("%s-%s", conf.ProjectName(), name)
-	return s
-}
-
-func (s Service) Name() string          { return s.name }
-func (s Service) Image() string         { return s.image }
-func (s Service) Url() monad.Maybe[Url] { return s.url }
-func (s Service) IsExposed() bool       { return s.url.HasValue() }
-func (s Service) QualifiedName() string { return s.qualifiedName } // Returns the service qualified name which identifies it uniquely
-
-// Append a new service (not exposed to the outside world) to the current services array.
-func (s Services) Internal(conf Config, name, image string) (Services, Service) {
-	service := newService(conf, name, image, monad.None[Url]())
-	return append(s, service), service
-}
-
-// Append a new exposed service to the current array.
-// Given a base url and a deployment config, it will generate the correct URL for the provided
-// service name.
-func (s Services) Public(baseUrl Url, conf Config, name, image string) (Services, Service) {
-	subdomain := conf.SubDomain()
-
-	// If the default domain has already been taken by another app, build a
-	// unique subdomain with the service name being exposed.
-	if s.hasExposedServices() {
-		subdomain = fmt.Sprintf("%s.%s", name, subdomain)
+	if exposed {
+		service.subdomain.Set(conf.SubDomain(name, s.hasExposedServices()))
 	}
 
-	service := newService(conf, name, image, monad.Value(baseUrl.SubDomain(subdomain)))
+	service.qualifiedName = conf.QualifiedName(name)
 
 	return append(s, service), service
 }
 
 func (s Services) hasExposedServices() bool {
 	for _, service := range s {
-		if service.IsExposed() {
+		if service.subdomain.HasValue() {
 			return true
 		}
 	}
@@ -83,10 +66,10 @@ func (s *Services) Scan(value any) error        { return storage.ScanJSON(value,
 
 // Type needed to marshal an unexposed Service data.
 type marshalledService struct {
-	Name          string           `json:"name"`
-	QualifiedName string           `json:"qualified_name"`
-	Image         string           `json:"image"`
-	Url           monad.Maybe[Url] `json:"url"`
+	Name          string              `json:"name"`
+	QualifiedName string              `json:"qualified_name"`
+	Image         string              `json:"image"`
+	Subdomain     monad.Maybe[string] `json:"subdomain"`
 }
 
 func (s Service) MarshalJSON() ([]byte, error) {
@@ -94,7 +77,7 @@ func (s Service) MarshalJSON() ([]byte, error) {
 		Name:          s.name,
 		QualifiedName: s.qualifiedName,
 		Image:         s.image,
-		Url:           s.url,
+		Subdomain:     s.subdomain,
 	}
 
 	return json.Marshal(serv)
@@ -110,7 +93,7 @@ func (s *Service) UnmarshalJSON(b []byte) error {
 	s.image = m.Image
 	s.name = m.Name
 	s.qualifiedName = m.QualifiedName
-	s.url = m.Url
+	s.subdomain = m.Subdomain
 
 	return nil
 }

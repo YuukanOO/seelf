@@ -1,47 +1,79 @@
 import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import { POLLING_INTERVAL_MS } from '$lib/config';
 import type { ByUserData } from '$lib/resources/users';
-import type { DeploymentData } from '$lib/resources/deployments';
+import type { Deployment } from '$lib/resources/deployments';
 
-export type AppData = {
+export type App = {
 	id: string;
 	name: string;
 	cleanup_requested_at?: string;
 	created_at: string;
 	created_by: ByUserData;
-	environments: Record<string, Maybe<DeploymentData>>;
+	latest_deployments: LatestDeployments;
+	production_target: TargetSummary;
+	staging_target: TargetSummary;
 };
 
-type EnvironmentPerEnvPerService = Record<string, Record<string, Record<string, string>>>;
-type VCSConfig = { url: string; token?: string };
-
-export type AppDetailData = AppData & {
-	vcs?: VCSConfig;
-	env?: EnvironmentPerEnvPerService;
+export type LatestDeployments = {
+	production?: Deployment;
+	staging?: Deployment;
 };
 
-export type CreateAppData = {
+export type EnvironmentVariablesPerService = Record<string, Record<string, string>>;
+export type VersionControl = { url: string; token?: string };
+
+export type TargetSummary = {
+	id: string;
 	name: string;
-	env?: EnvironmentPerEnvPerService;
-	vcs?: VCSConfig;
+	url: string;
 };
 
-export type UpdateAppData = {
-	vcs: Patch<{
-		url?: string;
+export type AppDetail = {
+	id: string;
+	name: string;
+	cleanup_requested_at?: string;
+	created_at: string;
+	created_by: ByUserData;
+	latest_deployments: LatestDeployments;
+	version_control?: VersionControl;
+	production: EnvironmentConfig;
+	staging: EnvironmentConfig;
+};
+
+export type EnvironmentConfig = {
+	target: TargetSummary;
+	vars?: EnvironmentVariablesPerService;
+};
+
+export type CreateAppDataEnvironmentConfig = {
+	target: string;
+	vars?: EnvironmentVariablesPerService;
+};
+
+export type CreateApp = {
+	name: string;
+	version_control?: VersionControl;
+	production: CreateAppDataEnvironmentConfig;
+	staging: CreateAppDataEnvironmentConfig;
+};
+
+export type UpdateApp = {
+	version_control: Patch<{
+		url: string;
 		token: Patch<string>;
 	}>;
-	env: Patch<EnvironmentPerEnvPerService>;
+	production: Maybe<CreateAppDataEnvironmentConfig>;
+	staging: Maybe<CreateAppDataEnvironmentConfig>;
 };
 
 export interface AppsService {
-	create(payload: CreateAppData): Promise<AppDetailData>;
-	update(id: string, payload: UpdateAppData): Promise<AppDetailData>;
+	create(payload: CreateApp): Promise<AppDetail>;
+	update(id: string, payload: UpdateApp): Promise<AppDetail>;
 	delete(id: string): Promise<void>;
-	fetchAll(options?: FetchOptions): Promise<AppData[]>;
-	fetchById(id: string, options?: FetchOptions): Promise<AppDetailData>;
-	queryAll(): QueryResult<AppData[]>;
-	queryById(id: string): QueryResult<AppDetailData>;
+	fetchAll(options?: FetchOptions): Promise<App[]>;
+	fetchById(id: string, options?: FetchOptions): Promise<AppDetail>;
+	queryAll(): QueryResult<App[]>;
+	queryById(id: string): QueryResult<AppDetail>;
 }
 
 type Options = {
@@ -51,11 +83,11 @@ type Options = {
 export class RemoteAppsService implements AppsService {
 	constructor(private readonly _fetcher: FetchService, private readonly _options: Options) {}
 
-	create(payload: CreateAppData): Promise<AppDetailData> {
+	create(payload: CreateApp): Promise<AppDetail> {
 		return this._fetcher.post('/api/v1/apps', payload);
 	}
 
-	update(id: string, payload: UpdateAppData): Promise<AppDetailData> {
+	update(id: string, payload: UpdateApp): Promise<AppDetail> {
 		return this._fetcher.patch(`/api/v1/apps/${id}`, payload);
 	}
 
@@ -65,21 +97,21 @@ export class RemoteAppsService implements AppsService {
 		});
 	}
 
-	queryAll(): QueryResult<AppData[]> {
+	queryAll(): QueryResult<App[]> {
 		return this._fetcher.query('/api/v1/apps', { refreshInterval: this._options.pollingInterval });
 	}
 
-	queryById(id: string): QueryResult<AppDetailData> {
+	queryById(id: string): QueryResult<AppDetail> {
 		return this._fetcher.query(`/api/v1/apps/${id}`, {
 			refreshInterval: this._options.pollingInterval
 		});
 	}
 
-	fetchAll(options?: FetchOptions): Promise<AppData[]> {
+	fetchAll(options?: FetchOptions): Promise<App[]> {
 		return this._fetcher.get('/api/v1/apps', options);
 	}
 
-	fetchById(id: string, options?: FetchOptions): Promise<AppDetailData> {
+	fetchById(id: string, options?: FetchOptions): Promise<AppDetail> {
 		return this._fetcher.get(`/api/v1/apps/${id}`, options);
 	}
 }
@@ -102,8 +134,8 @@ const regexEnvKeyValue = /^\s*(?<key>[^=]+)\s*=\s*(?<value>.*)\s*$/gm;
  */
 export function toServiceVariablesRecord(
 	services: ServiceVariables[]
-): Record<string, Record<string, string>> {
-	return services.reduce<Record<string, Record<string, string>>>(
+): EnvironmentVariablesPerService {
+	return services.reduce<EnvironmentVariablesPerService>(
 		(result, service) => ({
 			...result,
 			[service.name]: parseEnv(service.values)
@@ -113,7 +145,7 @@ export function toServiceVariablesRecord(
 }
 
 export function fromServiceVariablesRecord(
-	values?: Record<string, Record<string, string>>
+	values?: EnvironmentVariablesPerService
 ): ServiceVariables[] {
 	return Object.entries(values ?? {}).map(([name, values]) => ({
 		name,

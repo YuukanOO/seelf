@@ -4,11 +4,12 @@
 	import l, { type AppTranslationsString } from '$lib/localization';
 
 	export let label: AppTranslationsString;
+	export let disabled: boolean = false;
 	export let checked: boolean = false;
 </script>
 
 <Stack as="label" class="container" gap={2}>
-	<input type="checkbox" class="checkbox" bind:checked />
+	<input type="checkbox" {disabled} class="checkbox" bind:checked />
 	<Stack direction="column" gap={0}>
 		<span>{l.translate(label)}</span>
 		{#if $$slots.default}

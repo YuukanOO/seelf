@@ -2,11 +2,19 @@ name: CI
 
 on: [push]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
 jobs:
   backend:
+    name: Backend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -20,17 +28,19 @@ jobs:
         run: go test ./... --cover
 
   frontend:
+    name: Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: cmd/serve/front
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "18.x"
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -41,12 +51,53 @@ jobs:
       - name: Test
         run: npm test
 
+  build-docs:
+    name: Build docs
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Build with VitePress
+        run: npm run docs:build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy-docs:
+    if: github.ref_name == 'main'
+    name: Deploy docs
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build-docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   release:
+    name: Release
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -61,9 +112,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "20.x"
+          node-version: 20
+          cache: npm
 
       - name: Release
         run: npx -p @semantic-release/git -p @semantic-release/exec semantic-release

@@ -70,3 +70,18 @@ func Test_As(t *testing.T) {
 		testutil.IsFalse(t, ok)
 	})
 }
+
+func Test_Any(t *testing.T) {
+	t.Run("should return the first non nil error", func(t *testing.T) {
+		expected := errors.New("some error")
+		err := apperr.Any(nil, expected, nil)
+
+		testutil.ErrorIs(t, expected, err)
+	})
+
+	t.Run("should return nil if there is no error", func(t *testing.T) {
+		err := apperr.Any(nil, nil)
+
+		testutil.IsNil(t, err)
+	})
+}

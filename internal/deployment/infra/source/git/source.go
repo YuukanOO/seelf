@@ -11,8 +11,8 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/types"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
@@ -32,7 +32,7 @@ const basicAuthUser = "seelf"
 
 type (
 	// Public request to trigger a git deployment
-	Request struct {
+	Body struct {
 		Branch string              `json:"branch"`
 		Hash   monad.Maybe[string] `json:"hash"`
 	}
@@ -47,42 +47,44 @@ func New(reader domain.AppsReader) source.Source {
 	return &service{reader}
 }
 
-func (*service) CanPrepare(payload any) bool          { return types.Is[Request](payload) }
+func (*service) CanPrepare(payload any) bool          { return types.Is[Body](payload) }
 func (*service) CanFetch(meta domain.SourceData) bool { return types.Is[Data](meta) }
 
-func (s *service) Prepare(app domain.App, payload any) (domain.SourceData, error) {
-	req, ok := payload.(Request)
+func (s *service) Prepare(ctx context.Context, app domain.App, payload any) (domain.SourceData, error) {
+	req, ok := payload.(Body)
 
 	if !ok {
 		return nil, domain.ErrInvalidSourcePayload
 	}
 
-	if err := validation.Check(validation.Of{
-		"branch": validation.Is(req.Branch, strings.Required),
-		"hash": validation.Maybe(req.Hash, func(hash string) error {
-			return validation.Is(hash, strings.Required)
+	if err := validate.Struct(validate.Of{
+		"git.branch": validate.Field(req.Branch, strings.Required),
+		"git.hash": validate.Maybe(req.Hash, func(hash string) error {
+			return validate.Field(hash, strings.Required)
 		}),
 	}); err != nil {
 		return nil, err
 	}
 
-	vcs, hasVCS := app.VCS().TryGet()
+	vcs, hasVCS := app.VersionControl().TryGet()
 
 	if !hasVCS {
-		return nil, domain.ErrVCSNotConfigured
+		return nil, domain.ErrVersionControlNotConfigured
 	}
 
 	// Retrieve the latest commit to make sure the branch exists
-	latestCommit, err := getLatestBranchCommit(vcs, req.Branch)
+	latestCommit, err := getLatestBranchCommit(ctx, vcs, req.Branch)
 
 	if err != nil {
-		return nil, validation.WrapIfAppErr(err, "branch")
+		return nil, validate.Wrap(err, "git.branch")
 	}
 
 	return Data{req.Branch, req.Hash.Get(latestCommit)}, nil
 }
 
-func (s *service) Fetch(ctx context.Context, dir string, logger domain.DeploymentLogger, depl domain.Deployment) error {
+func (s *service) Fetch(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment) error {
+	logger := deploymentCtx.Logger()
+
 	// Retrieve git url and token from the app
 	app, err := s.reader.GetByID(ctx, depl.ID().AppID())
 
@@ -91,11 +93,11 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 		return ErrAppRetrievedFailed
 	}
 
-	vcs, hasVCS := app.VCS().TryGet()
+	vcs, hasVCS := app.VersionControl().TryGet()
 
 	// Could happen if the app vcs config has been removed since the deployment has been queued
 	if !hasVCS {
-		return domain.ErrVCSNotConfigured
+		return domain.ErrVersionControlNotConfigured
 	}
 
 	data, ok := depl.Source().(Data)
@@ -106,7 +108,7 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 
 	logger.Stepf("cloning branch %s at %s from %s using token: %t", data.Branch, data.Hash, vcs.Url(), vcs.Token().HasValue())
 
-	r, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
+	r, err := git.PlainCloneContext(ctx, deploymentCtx.BuildDirectory(), false, &git.CloneOptions{
 		Auth:          getAuthMethod(vcs),
 		SingleBranch:  true,
 		ReferenceName: plumbing.NewBranchReferenceName(data.Branch),
@@ -144,7 +146,7 @@ func (s *service) Fetch(ctx context.Context, dir string, logger domain.Deploymen
 	return nil
 }
 
-func getAuthMethod(vcs domain.VCSConfig) transport.AuthMethod {
+func getAuthMethod(vcs domain.VersionControl) transport.AuthMethod {
 	if token, isSet := vcs.Token().TryGet(); isSet {
 		return &http.BasicAuth{
 			Username: basicAuthUser,
@@ -155,12 +157,12 @@ func getAuthMethod(vcs domain.VCSConfig) transport.AuthMethod {
 	return nil
 }
 
-func getLatestBranchCommit(vcs domain.VCSConfig, branch string) (string, error) {
+func getLatestBranchCommit(ctx context.Context, vcs domain.VersionControl, branch string) (string, error) {
 	branchRef := plumbing.NewBranchReferenceName(branch)
 	refs, err := git.NewRemote(nil, &config.RemoteConfig{
 		Name: "origin",
 		URLs: []string{vcs.Url().String()},
-	}).List(&git.ListOptions{
+	}).ListContext(ctx, &git.ListOptions{
 		Auth: getAuthMethod(vcs),
 	})
 

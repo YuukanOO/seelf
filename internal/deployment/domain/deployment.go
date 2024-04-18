@@ -9,52 +9,59 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 var (
 	ErrCouldNotPromoteProductionDeployment = apperr.New("could_not_promote_production_deployment")
+	ErrRunningOrPendingDeployments         = apperr.New("running_or_pending_deployments")
 	ErrInvalidSourceDeployment             = apperr.New("invalid_source_deployment")
 )
 
 type (
-	// VALUE & RELATED OBJECTS
-
-	RunningOrPendingAppDeploymentsCount uint
-
-	// ENTITY
+	HasRunningOrPendingDeploymentsOnTarget       bool
+	HasRunningOrPendingDeploymentsOnAppTargetEnv bool
+	HasSuccessfulDeploymentsOnAppTargetEnv       bool
 
 	Deployment struct {
 		event.Emitter
 
 		id        DeploymentID
-		config    Config
-		state     State
+		config    DeploymentConfig
+		state     DeploymentState
 		source    SourceData
 		requested shared.Action[domain.UserID]
 	}
 
-	// RELATED SERVICES
-
 	DeploymentsReader interface {
 		GetByID(context.Context, DeploymentID) (Deployment, error)
+		GetLastDeployment(context.Context, AppID, Environment) (Deployment, error)
 		GetNextDeploymentNumber(context.Context, AppID) (DeploymentNumber, error)
-		GetRunningDeployments(context.Context) ([]Deployment, error)
-		GetRunningOrPendingDeploymentsCount(context.Context, AppID) (RunningOrPendingAppDeploymentsCount, error)
+		HasRunningOrPendingDeploymentsOnTarget(context.Context, TargetID) (HasRunningOrPendingDeploymentsOnTarget, error)
+		// Retrieve running or pending deployments count for a specific app, target and environment and the successful deployments count
+		// during the specified interval.
+		HasDeploymentsOnAppTargetEnv(context.Context, AppID, TargetID, Environment, shared.TimeInterval) (HasRunningOrPendingDeploymentsOnAppTargetEnv, HasSuccessfulDeploymentsOnAppTargetEnv, error)
+	}
+
+	FailCriterias struct {
+		Status      monad.Maybe[DeploymentStatus]
+		Target      monad.Maybe[TargetID]
+		App         monad.Maybe[AppID]
+		Environment monad.Maybe[Environment]
 	}
 
 	DeploymentsWriter interface {
+		FailDeployments(context.Context, error, FailCriterias) error // Fail all deployments matching the given filters
 		Write(context.Context, ...*Deployment) error
 	}
-
-	// EVENTS
 
 	DeploymentCreated struct {
 		bus.Notification
 
 		ID        DeploymentID
-		Config    Config
-		State     State
+		Config    DeploymentConfig
+		State     DeploymentState
 		Source    SourceData
 		Requested shared.Action[domain.UserID]
 	}
@@ -63,7 +70,7 @@ type (
 		bus.Notification
 
 		ID    DeploymentID
-		State State
+		State DeploymentState
 	}
 )
 
@@ -72,7 +79,7 @@ func (DeploymentStateChanged) Name_() string { return "deployment.event.deployme
 
 // Creates a new deployment for this app. This method acts as a factory for the deployment
 // entity to make sure a new deployment can be created for an app.
-func (a App) NewDeployment(
+func (a *App) NewDeployment(
 	deployNumber DeploymentNumber,
 	meta SourceData,
 	env Environment,
@@ -82,48 +89,24 @@ func (a App) NewDeployment(
 		return d, ErrAppCleanupRequested
 	}
 
-	if meta.NeedVCS() && !a.vcs.HasValue() {
-		return d, ErrVCSNotConfigured
+	if meta.NeedVersionControl() && !a.versionControl.HasValue() {
+		return d, ErrVersionControlNotConfigured
+	}
+
+	conf, err := a.ConfigSnapshotFor(env)
+
+	if err != nil {
+		return d, err
 	}
 
 	d.apply(DeploymentCreated{
 		ID:        DeploymentIDFrom(a.id, deployNumber),
-		Config:    NewConfig(a, env),
+		Config:    conf,
 		Source:    meta,
 		Requested: shared.NewAction(requestedBy),
 	})
 
 	return d, nil
-}
-
-// Redeploy the given deployment.
-func (a App) Redeploy(
-	source Deployment,
-	deployNumber DeploymentNumber,
-	requestedBy domain.UserID,
-) (d Deployment, err error) {
-	if source.id.appID != a.id {
-		return d, ErrInvalidSourceDeployment
-	}
-
-	return a.NewDeployment(deployNumber, source.source, source.config.environment, requestedBy)
-}
-
-// Promote the given deployment to the production environment
-func (a App) Promote(
-	source Deployment,
-	deployNumber DeploymentNumber,
-	requestedBy domain.UserID,
-) (d Deployment, err error) {
-	if source.config.environment.IsProduction() {
-		return d, ErrCouldNotPromoteProductionDeployment
-	}
-
-	if source.id.appID != a.id {
-		return d, ErrInvalidSourceDeployment
-	}
-
-	return a.NewDeployment(deployNumber, source.source, Production, requestedBy)
 }
 
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
@@ -137,9 +120,11 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	err = scanner.Scan(
 		&d.id.appID,
 		&d.id.deploymentNumber,
+		&d.config.appid,
 		&d.config.appname,
 		&d.config.environment,
-		&d.config.env,
+		&d.config.target,
+		&d.config.vars,
 		&d.state.status,
 		&d.state.errcode,
 		&d.state.services,
@@ -161,20 +146,50 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	return d, err
 }
 
-func (d Deployment) ID() DeploymentID                        { return d.id }
-func (d Deployment) Config() Config                          { return d.config }
-func (d Deployment) Source() SourceData                      { return d.source }
-func (d Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
+// Redeploy the given deployment.
+func (a *App) Redeploy(
+	source Deployment,
+	deployNumber DeploymentNumber,
+	requestedBy domain.UserID,
+) (d Deployment, err error) {
+	if source.id.appID != a.id {
+		return d, ErrInvalidSourceDeployment
+	}
+
+	return a.NewDeployment(deployNumber, source.source, source.config.environment, requestedBy)
+}
+
+// Promote the given deployment to the production environment
+func (a *App) Promote(
+	source Deployment,
+	deployNumber DeploymentNumber,
+	requestedBy domain.UserID,
+) (d Deployment, err error) {
+	if source.config.environment.IsProduction() {
+		return d, ErrCouldNotPromoteProductionDeployment
+	}
+
+	if source.id.appID != a.id {
+		return d, ErrInvalidSourceDeployment
+	}
+
+	return a.NewDeployment(deployNumber, source.source, Production, requestedBy)
+}
+
+func (d *Deployment) ID() DeploymentID                        { return d.id }
+func (d *Deployment) Config() DeploymentConfig                { return d.config }
+func (d *Deployment) Source() SourceData                      { return d.source }
+func (d *Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
 
 // Mark a deployment has started.
 func (d *Deployment) HasStarted() error {
-	state, err := d.state.Started()
+	err := d.state.Started()
 
 	if err != nil {
 		return err
 	}
 
-	d.stateChanged(state)
+	d.stateChanged()
 
 	return nil
 }
@@ -187,30 +202,27 @@ func (d *Deployment) HasEnded(services Services, deploymentErr error) error {
 		services = Services{}
 	}
 
-	var (
-		err      error
-		newState State
-	)
+	var err error
 
 	if deploymentErr != nil {
-		newState, err = d.state.Failed(deploymentErr)
+		err = d.state.Failed(deploymentErr)
 	} else {
-		newState, err = d.state.Succeeded(services)
+		err = d.state.Succeeded(services)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	d.stateChanged(newState)
+	d.stateChanged()
 
 	return nil
 }
 
-func (d *Deployment) stateChanged(newState State) {
+func (d *Deployment) stateChanged() {
 	d.apply(DeploymentStateChanged{
 		ID:    d.id,
-		State: newState,
+		State: d.state,
 	})
 }
 

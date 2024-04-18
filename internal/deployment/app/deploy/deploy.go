@@ -2,11 +2,12 @@ package deploy
 
 import (
 	"context"
-	"database/sql/driver"
+	"errors"
+	"strconv"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 // Process a deployment, this is where the magic happen!
@@ -17,19 +18,19 @@ type Command struct {
 	DeploymentNumber int    `json:"deployment_number"`
 }
 
-func (Command) Name_() string                  { return "deployment.command.deploy" }
-func (c Command) Value() (driver.Value, error) { return storage.ValueJSON(c) }
+func (Command) Name_() string        { return "deployment.command.deploy" }
+func (c Command) ResourceID() string { return c.AppID + "-" + strconv.Itoa(c.DeploymentNumber) }
 
-func init() {
-	bus.Marshallable.Register(Command{}, func(s string) (bus.Request, error) { return storage.UnmarshalJSON[Command](s) })
-}
-
+// Handle the deployment process.
+// If an unexpected error occurs during this process, it uses the bus.PreserveOrder function
+// to make sure all deployments are processed linearly.
 func Handler(
 	reader domain.DeploymentsReader,
 	writer domain.DeploymentsWriter,
 	artifactManager domain.ArtifactManager,
 	source domain.Source,
-	backend domain.Backend,
+	provider domain.Provider,
+	targetsReader domain.TargetsReader,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (result bus.UnitType, finalErr error) {
 		result = bus.Unit
@@ -40,13 +41,39 @@ func Handler(
 		))
 
 		if err != nil {
+			// Deployment does not exist anymore, the app should have been deleted, return early
+			if errors.Is(err, apperr.ErrNotFound) {
+				return result, nil
+			}
+
 			return result, err
 		}
 
-		err = depl.HasStarted()
+		// If the target does not exist, fail the deployment
+		// If the target is not ready, returns early without starting the deployment
+		target, targetErr := targetsReader.GetByID(ctx, depl.Config().Target())
 
-		if err != nil {
-			return result, err
+		if targetErr != nil && !errors.Is(targetErr, apperr.ErrNotFound) {
+			return result, targetErr
+		}
+
+		if err = depl.HasStarted(); err != nil {
+			// If the deployment could not be started, it probably means the
+			// application has been requested for cleanup and the deployment has been
+			// cancelled, so the deploy job will never succeed.
+			return result, nil
+		}
+
+		var targetAvailabilityErr error
+
+		if targetErr == nil {
+			targetAvailabilityErr = target.CheckAvailability()
+
+			// Target configuration is in progress, just retry the job later without writing
+			// the deployment, keep it in pending state
+			if errors.Is(targetAvailabilityErr, domain.ErrTargetConfigurationInProgress) {
+				return result, targetAvailabilityErr
+			}
 		}
 
 		if err = writer.Write(ctx, &depl); err != nil {
@@ -54,9 +81,8 @@ func Handler(
 		}
 
 		var (
-			buildDirectory string
-			logger         domain.DeploymentLogger
-			services       domain.Services
+			deploymentCtx domain.DeploymentContext
+			services      domain.Services
 		)
 
 		// This one is a special case to avoid to avoid many branches
@@ -67,37 +93,54 @@ func Handler(
 			// Since the deployment process could take some time, retrieve a fresh version of the
 			// deployment right now
 			if depl, err = reader.GetByID(ctx, depl.ID()); err != nil {
+				if errors.Is(err, apperr.ErrNotFound) {
+					finalErr = nil
+				} else {
+					finalErr = err
+				}
+				return
+			}
+
+			// An error means it has already been handled
+			if err = depl.HasEnded(services, finalErr); err != nil {
+				finalErr = nil
+				return
+			}
+
+			if err = writer.Write(ctx, &depl); err != nil {
 				finalErr = err
 				return
 			}
 
-			stateErr := depl.HasEnded(services, finalErr)
-
-			if stateErr != nil {
-				finalErr = stateErr
-				return
-			}
-
-			if werr := writer.Write(ctx, &depl); werr != nil {
-				finalErr = werr
-				return
-			}
+			finalErr = nil
 		}()
 
 		// Prepare the build directory
-		if buildDirectory, logger, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
+		if deploymentCtx, finalErr = artifactManager.PrepareBuild(ctx, depl); finalErr != nil {
 			return
 		}
 
-		defer logger.Close()
+		defer deploymentCtx.Logger().Close()
+
+		// If the target does not exist, let's fail the deployment correctly
+		if targetErr != nil {
+			finalErr = targetErr
+			return
+		}
+
+		// Target not available, fail the deployment
+		if targetAvailabilityErr != nil {
+			finalErr = targetAvailabilityErr
+			return
+		}
 
 		// Fetch deployment files
-		if finalErr = source.Fetch(ctx, buildDirectory, logger, depl); finalErr != nil {
+		if finalErr = source.Fetch(ctx, deploymentCtx, depl); finalErr != nil {
 			return
 		}
 
-		// Ask the backend to actually deploy the app
-		if services, finalErr = backend.Run(ctx, buildDirectory, logger, depl); finalErr != nil {
+		// Ask the provider to actually deploy the app
+		if services, finalErr = provider.Deploy(ctx, deploymentCtx, depl, target); finalErr != nil {
 			return
 		}
 

@@ -13,14 +13,14 @@
 
 	const { data: app } = service.queryById(data.app.id);
 
-	$: ({ production, staging } = $app?.environments ?? {});
+	$: ({ production, staging } = $app?.latest_deployments ?? {});
 </script>
 
 <Breadcrumb
 	segments={[{ path: routes.apps, title: l.translate('breadcrumb.applications') }, data.app.name]}
 >
 	{#if $app?.cleanup_requested_at}
-		<CleanupNotice data={$app} />
+		<CleanupNotice requested_at={$app.cleanup_requested_at} />
 	{:else}
 		<Button href={routes.editApp(data.app.id)} variant="outlined" text="app.edit" />
 		<Button href={routes.createDeployment(data.app.id)} text="deployment.new" />

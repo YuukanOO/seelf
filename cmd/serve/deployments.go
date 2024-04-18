@@ -20,40 +20,35 @@ import (
 // Specific body for the queue deployment endpoint. Will resolve to the appropriate payload
 // based on the provided fields.
 type queueDeploymentBody struct {
-	Environment string                   `json:"environment" form:"environment"`
-	Raw         monad.Maybe[string]      `json:"raw"`
-	Archive     *multipart.FileHeader    `form:"archive"`
-	Git         monad.Maybe[git.Request] `json:"git"`
+	queue_deployment.Command
+
+	Raw     monad.Maybe[string]   `json:"raw"`
+	Archive *multipart.FileHeader `form:"archive"`
+	Git     monad.Maybe[git.Body] `json:"git"`
 }
 
 func (s *server) queueDeploymentHandler() gin.HandlerFunc {
 	return http.Bind(s, func(ctx *gin.Context, body queueDeploymentBody) error {
-		var (
-			payload any
-			context = ctx.Request.Context()
-			appid   = ctx.Param("id")
-		)
+		var context = ctx.Request.Context()
+
+		body.AppID = ctx.Param("id")
 
 		// Resolve the payload data.
 		if gitBody, isSet := body.Git.TryGet(); isSet {
-			payload = gitBody
+			body.Source = gitBody
 		} else if rawBody, isSet := body.Raw.TryGet(); isSet {
-			payload = rawBody
+			body.Source = rawBody
 		} else if body.Archive != nil {
-			payload = body.Archive
+			body.Source = body.Archive
 		}
 
-		number, err := bus.Send(s.bus, context, queue_deployment.Command{
-			AppID:       appid,
-			Environment: body.Environment,
-			Payload:     payload,
-		})
+		number, err := bus.Send(s.bus, context, body.Command)
 
 		if err != nil {
 			return err
 		}
 
-		return s.sendDeploymentCreatedResponse(ctx, appid, number)
+		return s.sendDeploymentCreatedResponse(ctx, body.AppID, number)
 	})
 }
 
@@ -145,11 +140,11 @@ func (s *server) listDeploymentsByAppHandler() gin.HandlerFunc {
 		}
 
 		if request.Environment != "" {
-			query.Environment = query.Environment.WithValue(request.Environment)
+			query.Environment.Set(request.Environment)
 		}
 
 		if request.Page != 0 {
-			query.Page = query.Page.WithValue(request.Page)
+			query.Page.Set(request.Page)
 		}
 
 		deployments, err := bus.Send(s.bus, ctx.Request.Context(), query)

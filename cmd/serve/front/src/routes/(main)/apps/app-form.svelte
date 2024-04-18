@@ -10,78 +10,119 @@
 	import TextInput from '$components/text-input.svelte';
 	import {
 		toServiceVariablesRecord,
-		type CreateAppData,
-		type AppDetailData,
+		type CreateApp,
+		type AppDetail,
 		fromServiceVariablesRecord,
-		type UpdateAppData
+		type UpdateApp,
+		type CreateAppDataEnvironmentConfig
 	} from '$lib/resources/apps';
+	import type { Target } from '$lib/resources/targets';
 	import l from '$lib/localization';
+	import Dropdown, { type DropdownOption } from '$components/dropdown.svelte';
 
 	export let handler: (data: any) => Promise<unknown>;
-	export let initialData: Maybe<AppDetailData> = undefined;
-	export let domain: string;
+	export let targets: Target[];
+	export let initialData: Maybe<AppDetail> = undefined;
 	export let disabled: Maybe<boolean> = undefined;
 
-	const domainUrl = new URL(domain);
-
 	let name = initialData?.name ?? '';
-	let production = fromServiceVariablesRecord(initialData?.env?.production);
-	let staging = fromServiceVariablesRecord(initialData?.env?.staging);
-	let useVCS = !!initialData?.vcs;
-	let url = initialData?.vcs?.url ?? '';
-	let token = initialData?.vcs?.token;
+	let production = {
+		target: initialData?.production.target.id ?? targets[0]?.id,
+		vars: fromServiceVariablesRecord(initialData?.production?.vars)
+	};
+	let staging = {
+		target: initialData?.staging.target.id ?? targets[0]?.id,
+		vars: fromServiceVariablesRecord(initialData?.staging?.vars)
+	};
 
-	$: appName = name || l.translate('app.how.placeholder');
+	let useVersionControl = !!initialData?.version_control;
+	let url = initialData?.version_control?.url ?? '';
+	let token = initialData?.version_control?.token;
+
+	let prodScheme = l.translate('app.how.placeholder.scheme');
+	let prodUrl = l.translate('app.how.placeholder.url');
+	let stagingScheme = l.translate('app.how.placeholder.scheme');
+	let stagingUrl = l.translate('app.how.placeholder.url');
+
+	const targetsMap = targets.reduce<Record<string, Target>>((acc, value) => {
+		acc[value.id] = value;
+		return acc;
+	}, {});
+
+	$: appName = name || l.translate('app.how.placeholder.name');
+	$: {
+		try {
+			const u = new URL(targetsMap[production.target]?.url);
+
+			prodScheme = u.protocol + '//';
+			prodUrl = u.hostname;
+		} catch {}
+	}
+	$: {
+		try {
+			const u = new URL(targetsMap[staging.target]?.url);
+
+			stagingScheme = u.protocol + '//';
+			stagingUrl = u.hostname;
+		} catch {}
+	}
 
 	const environmentText = l.translate('app.how.env');
 	const defaultServiceText = l.translate('app.how.default');
 	const otherServicesText = l.translate('app.how.others');
 	const otherServicesTitleText = l.translate('app.how.others.title');
 
+	const targetsOptions = targets.map((target) => ({
+		value: target.id,
+		label: `${target.url} - ${target.name}`
+	})) satisfies DropdownOption<string>[];
+
 	// Type $$Props to narrow the handler function based on wether this is an update or a new app
 	type $$Props = {
-		domain: string;
 		/** Force the disabled state of the form in case some other actions is processing */
 		disabled?: boolean;
+		targets: Target[];
 	} & (
 		| {
-				initialData: AppDetailData;
-				handler: (data: UpdateAppData) => Promise<unknown>;
+				initialData: AppDetail;
+				handler: (data: UpdateApp) => Promise<unknown>;
 		  }
 		| {
-				handler: (data: CreateAppData) => Promise<unknown>;
+				handler: (data: CreateApp) => Promise<unknown>;
 		  }
 	);
 
 	async function submit() {
-		let env: CreateAppData['env'] = production.length > 0 || staging.length > 0 ? {} : undefined;
-
-		if (production.length > 0) {
-			env!['production'] = toServiceVariablesRecord(production);
-		}
-
-		if (staging.length > 0) {
-			env!['staging'] = toServiceVariablesRecord(staging);
-		}
-
 		let formData: any;
+
+		const productionData: CreateAppDataEnvironmentConfig = {
+			target: production.target,
+			vars: production.vars.length ? toServiceVariablesRecord(production.vars) : undefined
+		};
+
+		const stagingData: CreateAppDataEnvironmentConfig = {
+			target: staging.target,
+			vars: staging.vars.length ? toServiceVariablesRecord(staging.vars) : undefined
+		};
 
 		if (!initialData) {
 			formData = {
 				name: name,
-				vcs: useVCS ? { url, token: token ? token : undefined } : undefined,
-				env
-			} satisfies CreateAppData;
+				version_control: useVersionControl ? { url, token: token || undefined } : undefined,
+				production: productionData,
+				staging: stagingData
+			} satisfies CreateApp;
 		} else {
 			formData = {
-				vcs: useVCS
+				version_control: useVersionControl
 					? {
 							url,
-							token: token !== initialData.vcs?.token ? (token ? token : null) : undefined
+							token: token !== initialData.version_control?.token ? token || null : undefined
 					  }
 					: null,
-				env: env ?? null
-			} satisfies UpdateAppData;
+				production: productionData,
+				staging: stagingData
+			} satisfies UpdateApp;
 		}
 
 		await handler(formData);
@@ -93,6 +134,12 @@
 
 	<Stack direction="column">
 		<FormErrors {errors} />
+
+		{#if targets.length === 0}
+			<Panel title="app.no_targets" variant="warning">
+				<p>{@html l.translate('app.no_targets.description')}</p>
+			</Panel>
+		{/if}
 
 		<div>
 			{#if !initialData}
@@ -121,19 +168,19 @@
 									<tr>
 										<td data-label={environmentText}><strong>production</strong></td>
 										<td data-label={defaultServiceText}>
-											{domainUrl.protocol}//{appName}.{domainUrl.host}
+											{prodScheme}{appName}.{prodUrl}
 										</td>
 										<td data-label={otherServicesTitleText}>
-											{domainUrl.protocol}//dashboard.{appName}.{domainUrl.host}
+											{prodScheme}dashboard.{appName}.{prodUrl}
 										</td>
 									</tr>
 									<tr>
 										<td data-label={environmentText}><strong>staging</strong></td>
 										<td data-label={defaultServiceText}>
-											{domainUrl.protocol}//{appName}-staging.{domainUrl.host}
+											{stagingScheme}{appName}-staging.{stagingUrl}
 										</td>
 										<td data-label={otherServicesTitleText}>
-											{domainUrl.protocol}//dashboard.{appName}-staging.{domainUrl.host}
+											{stagingScheme}dashboard.{appName}-staging.{stagingUrl}
 										</td>
 									</tr>
 								</tbody>
@@ -145,10 +192,10 @@
 
 			<FormSection title="app.vcs">
 				<Stack direction="column">
-					<Checkbox label="app.vcs.enabled" bind:checked={useVCS}>
+					<Checkbox label="app.vcs.enabled" bind:checked={useVersionControl}>
 						<p>{@html l.translate('app.vcs.help')}</p>
 					</Checkbox>
-					{#if useVCS}
+					{#if useVersionControl}
 						<TextInput label="url" required type="url" bind:value={url} />
 						<TextInput
 							label="app.vcs.token"
@@ -177,17 +224,70 @@
 				</Stack>
 			</FormSection>
 
-			<FormSection title="app.environments" transparent>
+			<FormSection title="app.environment.production">
 				<Stack direction="column">
-					{#if initialData}
-						<Panel variant="help" title="app.environments.help" format="inline">
-							<p>{l.translate('app.environments.help.description')}</p>
+					<Dropdown
+						label="app.environment.target"
+						options={targetsOptions}
+						bind:value={production.target}
+						remoteError={errors?.['production.target']}
+					/>
+
+					{#if initialData && initialData.production.target.id !== production.target}
+						<Panel title="app.environment.target.changed" variant="warning">
+							<p>
+								{@html l.translate('app.environment.target.changed.description', [
+									initialData.production.target.url
+								])}
+							</p>
 						</Panel>
 					{/if}
-					<FormEnvVars title="production" bind:values={production} />
-					<FormEnvVars title="staging" bind:values={staging} />
 				</Stack>
 			</FormSection>
+
+			<FormEnvVars
+				class="env-vars-container"
+				latestServiceNames={initialData?.latest_deployments.production?.state.services?.map(
+					(s) => s.name
+				)}
+				bind:values={production.vars}
+			/>
+
+			<FormSection title="app.environment.staging">
+				<Stack direction="column">
+					<Dropdown
+						label="app.environment.target"
+						options={targetsOptions}
+						bind:value={staging.target}
+						remoteError={errors?.['staging.target']}
+					/>
+
+					{#if initialData && initialData.staging.target.id !== staging.target}
+						<Panel title="app.environment.target.changed" variant="warning">
+							<p>
+								{@html l.translate('app.environment.target.changed.description', [
+									initialData.production.target.url
+								])}
+							</p>
+						</Panel>
+					{/if}
+				</Stack>
+			</FormSection>
+
+			<FormEnvVars
+				class="env-vars-container"
+				latestServiceNames={initialData?.latest_deployments.staging?.state.services?.map(
+					(s) => s.name
+				)}
+				bind:values={staging.vars}
+			/>
 		</div>
 	</Stack>
 </Form>
+
+<style module>
+	.env-vars-container {
+		margin-block-start: var(--sp-4);
+		margin-block-end: var(--sp-6);
+	}
+</style>

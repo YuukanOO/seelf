@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from '$components/button.svelte';
 	import Breadcrumb from '$components/breadcrumb.svelte';
-	import type { UpdateAppData } from '$lib/resources/apps';
+	import type { UpdateApp } from '$lib/resources/apps';
 	import AppForm from '../../app-form.svelte';
 	import service from '$lib/resources/apps';
 	import { goto } from '$app/navigation';
@@ -13,7 +13,7 @@
 
 	export let data;
 
-	const submit = (form: UpdateAppData) =>
+	const submit = (form: UpdateApp) =>
 		service.update(data.app.id, form).then(() => goto(routes.app(data.app.id)));
 
 	const {
@@ -25,7 +25,7 @@
 	});
 </script>
 
-<AppForm disabled={$deleting} handler={submit} initialData={data.app} domain={data.health.domain}>
+<AppForm disabled={$deleting} handler={submit} initialData={data.app} targets={data.targets}>
 	<svelte:fragment slot="default" let:submitting>
 		<Breadcrumb
 			title={l.translate('breadcrumb.application.settings', [data.app.name])}
@@ -36,7 +36,7 @@
 			]}
 		>
 			{#if data.app.cleanup_requested_at}
-				<CleanupNotice data={data.app} />
+				<CleanupNotice requested_at={data.app.cleanup_requested_at} />
 			{:else}
 				<Button loading={$deleting} on:click={deleteApp} variant="danger" text="app.delete" />
 				<Button type="submit" loading={submitting} text="save" />

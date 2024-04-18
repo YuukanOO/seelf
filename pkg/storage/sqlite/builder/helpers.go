@@ -29,7 +29,7 @@ func Merge[TParent, TChildren any](
 }
 
 // Tiny mapper when all you have to do is retrieve a single value from a query.
-func extract[T any](scanner storage.Scanner) (value T, err error) {
+func valueMapper[T any](scanner storage.Scanner) (value T, err error) {
 	err = scanner.Scan(&value)
 	return value, err
 }

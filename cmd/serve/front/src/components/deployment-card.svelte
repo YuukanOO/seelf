@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type DeploymentData, DeploymentStatus } from '$lib/resources/deployments';
+	import { type Deployment, DeploymentStatus } from '$lib/resources/deployments';
 	import type { ComponentProps } from 'svelte';
 	import routes from '$lib/path';
 	import Card from '$components/card.svelte';
@@ -11,7 +11,7 @@
 	import ExternalLaunch from '$assets/icons/external-launch.svelte';
 	import l from '$lib/localization';
 
-	export let data: DeploymentData;
+	export let data: Deployment;
 	export let isStale = false;
 
 	function colorForStatus(status: DeploymentStatus): ComponentProps<Card>['color'] {
@@ -34,7 +34,7 @@
 		<DeploymentPill {data} />
 	</Stack>
 
-	<div class="grid">
+	<dl class="grid">
 		<Display label="deployment.started_at">
 			{data.state.started_at ? l.datetime(data.state.started_at) : '-'}
 		</Display>
@@ -50,6 +50,14 @@
 				: '-'}
 		</Display>
 
+		<Display class="large" label="deployment.target">
+			{#if data.target.name}
+				<Link href={routes.editTarget(data.target.id)}>{data.target.name}</Link>
+			{:else}
+				{l.translate('deployment.target.deleted')}
+			{/if}
+		</Display>
+
 		{#if data.source.discriminator === 'git'}
 			<Display label="deployment.branch">
 				{data.source.data.branch}
@@ -61,9 +69,9 @@
 
 		{#if data.state.error_code}
 			<Display class="large" label="deployment.error_code">
-				<Link href={routes.deployment(data.app_id, data.deployment_number)}
-					>{data.state.error_code}</Link
-				>
+				<Link href={routes.deployment(data.app_id, data.deployment_number)}>
+					{data.state.error_code}
+				</Link>
 			</Display>
 		{/if}
 		{#if data.state.services && data.state.services?.length > 0}
@@ -74,12 +82,13 @@
 					</Panel>
 				{/if}
 				<ul>
-					{#each data.state.services as service}
+					{#each data.state.services as service (service.name)}
 						<Stack as="li" justify="space-between">
 							{#if service.url}
-								<Link class="service-url" href={service.url} external newWindow
-									>{service.name} <ExternalLaunch /></Link
-								>
+								<Link class="service-url" href={service.url} external newWindow>
+									{service.name}
+									<ExternalLaunch />
+								</Link>
 							{:else}
 								<div>{service.name}</div>
 							{/if}
@@ -89,7 +98,7 @@
 				</ul>
 			</Display>
 		{/if}
-	</div>
+	</dl>
 
 	<slot slot="footer" />
 </Card>
@@ -104,7 +113,7 @@
 		display: grid;
 		margin-block-start: var(--sp-4);
 		gap: var(--sp-2);
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, 1fr);
 	}
 
 	.large {

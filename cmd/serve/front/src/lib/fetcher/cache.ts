@@ -53,7 +53,7 @@ export default class CacheFetchService implements FetchService {
 		const cache = this._cache.getOrCreate(url, options?.params);
 		const now = this._options.now();
 
-		if (cache.mustRevalidate(this._options.dedupeInterval, now)) {
+		if (options?.cache === 'no-store' || cache.mustRevalidate(this._options.dedupeInterval, now)) {
 			return this.revalidate(cache, options, now);
 		}
 
@@ -116,7 +116,7 @@ export default class CacheFetchService implements FetchService {
 		options?: FetchOptions,
 		at?: number
 	): Promise<void> {
-		if (!cache.mustRevalidate(this._options.dedupeInterval, at)) {
+		if (options?.cache !== 'no-store' && !cache.mustRevalidate(this._options.dedupeInterval, at)) {
 			return;
 		}
 

@@ -3,6 +3,7 @@ package get_deployment
 import (
 	"time"
 
+	"github.com/YuukanOO/seelf/internal/deployment/app"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -20,18 +21,20 @@ type (
 	}
 
 	Deployment struct {
-		AppID            string    `json:"app_id"`
-		DeploymentNumber int       `json:"deployment_number"`
-		Environment      string    `json:"environment"`
-		Source           Source    `json:"source"`
-		State            State     `json:"state"`
-		RequestedAt      time.Time `json:"requested_at"`
-		RequestedBy      User      `json:"requested_by"`
+		AppID            string          `json:"app_id"`
+		DeploymentNumber int             `json:"deployment_number"`
+		Environment      string          `json:"environment"`
+		Target           TargetSummary   `json:"target"`
+		Source           Source          `json:"source"`
+		State            State           `json:"state"`
+		RequestedAt      time.Time       `json:"requested_at"`
+		RequestedBy      app.UserSummary `json:"requested_by"`
 	}
 
-	User struct {
-		ID    string `json:"id"`
-		Email string `json:"email"`
+	TargetSummary struct {
+		ID   string              `json:"id"`
+		Name monad.Maybe[string] `json:"name"` // Since the target could have been deleted, the name is nullable here.
+		Url  monad.Maybe[string] `json:"url"`
 	}
 
 	Source struct {
@@ -54,9 +57,10 @@ type (
 	Services []Service
 
 	Service struct {
-		Name  string              `json:"name"`
-		Image string              `json:"image"`
-		Url   monad.Maybe[string] `json:"url"`
+		Name      string              `json:"name"`
+		Image     string              `json:"image"`
+		Subdomain monad.Maybe[string] `json:"subdomain"`
+		Url       monad.Maybe[string] `json:"url"`
 	}
 )
 

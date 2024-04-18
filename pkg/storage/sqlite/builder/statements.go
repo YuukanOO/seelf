@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -10,7 +9,7 @@ import (
 // Maybe is a helper function that will only append the SQL statement and arguments
 // if the monad value is set. This is useful for optional fields in a query.
 func Maybe[T any](value monad.Maybe[T], fn func(T) (string, []any)) Statement {
-	return func(builder sqlBuilder) {
+	return func(builder Builder) {
 		v, hasValue := value.TryGet()
 
 		if !hasValue {
@@ -19,7 +18,18 @@ func Maybe[T any](value monad.Maybe[T], fn func(T) (string, []any)) Statement {
 
 		sql, args := fn(v)
 
-		builder.apply(sql, args...)
+		builder.Apply(sql, args...)
+	}
+}
+
+// Append the given sql string only if the expr is true.
+func If(expr bool, sql string, args ...any) Statement {
+	return func(builder Builder) {
+		if !expr {
+			return
+		}
+
+		builder.Apply(sql, args...)
 	}
 }
 
@@ -34,7 +44,7 @@ func MaybeValue[T any](value monad.Maybe[T], sql string) Statement {
 // "name IN" and the list of values and it will append (?, ?, ?) to the prefix based
 // on what's in the list.
 func Array[T any](prefix string, values []T) Statement {
-	return func(builder sqlBuilder) {
+	return func(builder Builder) {
 		size := len(values)
 
 		if size == 0 {
@@ -50,6 +60,6 @@ func Array[T any](prefix string, values []T) Statement {
 			args[i] = value
 		}
 
-		builder.apply(fmt.Sprintf("%s (%s)", prefix, placeholders), args...)
+		builder.Apply(prefix+" ("+placeholders+")", args...)
 	}
 }

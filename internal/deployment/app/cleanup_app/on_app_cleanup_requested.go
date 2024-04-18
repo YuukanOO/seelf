@@ -2,19 +2,35 @@ package cleanup_app
 
 import (
 	"context"
+	"time"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
-// Upon receiving a cleanup request, queue a job to remove everything related to the application.
+// Queue the provider cleanup stuff for both production and staging for the app being deleted.
 func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.AppCleanupRequested] {
 	return func(ctx context.Context, evt domain.AppCleanupRequested) error {
-		cmd := Command{
-			ID: string(evt.ID),
+		now := time.Now().UTC()
+
+		err := scheduler.Queue(ctx, Command{
+			AppID:       string(evt.ID),
+			Environment: string(domain.Production),
+			TargetID:    string(evt.ProductionConfig.Target()),
+			From:        evt.ProductionConfig.Version(),
+			To:          now,
+		}, bus.WithPolicy(bus.JobPolicyCancellable))
+
+		if err != nil {
+			return err
 		}
 
-		return scheduler.Queue(ctx, cmd, monad.None[string](), bus.JobErrPolicyRetry)
+		return scheduler.Queue(ctx, Command{
+			AppID:       string(evt.ID),
+			Environment: string(domain.Staging),
+			TargetID:    string(evt.StagingConfig.Target()),
+			From:        evt.StagingConfig.Version(),
+			To:          now,
+		}, bus.WithPolicy(bus.JobPolicyCancellable))
 	}
 }

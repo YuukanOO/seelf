@@ -4,7 +4,7 @@
 	import l, { type AppTranslationsString } from '$lib/localization';
 
 	export let title: AppTranslationsString;
-	export let variant: 'help' | 'danger' | 'warning' = 'help';
+	export let variant: 'help' | 'danger' | 'warning' | 'success' = 'help';
 	export let format: 'default' | 'collapsable' | 'inline' = 'default';
 	let className: string = '';
 
@@ -17,7 +17,12 @@
 		class="container {className}"
 		style="--panel-border-color: var(--co-{variant}-3);--panel-background-color: var(--co-{variant}-1);--panel-title-color: var(--co-{variant}-4);"
 	>
-		<summary class="title">{l.translate(title)}</summary>
+		<summary class="title collapsable">
+			<Stack gap={1} justify="space-between">
+				{l.translate(title)}
+				<span class="hint">{l.translate('panel.hint')}</span>
+			</Stack>
+		</summary>
 		<Prose class="content">
 			<slot />
 		</Prose>
@@ -59,6 +64,13 @@
 	.title {
 		color: var(--panel-title-color);
 		font-weight: 600;
+	}
+
+	.title .hint {
+		font: var(--ty-caption);
+		font-style: italic;
+		text-align: end;
+		color: var(--co-text-4);
 	}
 
 	summary.title {

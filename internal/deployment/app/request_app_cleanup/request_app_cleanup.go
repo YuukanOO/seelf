@@ -30,10 +30,6 @@ func Handler(
 
 		app.RequestCleanup(auth.CurrentUser(ctx).MustGet())
 
-		if err = writer.Write(ctx, &app); err != nil {
-			return bus.Unit, err
-		}
-
-		return bus.Unit, nil
+		return bus.Unit, writer.Write(ctx, &app)
 	}
 }

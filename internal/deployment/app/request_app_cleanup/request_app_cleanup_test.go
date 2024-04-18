@@ -10,6 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
@@ -32,16 +33,18 @@ func Test_RequestAppCleanup(t *testing.T) {
 	})
 
 	t.Run("should mark an application has ready for deletion", func(t *testing.T) {
-		a := domain.NewApp("my-app", "uid")
-		uc := sut(&a)
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "some-uid"))
+		uc := sut(&app)
 
 		r, err := uc(ctx, request_app_cleanup.Command{
-			ID: string(a.ID()),
+			ID: string(app.ID()),
 		})
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, bus.Unit, r)
 
-		testutil.EventIs[domain.AppCleanupRequested](t, &a, 1)
+		testutil.EventIs[domain.AppCleanupRequested](t, &app, 1)
 	})
 }

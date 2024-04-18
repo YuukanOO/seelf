@@ -30,10 +30,11 @@ func Test_Builder(t *testing.T) {
 					return "AND name != ?", []any{"bob"}
 				}),
 				builder.Array("AND age IN", []int{18, 19}),
+				builder.If(true, "AND TRUE"),
 			).
 			F("ORDER BY name")
 
-		testutil.Equals(t, "SELECT id, name FROM some_table WHERE name = ? AND id = ? AND age IN (?,?) ORDER BY name", q.String())
+		testutil.Equals(t, "SELECT id, name FROM some_table WHERE name = ? AND id = ? AND age IN (?,?) AND TRUE ORDER BY name", q.String())
 	})
 
 	t.Run("should handle insert statements", func(t *testing.T) {

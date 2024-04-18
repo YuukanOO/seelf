@@ -1,8 +1,6 @@
 package infra
 
 import (
-	"context"
-
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
@@ -15,14 +13,8 @@ import (
 	authsqlite "github.com/YuukanOO/seelf/internal/auth/infra/sqlite"
 )
 
-type Options interface {
-	DefaultEmail() string
-	DefaultPassword() string
-}
-
 // Setup the auth module
 func Setup(
-	opts Options,
 	logger log.Logger,
 	db *sqlite.Database,
 	b bus.Bus,
@@ -38,17 +30,5 @@ func Setup(
 	bus.Register(b, update_user.Handler(usersStore, usersStore, passwordHasher))
 	bus.Register(b, authQueryHandler.GetProfile)
 
-	if err := db.Migrate(authsqlite.Migrations); err != nil {
-		return nil, err
-	}
-
-	// Create the first account if needed
-	if _, err := bus.Send(b, context.Background(), create_first_account.Command{
-		Email:    opts.DefaultEmail(),
-		Password: opts.DefaultPassword(),
-	}); err != nil {
-		return nil, err
-	}
-
-	return usersStore, nil
+	return usersStore, db.Migrate(authsqlite.Migrations)
 }

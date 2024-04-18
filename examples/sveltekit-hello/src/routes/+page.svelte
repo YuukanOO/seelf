@@ -7,7 +7,7 @@
 			<li><a href="https://github.com/YuukanOO/seelf/" rel="noopener noreferrer">Source</a></li>
 			<li>
 				<a
-					href="https://github.com/YuukanOO/seelf/blob/main/DOCUMENTATION.md"
+					href="https://yuukanoo.github.io/seelf/guide/quickstart.html"
 					rel="noopener noreferrer">Docs</a
 				>
 			</li>

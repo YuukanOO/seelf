@@ -10,13 +10,15 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
-	"github.com/YuukanOO/seelf/pkg/validation"
+	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_Login(t *testing.T) {
 	hasher := crypto.NewBCryptHasher()
-	password, _ := hasher.Hash("password") // Sample password hash for the string "password" for tests
+	password := must.Panic(hasher.Hash("password")) // Sample password hash for the string "password" for tests
+	existingUser := must.Panic(domain.NewUser(domain.NewEmailRequirement("existing@example.com", true), password, "apikey"))
 
 	sut := func(existingUsers ...*domain.User) bus.RequestHandler[string, login.Command] {
 		store := memory.NewUsersStore(existingUsers...)
@@ -27,7 +29,7 @@ func Test_Login(t *testing.T) {
 		uc := sut()
 		_, err := uc(context.Background(), login.Command{})
 
-		testutil.ErrorIs(t, validation.ErrValidationFailed, err)
+		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
 	})
 
 	t.Run("should complains if email does not exists", func(t *testing.T) {
@@ -37,28 +39,26 @@ func Test_Login(t *testing.T) {
 			Password: "nobodycares",
 		})
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["email"])
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["password"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["email"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["password"])
 	})
 
 	t.Run("should complains if password does not match", func(t *testing.T) {
-		usr := domain.NewUser("existing@example.com", password, "apikey")
-		uc := sut(&usr)
+		uc := sut(&existingUser)
 		_, err := uc(context.Background(), login.Command{
 			Email:    "existing@example.com",
 			Password: "nobodycares",
 		})
 
-		validationErr, ok := apperr.As[validation.Error](err)
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
 		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["email"])
-		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr.Fields["password"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["email"])
+		testutil.ErrorIs(t, domain.ErrInvalidEmailOrPassword, validationErr["password"])
 	})
 
 	t.Run("should returns a valid user id if it succeeds", func(t *testing.T) {
-		existingUser := domain.NewUser("existing@example.com", password, "apikey")
 		uc := sut(&existingUser)
 		uid, err := uc(context.Background(), login.Command{
 			Email:    "existing@example.com",

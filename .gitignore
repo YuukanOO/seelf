@@ -2,3 +2,6 @@
 seelf
 .vscode
 !.vscode/launch.json
+node_modules
+docs/.vitepress/dist
+docs/.vitepress/cache

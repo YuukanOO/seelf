@@ -5,6 +5,7 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/event"
 )
 
@@ -21,7 +22,7 @@ type (
 	deploymentData struct {
 		id    domain.DeploymentID
 		value *domain.Deployment
-		state domain.State
+		state domain.DeploymentState
 	}
 )
 
@@ -43,6 +44,25 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 	return domain.Deployment{}, apperr.ErrNotFound
 }
 
+func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppID, env domain.Environment) (domain.Deployment, error) {
+	var last *deploymentData
+
+	for _, depl := range s.deployments {
+		if depl.id.AppID() == id && depl.value.Config().Environment() == env {
+			if last == nil || last.id.DeploymentNumber() < depl.id.DeploymentNumber() {
+				last = depl
+			}
+		}
+	}
+
+	if last == nil {
+		return domain.Deployment{}, apperr.ErrNotFound
+	}
+
+	return *last.value, nil
+
+}
+
 func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appid domain.AppID) (domain.DeploymentNumber, error) {
 	count := 0
 
@@ -55,28 +75,46 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appid do
 	return domain.DeploymentNumber(count + 1), nil
 }
 
-func (s *deploymentsStore) GetRunningDeployments(context.Context) ([]domain.Deployment, error) {
-	var result []domain.Deployment
-
+func (s *deploymentsStore) HasRunningOrPendingDeploymentsOnTarget(ctx context.Context, target domain.TargetID) (domain.HasRunningOrPendingDeploymentsOnTarget, error) {
 	for _, d := range s.deployments {
-		if d.state.Status() == domain.DeploymentStatusRunning {
-			result = append(result, *d.value)
+		if d.value.Config().Target() == target && (d.state.Status() == domain.DeploymentStatusRunning || d.state.Status() == domain.DeploymentStatusPending) {
+			return true, nil
 		}
 	}
 
-	return result, nil
+	return false, nil
 }
 
-func (s *deploymentsStore) GetRunningOrPendingDeploymentsCount(ctx context.Context, appid domain.AppID) (domain.RunningOrPendingAppDeploymentsCount, error) {
-	var count domain.RunningOrPendingAppDeploymentsCount
+func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app domain.AppID, target domain.TargetID, env domain.Environment, ti shared.TimeInterval) (
+	domain.HasRunningOrPendingDeploymentsOnAppTargetEnv,
+	domain.HasSuccessfulDeploymentsOnAppTargetEnv,
+	error,
+) {
+	var (
+		ongoing    domain.HasRunningOrPendingDeploymentsOnAppTargetEnv
+		successful domain.HasSuccessfulDeploymentsOnAppTargetEnv
+	)
 
 	for _, d := range s.deployments {
-		if d.id.AppID() == appid && (d.state.Status() == domain.DeploymentStatusRunning || d.state.Status() == domain.DeploymentStatusPending) {
-			count += 1
+		if d.id.AppID() != app || d.value.Config().Target() != target || d.value.Config().Environment() != env {
+			continue
+		}
+
+		switch d.state.Status() {
+		case domain.DeploymentStatusSucceeded:
+			if d.value.Requested().At().After(ti.From()) && d.value.Requested().At().Before(ti.To()) {
+				successful = true
+			}
+		case domain.DeploymentStatusRunning, domain.DeploymentStatusPending:
+			ongoing = true
 		}
 	}
 
-	return count, nil
+	return ongoing, successful, nil
+}
+
+func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criterias domain.FailCriterias) error {
+	panic("not implemented")
 }
 
 func (s *deploymentsStore) Write(ctx context.Context, deployments ...*domain.Deployment) error {

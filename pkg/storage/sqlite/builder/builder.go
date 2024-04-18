@@ -4,17 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
-const (
-	perPage     = 5          // Number of elements per page. In the future, this may be configurable.
-	countClause = "COUNT(*)" // Count clause needed for pagination.
-)
+const countClause = "COUNT(*)" // Count clause needed for pagination.
 
 var ErrPaginationNotSupported = errors.New("pagination not supported for this query. Did you forget to build the query using the Select function?")
 
@@ -30,12 +26,12 @@ type (
 	}
 
 	// Statement function to append an SQL statement to a builder.
-	Statement func(sqlBuilder)
+	Statement func(Builder)
 
 	// Interface used to express the ability to append a SQL statement and arguments to a query
 	// builder. This is a private interface to not pollute the public API.
-	sqlBuilder interface {
-		apply(string, ...any)
+	Builder interface {
+		Apply(string, ...any)
 	}
 
 	// Query builder result used to interact with the database.
@@ -53,10 +49,12 @@ type (
 		// Executes the query and returns the first matching result
 		One(Executor, context.Context, storage.Mapper[T], ...Dataloader[T]) (T, error)
 		// Returns a paginated data result set.
-		Paginate(Executor, context.Context, storage.Mapper[T], int, ...Dataloader[T]) (storage.Paginated[T], error)
-
+		Paginate(ex Executor, ctx context.Context, mapper storage.Mapper[T], page int, perPage int, loaders ...Dataloader[T]) (storage.Paginated[T], error)
 		// Same as One but extract a primitive value by using a simple generic scanner
 		Extract(Executor, context.Context) (T, error)
+		// Same as All but extract a primitive value by using a simple generic scanner
+		ExtractAll(Executor, context.Context) ([]T, error)
+
 		// Executes the query without scanning the result.
 		Exec(Executor, context.Context) error
 	}
@@ -96,11 +94,11 @@ func Insert(table string, values Values) QueryBuilder[any] {
 		i++
 	}
 
-	b.WriteString(fmt.Sprintf("INSERT INTO %s (", table))
+	b.WriteString("INSERT INTO " + table + " (")
 	b.WriteString(strings.Join(columns, ","))
 
 	placeholders := strings.Repeat(",?", size)[1:] // Remove the first comma
-	b.WriteString(fmt.Sprintf(") VALUES (%s)", placeholders))
+	b.WriteString(") VALUES (" + placeholders + ")")
 
 	return Command(b.String(), args...)
 }
@@ -116,12 +114,12 @@ func Update(table string, values Values) QueryBuilder[any] {
 	)
 
 	for field, value := range values {
-		statements[i] = fmt.Sprintf("%s = ?", field)
+		statements[i] = field + " = ?"
 		args[i] = value
 		i++
 	}
 
-	b.WriteString(fmt.Sprintf("UPDATE %s SET ", table))
+	b.WriteString("UPDATE " + table + " SET ")
 	b.WriteString(strings.Join(statements, ","))
 
 	return Command(b.String(), args...)
@@ -147,7 +145,7 @@ func (q *queryBuilder[T]) S(statements ...Statement) QueryBuilder[T] {
 	return q
 }
 
-func (q *queryBuilder[T]) apply(sql string, args ...any) { q.F(sql, args...) }
+func (q *queryBuilder[T]) Apply(sql string, args ...any) { q.F(sql, args...) }
 
 func (q *queryBuilder[T]) All(
 	ex Executor,
@@ -209,6 +207,7 @@ func (q *queryBuilder[T]) Paginate(
 	ctx context.Context,
 	mapper storage.Mapper[T],
 	page int,
+	perPage int,
 	loaders ...Dataloader[T],
 ) (storage.Paginated[T], error) {
 	// FIXME: Since the query is definitely mutated to paginate the result, it could not
@@ -258,27 +257,35 @@ func (q *queryBuilder[T]) One(
 		return result, apperr.ErrNotFound
 	}
 
-	if len(loaders) > 0 {
-		kr := KeyedResult[T]{
-			data: []T{result},
+	if err != nil || len(loaders) == 0 {
+		return result, err
+	}
+
+	kr := KeyedResult[T]{
+		data: []T{result},
+	}
+
+	for _, loader := range loaders {
+		kr.indexByKeys = KeysMapping{
+			loader.ExtractKey(result): 0,
 		}
 
-		for _, loader := range loaders {
-			kr.indexByKeys = KeysMapping{
-				loader.ExtractKey(result): 0,
-			}
-
-			if err = loader.Fetch(ex, ctx, kr); err != nil {
-				return result, err
-			}
+		if err = loader.Fetch(ex, ctx, kr); err != nil {
+			return result, err
 		}
 	}
 
-	return result, err
+	// Return the element that has been merged when fetching dataloaders
+	return kr.data[0], err
+
 }
 
 func (q *queryBuilder[T]) Extract(ex Executor, ctx context.Context) (T, error) {
-	return q.One(ex, ctx, extract[T])
+	return q.One(ex, ctx, valueMapper[T])
+}
+
+func (q *queryBuilder[T]) ExtractAll(ex Executor, ctx context.Context) ([]T, error) {
+	return q.All(ex, ctx, valueMapper[T])
 }
 
 func (q *queryBuilder[T]) Exec(ex Executor, ctx context.Context) error {

@@ -3,6 +3,8 @@ package bus
 import (
 	"context"
 	"errors"
+
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 var ErrNoHandlerRegistered = errors.New("no_handler_registered")
@@ -38,6 +40,11 @@ func Register[TResult any, TMsg TypedRequest[TResult]](bus Bus, handler RequestH
 	)
 
 	bus.Register(msg, h)
+
+	// If the message is schedulable, register the unmarshaller automatically.
+	if _, isSchedulable := any(msg).(Schedulable); isSchedulable {
+		Marshallable.Register(msg, func(s string) (Request, error) { return storage.UnmarshalJSON[TMsg](s) })
+	}
 }
 
 // Register a signal handler for the given signal. Multiple signals can be registered for the same signal

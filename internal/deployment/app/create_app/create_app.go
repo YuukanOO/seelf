@@ -7,8 +7,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/validation"
-	"github.com/YuukanOO/seelf/pkg/validation/strings"
+	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 type (
@@ -16,12 +16,18 @@ type (
 	Command struct {
 		bus.Command[string]
 
-		Name string                                               `json:"name"`
-		VCS  monad.Maybe[VCSConfig]                               `json:"vcs"`
-		Env  monad.Maybe[map[string]map[string]map[string]string] `json:"env"` // This is not so sweet but hey!
+		Name           string                      `json:"name"`
+		VersionControl monad.Maybe[VersionControl] `json:"version_control"`
+		Production     EnvironmentConfig           `json:"production"`
+		Staging        EnvironmentConfig           `json:"staging"`
 	}
 
-	VCSConfig struct {
+	EnvironmentConfig struct {
+		Target string                                    `json:"target"`
+		Vars   monad.Maybe[map[string]map[string]string] `json:"vars"`
+	}
+
+	VersionControl struct {
 		Url   string              `json:"url"`
 		Token monad.Maybe[string] `json:"token"`
 	}
@@ -35,48 +41,68 @@ func Handler(
 ) bus.RequestHandler[string, Command] {
 	return func(ctx context.Context, cmd Command) (string, error) {
 		var (
-			appname domain.AppName
-			envs    domain.EnvironmentsEnv
-			url     domain.Url
+			appname          domain.AppName
+			url              domain.Url
+			productionTarget = domain.TargetID(cmd.Production.Target)
+			stagingTarget    = domain.TargetID(cmd.Staging.Target)
 		)
 
-		if err := validation.Check(validation.Of{
-			"name": validation.Value(cmd.Name, &appname, domain.AppNameFrom),
-			"vcs": validation.Maybe(cmd.VCS, func(config VCSConfig) error {
-				return validation.Check(validation.Of{
-					"url": validation.Value(config.Url, &url, domain.UrlFrom),
-					"token": validation.Maybe(config.Token, func(tokenValue string) error {
-						return validation.Is(tokenValue, strings.Required)
-					}),
+		if err := validate.Struct(validate.Of{
+			"name": validate.Value(cmd.Name, &appname, domain.AppNameFrom),
+			"version_control": validate.Maybe(cmd.VersionControl, func(config VersionControl) error {
+				return validate.Struct(validate.Of{
+					"url":   validate.Value(config.Url, &url, domain.UrlFrom),
+					"token": validate.Maybe(config.Token, strings.Required),
 				})
 			}),
-			"env": validation.Maybe(cmd.Env, func(envmap map[string]map[string]map[string]string) error {
-				return validation.Value(envmap, &envs, domain.EnvironmentsEnvFrom)
+			"production": validate.Struct(validate.Of{
+				"target": validate.Field(cmd.Production.Target, strings.Required),
+			}),
+			"staging": validate.Struct(validate.Of{
+				"target": validate.Field(cmd.Staging.Target, strings.Required),
 			}),
 		}); err != nil {
 			return "", err
 		}
 
-		uniqueName, err := reader.IsNameUnique(ctx, appname)
+		productionRequirement, stagingRequirement, err := reader.CheckAppNamingAvailability(
+			ctx,
+			appname,
+			BuildEnvironmentConfig(productionTarget, cmd.Production.Vars),
+			BuildEnvironmentConfig(stagingTarget, cmd.Staging.Vars),
+		)
 
 		if err != nil {
-			return "", validation.WrapIfAppErr(err, "name")
+			return "", err
 		}
 
-		app := domain.NewApp(uniqueName, auth.CurrentUser(ctx).MustGet())
+		// Returns early if the application name is not unique on both targets.
+		if err = validate.Struct(validate.Of{
+			"production.target": productionRequirement.Error(),
+			"staging.target":    stagingRequirement.Error(),
+		}); err != nil {
+			return "", err
+		}
 
-		if cmdVCS, isSet := cmd.VCS.TryGet(); isSet {
-			vcs := domain.NewVCSConfig(url)
+		app, err := domain.NewApp(
+			appname,
+			productionRequirement,
+			stagingRequirement,
+			auth.CurrentUser(ctx).MustGet(),
+		)
+
+		if err != nil {
+			return "", err
+		}
+
+		if cmdVCS, isSet := cmd.VersionControl.TryGet(); isSet {
+			vcs := domain.NewVersionControl(url)
 
 			if token, isSet := cmdVCS.Token.TryGet(); isSet {
-				vcs = vcs.Authenticated(token)
+				vcs.Authenticated(token)
 			}
 
 			app.UseVersionControl(vcs)
-		}
-
-		if cmd.Env.HasValue() {
-			app.HasEnvironmentVariables(envs)
 		}
 
 		if err := writer.Write(ctx, &app); err != nil {
@@ -85,4 +111,15 @@ func Handler(
 
 		return string(app.ID()), nil
 	}
+}
+
+// Helper method to build a domain.EnvironmentConfig from a raw command value.
+func BuildEnvironmentConfig(target domain.TargetID, env monad.Maybe[map[string]map[string]string]) domain.EnvironmentConfig {
+	config := domain.NewEnvironmentConfig(target)
+
+	if vars, hasVars := env.TryGet(); hasVars {
+		config.HasEnvironmentVariables(domain.ServicesEnvFrom(vars))
+	}
+
+	return config
 }

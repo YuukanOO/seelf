@@ -15,36 +15,46 @@ import (
 )
 
 var (
-	ErrAppNameAlreadyTaken               = apperr.New("app_name_already_taken")
-	ErrVCSNotConfigured                  = apperr.New("vcs_not_configured")
-	ErrAppCleanupNeeded                  = apperr.New("app_cleanup_needed")
-	ErrAppCleanupRequested               = apperr.New("app_cleanup_requested")
-	ErrAppHasRunningOrPendingDeployments = apperr.New("app_has_running_or_pending_deployments")
+	ErrAppNameAlreadyTaken         = apperr.New("app_name_already_taken")
+	ErrVersionControlNotConfigured = apperr.New("version_control_not_configured")
+	ErrAppCleanupNeeded            = apperr.New("app_cleanup_needed")
+	ErrAppCleanupRequested         = apperr.New("app_cleanup_requested")
+	ErrAppTargetChanged            = apperr.New("app_target_changed")
 )
 
 type (
-	// VALUE OBJECTS
-
-	AppID         string
-	UniqueAppName AppName // Represents the unique name of an app and will be used as a subdomain.
-
-	// ENTITY
+	AppID           string
+	HasAppsOnTarget bool
 
 	App struct {
 		event.Emitter
 
 		id               AppID
-		name             UniqueAppName
-		vcs              monad.Maybe[VCSConfig]
-		env              monad.Maybe[EnvironmentsEnv]
+		name             AppName
+		versionControl   monad.Maybe[VersionControl]
+		production       EnvironmentConfig
+		staging          EnvironmentConfig
 		cleanupRequested monad.Maybe[shared.Action[domain.UserID]]
 		created          shared.Action[domain.UserID]
 	}
 
-	// RELATED SERVICES
-
 	AppsReader interface {
-		IsNameUnique(context.Context, AppName) (UniqueAppName, error)
+		// Check if the naming is available (not use by another application with the same name on the same targets).
+		CheckAppNamingAvailability(
+			ctx context.Context,
+			name AppName,
+			production EnvironmentConfig,
+			staging EnvironmentConfig,
+		) (EnvironmentConfigRequirement, EnvironmentConfigRequirement, error)
+		// Same as CheckAppNamingAvailability but used when updating the environment configuration with optional targets.
+		CheckAppNamingAvailabilityByID(
+			ctx context.Context,
+			id AppID,
+			production monad.Maybe[EnvironmentConfig],
+			staging monad.Maybe[EnvironmentConfig],
+		) (EnvironmentConfigRequirement, EnvironmentConfigRequirement, error)
+		// Check if a specific target is used by an application.
+		HasAppsOnTarget(context.Context, TargetID) (HasAppsOnTarget, error)
 		GetByID(context.Context, AppID) (App, error)
 	}
 
@@ -52,37 +62,33 @@ type (
 		Write(context.Context, ...*App) error
 	}
 
-	// EVENTS
-
 	AppCreated struct {
 		bus.Notification
 
-		ID      AppID
-		Name    UniqueAppName
-		Created shared.Action[domain.UserID]
+		ID         AppID
+		Name       AppName
+		Production EnvironmentConfig
+		Staging    EnvironmentConfig
+		Created    shared.Action[domain.UserID]
 	}
 
 	AppEnvChanged struct {
 		bus.Notification
 
-		ID  AppID
-		Env EnvironmentsEnv
+		ID          AppID
+		Environment Environment
+		Config      EnvironmentConfig
+		OldConfig   EnvironmentConfig // Old configuration, used to ease the cleanup handling
 	}
 
-	AppEnvRemoved struct {
-		bus.Notification
-
-		ID AppID
-	}
-
-	AppVCSConfigured struct {
+	AppVersionControlConfigured struct {
 		bus.Notification
 
 		ID     AppID
-		Config VCSConfig
+		Config VersionControl
 	}
 
-	AppVCSRemoved struct {
+	AppVersionControlRemoved struct {
 		bus.Notification
 
 		ID AppID
@@ -91,8 +97,10 @@ type (
 	AppCleanupRequested struct {
 		bus.Notification
 
-		ID        AppID
-		Requested shared.Action[domain.UserID]
+		ID               AppID
+		ProductionConfig EnvironmentConfig
+		StagingConfig    EnvironmentConfig
+		Requested        shared.Action[domain.UserID]
 	}
 
 	AppDeleted struct {
@@ -102,22 +110,43 @@ type (
 	}
 )
 
-func (AppCreated) Name_() string          { return "deployment.event.app_created" }
-func (AppEnvChanged) Name_() string       { return "deployment.event.app_env_changed" }
-func (AppEnvRemoved) Name_() string       { return "deployment.event.app_env_removed" }
-func (AppVCSConfigured) Name_() string    { return "deployment.event.app_vcs_configured" }
-func (AppVCSRemoved) Name_() string       { return "deployment.event.app_vcs_removed" }
-func (AppCleanupRequested) Name_() string { return "deployment.event.app_cleanup_requested" }
-func (AppDeleted) Name_() string          { return "deployment.event.app_deleted" }
+func (AppCreated) Name_() string    { return "deployment.event.app_created" }
+func (AppEnvChanged) Name_() string { return "deployment.event.app_env_changed" }
+func (AppVersionControlConfigured) Name_() string {
+	return "deployment.event.app_version_control_configured"
+}
+func (AppVersionControlRemoved) Name_() string { return "deployment.event.app_version_control_removed" }
+func (AppCleanupRequested) Name_() string      { return "deployment.event.app_cleanup_requested" }
+func (AppDeleted) Name_() string               { return "deployment.event.app_deleted" }
 
 // Instantiates a new App.
-func NewApp(name UniqueAppName, createdBy domain.UserID) (app App) {
+func NewApp(
+	name AppName,
+	productionRequirement EnvironmentConfigRequirement,
+	stagingRequirement EnvironmentConfigRequirement,
+	createdBy domain.UserID,
+) (app App, err error) {
+	production, err := productionRequirement.Met()
+
+	if err != nil {
+		return app, err
+	}
+
+	staging, err := stagingRequirement.Met()
+
+	if err != nil {
+		return app, err
+	}
+
 	app.apply(AppCreated{
-		ID:      id.New[AppID](),
-		Name:    name,
-		Created: shared.NewAction(createdBy),
+		ID:         id.New[AppID](),
+		Name:       name,
+		Production: production,
+		Staging:    staging,
+		Created:    shared.NewAction(createdBy),
 	})
-	return app
+
+	return app, nil
 }
 
 // Recreates an app from the persistent storage.
@@ -136,7 +165,12 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		&a.name,
 		&url,
 		&token,
-		&a.env,
+		&a.production.target,
+		&a.production.version,
+		&a.production.vars,
+		&a.staging.target,
+		&a.staging.version,
+		&a.staging.vars,
 		&cleanupRequestedAt,
 		&cleanupRequestedBy,
 		&createdAt,
@@ -146,92 +180,88 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 	a.created = shared.ActionFrom(createdBy, createdAt)
 
 	if requestedAt, isSet := cleanupRequestedAt.TryGet(); isSet {
-		a.cleanupRequested = a.cleanupRequested.WithValue(
+		a.cleanupRequested.Set(
 			shared.ActionFrom(domain.UserID(cleanupRequestedBy.MustGet()), requestedAt),
 		)
 	}
 
 	// vcs url has been set, reconstitute the vcs config
 	if u, isSet := url.TryGet(); isSet {
-		vcs := NewVCSConfig(u)
+		vcs := NewVersionControl(u)
 
 		if tok, isSet := token.TryGet(); isSet {
-			vcs = vcs.Authenticated(tok)
+			vcs.Authenticated(tok)
 		}
 
-		a.vcs = a.vcs.WithValue(vcs)
+		a.versionControl.Set(vcs)
 	}
 
 	return a, err
 }
 
 // Sets an app version control configuration.
-func (a *App) UseVersionControl(config VCSConfig) {
-	if existing, isSet := a.vcs.TryGet(); isSet && config.Equals(existing) {
-		return
+func (a *App) UseVersionControl(config VersionControl) error {
+	if a.cleanupRequested.HasValue() {
+		return ErrAppCleanupRequested
 	}
 
-	a.apply(AppVCSConfigured{
+	if existing, isSet := a.versionControl.TryGet(); isSet && config.Equals(existing) {
+		return nil
+	}
+
+	a.apply(AppVersionControlConfigured{
 		ID:     a.id,
 		Config: config,
 	})
+
+	return nil
 }
 
 // Removes the version control configuration from the app.
-func (a *App) RemoveVersionControl() {
-	if !a.vcs.HasValue() {
-		return
+func (a *App) RemoveVersionControl() error {
+	if a.cleanupRequested.HasValue() {
+		return ErrAppCleanupRequested
 	}
 
-	a.apply(AppVCSRemoved{
+	if !a.versionControl.HasValue() {
+		return nil
+	}
+
+	a.apply(AppVersionControlRemoved{
 		ID: a.id,
 	})
+
+	return nil
 }
 
-// Store environement variables per env and per services for this application.
-func (a *App) HasEnvironmentVariables(vars EnvironmentsEnv) {
-	if existing, isSet := a.env.TryGet(); isSet && vars.Equals(existing) {
-		return
-	}
-
-	a.apply(AppEnvChanged{
-		ID:  a.id,
-		Env: vars,
-	})
+// Updates the production configuration for this application.
+func (a *App) HasProductionConfig(configRequirement EnvironmentConfigRequirement) error {
+	return a.tryUpdateEnvironmentConfig(Production, configRequirement)
 }
 
-// Removes all environment variables for this application.
-func (a *App) RemoveEnvironmentVariables() {
-	if !a.env.HasValue() {
-		return
-	}
-
-	a.apply(AppEnvRemoved{
-		ID: a.id,
-	})
+// Updates the staging configuration for this application.
+func (a *App) HasStagingConfig(configRequirement EnvironmentConfigRequirement) error {
+	return a.tryUpdateEnvironmentConfig(Staging, configRequirement)
 }
 
-// Request backend cleaning for this application. This marks the application for deletion.
+// Request cleaning for this application. This marks the application for deletion.
 func (a *App) RequestCleanup(requestedBy domain.UserID) {
 	if a.cleanupRequested.HasValue() {
 		return
 	}
 
 	a.apply(AppCleanupRequested{
-		ID:        a.id,
-		Requested: shared.NewAction(requestedBy),
+		ID:               a.id,
+		ProductionConfig: a.production,
+		StagingConfig:    a.staging,
+		Requested:        shared.NewAction(requestedBy),
 	})
 }
 
-// Delete the application. This will only succeed if there are no running or pending deployments and
-// a cleanup request has been made.
-func (a *App) Delete(deployments RunningOrPendingAppDeploymentsCount) error {
-	if !a.cleanupRequested.HasValue() {
+// Delete the application.
+func (a *App) Delete(cleanedUp bool) error {
+	if !a.cleanupRequested.HasValue() || !cleanedUp {
 		return ErrAppCleanupNeeded
-	}
-
-	if deployments > 0 {
-		return ErrAppHasRunningOrPendingDeployments
 	}
 
 	a.apply(AppDeleted{
@@ -241,24 +271,54 @@ func (a *App) Delete(deployments RunningOrPendingAppDeploymentsCount) error {
 	return nil
 }
 
-func (a App) ID() AppID                   { return a.id }
-func (a App) VCS() monad.Maybe[VCSConfig] { return a.vcs }
+func (a *App) ID() AppID                                   { return a.id }
+func (a *App) VersionControl() monad.Maybe[VersionControl] { return a.versionControl }
+func (a *App) Production() EnvironmentConfig               { return a.production }
+func (a *App) Staging() EnvironmentConfig                  { return a.staging }
 
-// Retrieve environments variables per service for the given deployment environment
-func (a App) envFor(e Environment) (m monad.Maybe[ServicesEnv]) {
-	env, isSet := a.env.TryGet()
-
-	if !isSet {
-		return m
+func (a *App) tryUpdateEnvironmentConfig(
+	env Environment,
+	updatedConfigRequirement EnvironmentConfigRequirement,
+) error {
+	if a.cleanupRequested.HasValue() {
+		return ErrAppCleanupRequested
 	}
 
-	vars, exists := env[e]
+	var existingConfig EnvironmentConfig
 
-	if !exists {
-		return m
+	switch env {
+	case Production:
+		existingConfig = a.production
+	case Staging:
+		existingConfig = a.staging
+	default:
+		return ErrInvalidEnvironmentName
 	}
 
-	return m.WithValue(vars)
+	updatedConfig, err := updatedConfigRequirement.Met()
+
+	if err != nil {
+		return err
+	}
+
+	// Same configuration, returns
+	if updatedConfig.Equals(existingConfig) {
+		return nil
+	}
+
+	// Same target, does not update the inner version
+	if updatedConfig.target == existingConfig.target {
+		updatedConfig.version = existingConfig.version
+	}
+
+	a.apply(AppEnvChanged{
+		ID:          a.id,
+		Environment: env,
+		Config:      updatedConfig,
+		OldConfig:   existingConfig,
+	})
+
+	return nil
 }
 
 func (a *App) apply(e event.Event) {
@@ -266,17 +326,22 @@ func (a *App) apply(e event.Event) {
 	case AppCreated:
 		a.id = evt.ID
 		a.name = evt.Name
+		a.production = evt.Production
+		a.staging = evt.Staging
 		a.created = evt.Created
 	case AppEnvChanged:
-		a.env = a.env.WithValue(evt.Env)
-	case AppEnvRemoved:
-		a.env = a.env.None()
-	case AppVCSConfigured:
-		a.vcs = a.vcs.WithValue(evt.Config)
-	case AppVCSRemoved:
-		a.vcs = a.vcs.None()
+		switch evt.Environment {
+		case Production:
+			a.production = evt.Config
+		case Staging:
+			a.staging = evt.Config
+		}
+	case AppVersionControlConfigured:
+		a.versionControl.Set(evt.Config)
+	case AppVersionControlRemoved:
+		a.versionControl.Unset()
 	case AppCleanupRequested:
-		a.cleanupRequested = a.cleanupRequested.WithValue(evt.Requested)
+		a.cleanupRequested.Set(evt.Requested)
 	}
 
 	event.Store(a, e)

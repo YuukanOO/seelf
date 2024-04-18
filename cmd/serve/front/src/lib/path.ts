@@ -10,7 +10,11 @@ const routes = {
 	editApp: (id: string) => `/apps/${id}/edit`,
 	app: (id: string) => `/apps/${id}`,
 	createDeployment: (id: string) => `/apps/${id}/deployments/new`,
-	deployment: (id: string, number: number) => `/apps/${id}/deployments/${number}`
+	deployment: (id: string, number: number) => `/apps/${id}/deployments/${number}`,
+	targets: '/targets',
+	createTarget: '/targets/new',
+	editTarget: (id: string) => `/targets/${id}/edit`,
+	jobs: '/jobs'
 } as const;
 
 export default routes;

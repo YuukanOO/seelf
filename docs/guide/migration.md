@@ -20,6 +20,7 @@ Here is a breakdown of actions needed:
 1. **Update and launch** seelf
 1. **Update** the newly created (by the migration script) local target url to match the old `BALANCER_DOMAIN`
 1. **Migrate old balancer data** (certificates) to the new one (skip if no certificates have been generated)
+1. Update the seelf compose again (optional, see below)
 1. **Redeploy** every apps
 1. **Migrate application data** (if you wish to keep them)
 1. **Prune** unneeded resources
@@ -67,7 +68,13 @@ volumes:
 
 #### With traefik labels
 
-The procedure used to expose seelf has been simplified.
+The procedure used to expose seelf [has been simplified](/guide/installation#exposing-seelf) but the migration is a bit tricky. A default target will be created when launching seelf `v2.x.x` for the first time if it doesn't exist and this target will have an URL of `http://docker.localhost`.
+
+For this to work, we keep the `traefik.http.routers.seelf.rule` label for the duration of the migration and we remove the `https` stuff such as `HTTP_SECURE` and the cert resolver to make sure we can connect to seelf without `https`. During the migration, you will access seelf using `http` only.
+
+::: warning
+Before updating the default local target URL, you'll have to trust invalid certificates and access the seelf instance without `https`.
+:::
 
 ```yml
 services:
@@ -83,14 +90,14 @@ services:
       - ADMIN_EMAIL=admin@example.com // [!code ++]
       - ADMIN_PASSWORD=admin // [!code ++]
       - EXPOSED_ON=https://seelf@your.domain // [!code ++]
-      - HTTP_SECURE= // [!code ++]
+      - HTTP_SECURE=false # false is important during the migration // [!code ++]
       # (...) other variables left unchanged
     labels:
       - app.seelf.exposed=true // [!code ++]
       - app.seelf.subdomain=seelf // [!code ++]
       - traefik.enable=true // [!code --]
       - traefik.http.routers.seelf.rule=Host(`seelf.your.domain`) # This line can be removed AFTER the migration
-      - traefik.http.routers.seelf.tls.certresolver=seelfresolver # This line can be removed AFTER the migration
+      - traefik.http.routers.seelf.tls.certresolver=seelfresolver // [!code --] # Not needed anymore and we need to access seelf without certificates during the migration process
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - seelfssh:/root/.ssh // [!code ++]
@@ -117,6 +124,10 @@ docker network create seelf-gateway-2brudqnyrelmqyh9gflqv1s0cqv --label com.dock
 
 Now that our compose file is ready, pull the latest image and relaunch seelf:
 
+::: info
+If you can't connect to your seelf instance after that, try to clear the cookie storage, it may be needed if the `HTTP_SECURE` variable have changed.
+:::
+
 ```sh
 docker compose pull && docker compose up -d
 ```
@@ -134,7 +145,36 @@ If you use `https://`, you must transfer the old certificates to the new target 
 To do so, we will use the `docker cp` command, to transfer data from our old proxy container to the new one. Since we cannot transfer directly from one container to another, we will transfer first to our host.
 
 ```sh
-docker cp seelf-internal-balancer-1:/letsencrypt ./letsencrypt && docker cp ./letsencrypt/. seelf-internal-2brudqnyrelmqyh9gflqv1s0cqv-proxy-1:/letsencrypt/ && rm -rf ./letsencrypt/
+docker cp seelf-internal-balancer-1:/letsencrypt ./letsencrypt && docker cp ./letsencrypt/. seelf-internal-2brudqnyrelmqyh9gflqv1s0cqv-proxy-1:/letsencrypt/ && rm -rf ./letsencrypt/ && docker restart seelf-internal-2brudqnyrelmqyh9gflqv1s0cqv-proxy-1
+```
+
+### Update the seelf compose (only if it was exposed using the default proxy and using https)
+
+```yml
+services:
+  web:
+    restart: unless-stopped
+    image: yuukanoo/seelf
+    container_name: seelf
+    environment:
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=admin
+      - EXPOSED_ON=https://seelf@your.domain
+      - HTTP_SECURE=false // [!code --]
+      - HTTP_SECURE= # Go back to its default behavior based on EXPOSED_ON scheme // [!code ++]
+      # (...) other variables left unchanged
+    labels:
+      - app.seelf.exposed=true
+      - app.seelf.subdomain=seelf # Here your can update the subdomain used by seelf if you wish
+      - traefik.http.routers.seelf.rule=Host(`seelf.your.domain`) // [!code --]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - seelfssh:/root/.ssh
+      - seelfdata:/seelf/data
+
+volumes:
+  seelfdata:
+  seelfssh:
 ```
 
 ### Redeploy every apps
@@ -169,5 +209,7 @@ Now that everything is good, we can safely prune our old resources:
 
 ```sh
 docker system prune -af --volumes
-docker volume prune -af
+docker volume prune -af # If docker engine < v1.42, remove the `a` flag
 ```
+
+Everything should be good now, and if it's not, feel free to [open an issue](https://github.com/YuukanOO/seelf/issues).

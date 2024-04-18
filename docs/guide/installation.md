@@ -66,6 +66,10 @@ make build && ./seelf serve
 
 You probably want to expose seelf itself on an url without a port and with a valid certificate. You can manage this part yourself or just leverage the proxy deployed by seelf.
 
+::: warning
+If you choose to expose **seelf** with the local target, you **should never** delete the target or things may break.
+:::
+
 To do this, we recommend to use the [docker compose installation](#with-compose) and add the missing parts.
 
 ```yml

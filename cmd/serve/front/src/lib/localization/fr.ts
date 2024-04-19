@@ -214,7 +214,7 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'footer.documentation': 'Docs',
 		'footer.donate': '❤️ Donner',
 		// Shared
-		'panel.hint': 'Cliquer pour afficher',
+		'panel.hint': 'Afficher / Masquer',
 		'datatable.no_data': 'Aucune donnée à afficher',
 		'datatable.toggle': 'Afficher / masquer les détails',
 		cleanup_requested: 'Suppression demandée',

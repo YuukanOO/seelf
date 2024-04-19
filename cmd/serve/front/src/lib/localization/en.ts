@@ -210,7 +210,7 @@ You may reconsider and try to make the target reachable before deleting it.`,
 	'footer.documentation': 'Docs',
 	'footer.donate': '❤️ Donate',
 	// Shared
-	'panel.hint': 'Click to toggle',
+	'panel.hint': 'Show / Hide',
 	'datatable.no_data': 'No data to show',
 	'datatable.toggle': 'Show / hide details',
 	cleanup_requested: 'Marked for deletion',

@@ -213,7 +213,7 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) error {
 		TargetLabel: string(id),
 	}
 
-	constraintsLabel := "--providers.docker.constraints=Label(`" + TargetLabel + "`, `" + string(id) + "`)"
+	constraintsLabel := "--providers.docker.constraints=(Label(`" + TargetLabel + "`, `" + string(id) + "`) && LabelRegex(`" + SubdomainLabel + "`, `.+`))"
 
 	// If it's a local docker, append a specific alternative constraint to allow this target to expose
 	// seelf itself and make hosting it a breeze.

@@ -252,7 +252,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
 			fmt.Sprintf("--providers.docker.network=%s", networkName),
-			fmt.Sprintf("--providers.docker.constraints=Label(`%s`, `%s`) || Label(`%s`, `true`)", docker.TargetLabel, targetWithoutSSL.ID(), docker.ExposedLabel),
+			fmt.Sprintf("--providers.docker.constraints=(Label(`%s`, `%s`) && LabelRegex(`%s`, `.+`)) || Label(`%s`, `true`)", docker.TargetLabel, targetWithoutSSL.ID(), docker.SubdomainLabel, docker.ExposedLabel),
 			fmt.Sprintf("--providers.docker.defaultrule=Host(`{{ index .Labels %s}}.docker.localhost`)", fmt.Sprintf(`"%s"`, docker.SubdomainLabel)),
 		}, project.Services["proxy"].Command)
 		testutil.HasLength(t, project.Services["proxy"].Ports, 1)
@@ -289,7 +289,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		testutil.DeepEquals(t, []string{
 			"--providers.docker",
 			fmt.Sprintf("--providers.docker.network=%s", networkName),
-			fmt.Sprintf("--providers.docker.constraints=Label(`%s`, `%s`) || Label(`%s`, `true`)", docker.TargetLabel, targetWithSSL.ID(), docker.ExposedLabel),
+			fmt.Sprintf("--providers.docker.constraints=(Label(`%s`, `%s`) && LabelRegex(`%s`, `.+`)) || Label(`%s`, `true`)", docker.TargetLabel, targetWithSSL.ID(), docker.SubdomainLabel, docker.ExposedLabel),
 			fmt.Sprintf("--providers.docker.defaultrule=Host(`{{ index .Labels %s}}.docker.localhost`)", fmt.Sprintf(`"%s"`, docker.SubdomainLabel)),
 			"--entrypoints.web.address=:80",
 			"--entrypoints.web.http.redirections.entryPoint.to=websecure",

@@ -6,6 +6,10 @@ Let's take an example for an application registered with the name `sandbox` and 
 
 Whatever method you choose when deploying your application, seelf will look for a compose file at the root of a deployment build directory in this order:
 
+::: info
+In this list, `production` represents the actual environment name and will vary depending on where the deployment is occuring (`production` or `staging`).
+:::
+
 ```
 - compose.seelf.production.yml
 - compose.seelf.production.yaml
@@ -67,12 +71,16 @@ volumes:
 When deploying this project on seelf, it will:
 
 - Build an image for the `app` service named `sandbox-<application id>/app:production`
-- Expose the `app` service on the default subdomain `http://sandbox.docker.localhost` because that's the first service in **alphabetical order** which has **port mappings defined**. If environment variables has been defined for the `app` service in the production environment, they will overwrite what's in the compose file
+- Expose the `app` service on the default subdomain `http://sandbox.docker.localhost` because that's the first service in **alphabetical order** which has **ports mappings defined**. If environment variables has been defined for the `app` service in the production environment, they will overwrite what's in the compose file
 - expose the `sidecar` service on `http://sidecar.sandbox.docker.localhost` because it has port mappings too and the production profile is activated
 - skip the `stagingonly` service because we have requested a production deployment
 - run the `db` service without exposing it because it does not have port mappings defined and has such will be kept private and use any environment variables defined for the `db` service in the production environment.
 
-To expose those services, seelf will add the needed traefik labels based on the target's url you've set when configuring it. If your domain starts with `https://`, Let's encrypt certificates will be generated for you.
+::: info Why relying on **ports mappings**?
+When working on a local compose stack, you make **services available by defining ports mappings**. By using this **heuristic**, we make the transition from local to remote a breeze.
+:::
+
+To expose those services, seelf will add appropriate container labels related to the target on which they should be exposed.
 
 ## Docker labels appended by seelf
 

@@ -77,6 +77,7 @@ export default defineConfig({
           { text: "Docs", link: "/contributing/docs" },
           { text: "Backend", link: "/contributing/backend" },
           { text: "Frontend", link: "/contributing/frontend" },
+          { text: "Donating", link: "/contributing/donating" },
         ],
       },
     ],

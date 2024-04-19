@@ -1,6 +1,6 @@
 # Documentation
 
-The documentation you're seeing right now is built using [Vitepress](https://vitepress.dev).
+The documentation you're seeing right now is built using [Vitepress](https://vitepress.dev). If you find something to fix or want to improve it, feel free to submit a **pull request**!
 
 ## Useful commands
 

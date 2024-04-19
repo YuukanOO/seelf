@@ -115,8 +115,6 @@ func (db *Database) WithTransaction(ctx context.Context) (context.Context, *sql.
 		panic(err)
 	}
 
-	db.logger.Debug("transaction created")
-
 	return context.WithValue(ctx, transactionContextKey, tx), tx, true
 }
 

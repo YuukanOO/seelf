@@ -4,7 +4,7 @@ import (
 	"runtime/debug"
 )
 
-var version = "2.0.0"
+var version = "2.0.1"
 
 // Retrieve the currentVersion version with additional vcs info if any.
 func Current() string {

@@ -30,6 +30,10 @@
 </Stack>
 
 <style module>
+	body:has(#menu:checked) {
+		overflow: hidden;
+	}
+
 	.topbar {
 		border-block-end: 1px solid var(--co-divider-4);
 		padding: var(--sp-4);
@@ -83,6 +87,7 @@
 		transform: translateX(100%);
 		transition: all 0.2s ease-in-out;
 		box-shadow: 0 10px 10px var(--co-background-4);
+		overflow: auto;
 	}
 
 	#menu {
@@ -107,6 +112,10 @@
 	}
 
 	@media screen and (min-width: 56rem) {
+		body {
+			overflow: auto !important;
+		}
+
 		#menu,
 		.menu-toggle {
 			display: none;
@@ -120,6 +129,7 @@
 			flex-direction: row;
 			justify-content: flex-start;
 			align-items: center;
+			flex-wrap: wrap;
 		}
 
 		.menu-content {

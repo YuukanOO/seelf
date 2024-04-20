@@ -22,7 +22,7 @@
 				</Link>
 			</li>
 			<li>
-				<Link href="https://liberapay.com/YuukanOO/" external newWindow>
+				<Link href="https://yuukanoo.github.io/seelf/contributing/donating.html" external newWindow>
 					{l.translate('footer.donate')}
 				</Link>
 			</li>

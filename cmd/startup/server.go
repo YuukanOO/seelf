@@ -128,7 +128,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	if exposedUrl, isSet := s.options.AppExposedUrl().TryGet(); isSet {
 		container := exposedUrl.User().Get("")
 
-		s.logger.Infow("exposing seelf container using the local target, creating it if needed, the container will restart once done",
+		s.logger.Infow("exposing seelf container using the local target, creating it if needed, the container may restart once done",
 			"container", container)
 
 		if _, err := bus.Send(s.bus, domain.WithUserID(context.Background(), domain.UserID(uid)), expose_seelf_container.Command{

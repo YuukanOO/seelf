@@ -6,7 +6,7 @@ If you choose a Docker-based installation, you **must** have [Docker >= v18.0.9]
 
 ## With Compose (recommended) {#with-compose}
 
-Simply save the following `compose.yml` file in a folder and [configure it according to your needs](/guide/configuration):
+Simply save the following `compose.yml` file in a folder, [configure it according to your needs](/guide/configuration) and run `docker compose up -d`:
 
 ```yml
 services:

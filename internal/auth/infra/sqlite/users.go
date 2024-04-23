@@ -110,6 +110,13 @@ func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
+		case domain.UserAPIKeyChanged:
+			return builder.
+				Update("users", builder.Values{
+					"api_key": evt.Key,
+				}).
+				F("WHERE id = ?", evt.ID).
+				Exec(s.db, ctx)
 		default:
 			return nil
 		}

@@ -65,4 +65,16 @@ func Test_User(t *testing.T) {
 		testutil.Equals(t, u.ID(), evt.ID)
 		testutil.Equals(t, "anotherPassword", evt.Password)
 	})
+
+	t.Run("should be able to change API key", func(t *testing.T) {
+		u := must.Panic(domain.NewUser(domain.NewEmailRequirement("some@email.com", true), "someHashedPassword", "apikey"))
+
+		u.HasAPIKey("apikey") // no change, should not trigger events
+		u.HasAPIKey("anotherKey")
+
+		testutil.HasNEvents(t, &u, 2)
+		evt := testutil.EventIs[domain.UserAPIKeyChanged](t, &u, 1)
+		testutil.Equals(t, u.ID(), evt.ID)
+		testutil.Equals(t, "anotherKey", evt.Key)
+	})
 }

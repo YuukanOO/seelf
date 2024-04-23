@@ -1,6 +1,6 @@
 examples
 Dockerfile
-docker-compose.yml
+compose.yml
 docs
 node_modules
 **/Dockerfile

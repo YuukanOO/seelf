@@ -19,13 +19,18 @@ export type UpdateProfileData = {
 
 export interface UsersService {
 	update(payload: UpdateProfileData): Promise<Profile>;
+	refreshAPIKey(): Promise<Pick<Profile, 'api_key'>>;
 }
 
 export class RemoteUsersService implements UsersService {
 	constructor(private readonly _fetcher: FetchService) {}
 
 	update(payload: UpdateProfileData): Promise<Profile> {
-		return this._fetcher.patch<Profile, UpdateProfileData>('/api/v1/profile', payload);
+		return this._fetcher.patch('/api/v1/profile', payload);
+	}
+
+	refreshAPIKey(): Promise<Pick<Profile, 'api_key'>> {
+		return this._fetcher.put('/api/v1/profile/key');
 	}
 }
 

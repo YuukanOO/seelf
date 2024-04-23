@@ -144,6 +144,9 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'profile.key': 'Clé API',
 		'profile.key.help':
 			"Passez ce jeton dans l'entête <code>Authorization: Bearer</code> pour communiquer avec l'API seelf. <strong>Vous devez le garder secret !</strong>",
+		'profile.key.refresh': "Regénérer la clé d'API",
+		'profile.key.refresh.confirm':
+			"L'ancienne clé ne sera plus valide. Confirmez-vous cette action ?",
 		// Deployment
 		'deployment.new': 'Nouveau déploiement',
 		'deployment.deploy': 'Déployer',

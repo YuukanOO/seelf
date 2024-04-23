@@ -75,11 +75,19 @@ type (
 		ID       UserID
 		Password PasswordHash
 	}
+
+	UserAPIKeyChanged struct {
+		bus.Notification
+
+		ID  UserID
+		Key APIKey
+	}
 )
 
 func (UserRegistered) Name_() string      { return "auth.event.user_registered" }
 func (UserEmailChanged) Name_() string    { return "auth.event.user_email_changed" }
 func (UserPasswordChanged) Name_() string { return "auth.event.user_password_changed" }
+func (UserAPIKeyChanged) Name_() string   { return "auth.event.user_api_key_changed" }
 
 func NewUser(emailRequirement EmailRequirement, password PasswordHash, key APIKey) (u User, err error) {
 	email, err := emailRequirement.Met()
@@ -144,6 +152,18 @@ func (u *User) HasPassword(password PasswordHash) {
 	})
 }
 
+// Updates the user API key
+func (u *User) HasAPIKey(key APIKey) {
+	if u.key == key {
+		return
+	}
+
+	u.apply(UserAPIKeyChanged{
+		ID:  u.id,
+		Key: key,
+	})
+}
+
 func (u *User) ID() UserID             { return u.id }
 func (u *User) Password() PasswordHash { return u.password }
 
@@ -159,6 +179,8 @@ func (u *User) apply(e event.Event) {
 		u.email = evt.Email
 	case UserPasswordChanged:
 		u.password = evt.Password
+	case UserAPIKeyChanged:
+		u.key = evt.Key
 	}
 
 	event.Store(u, e)

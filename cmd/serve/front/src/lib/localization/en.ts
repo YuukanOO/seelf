@@ -141,6 +141,8 @@ You may reconsider and try to make the target reachable before deleting it.`,
 	'profile.key': 'API Key',
 	'profile.key.help':
 		'Pass this token as an <code>Authorization: Bearer</code> header to communicate with the seelf API. <strong>You MUST keep it secret!</strong>',
+	'profile.key.refresh': 'Regenerate API Key',
+	'profile.key.refresh.confirm': 'It will make the old key invalid. Do you confirm?',
 	// Deployment
 	'deployment.new': 'New deployment',
 	'deployment.deploy': 'Deploy',

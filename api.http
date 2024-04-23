@@ -33,6 +33,10 @@ Content-Type: application/json
 
 ###
 
+PUT {{url}}/profile/key
+
+###
+
 GET {{url}}/targets
 
 ###

@@ -2,6 +2,7 @@ package serve
 
 import (
 	"github.com/YuukanOO/seelf/internal/auth/app/get_profile"
+	"github.com/YuukanOO/seelf/internal/auth/app/refresh_api_key"
 	"github.com/YuukanOO/seelf/internal/auth/app/update_user"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
@@ -27,6 +28,28 @@ func (s *server) updateProfileHandler() gin.HandlerFunc {
 		}
 
 		return http.Ok(ctx, user)
+	})
+}
+
+type refreshProfileKeyResult struct {
+	APIKey string `json:"api_key"`
+}
+
+func (s *server) refreshProfileKeyHandler() gin.HandlerFunc {
+	return http.Send(s, func(ctx *gin.Context) error {
+		c := ctx.Request.Context()
+		currentUserID := domain.CurrentUser(c).MustGet()
+		key, err := bus.Send(s.bus, c, refresh_api_key.Command{
+			ID: string(currentUserID),
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return http.Ok(ctx, refreshProfileKeyResult{
+			APIKey: key,
+		})
 	})
 }
 

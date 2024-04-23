@@ -8,14 +8,16 @@
 	import Stack from '$components/stack.svelte';
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
+	import Dropdown from '$components/dropdown.svelte';
+	import { submitter } from '$lib/form.js';
 	import service from '$lib/resources/users';
 	import l from '$lib/localization';
-	import Dropdown from '$components/dropdown.svelte';
 
 	export let data;
 
 	let email = data.user.email;
 	let password: Maybe<string>;
+	let apiKey = data.user.api_key;
 	let locale = l.locale();
 
 	const locales = l.locales().map((l) => ({ label: l.displayName, value: l.code }));
@@ -27,6 +29,14 @@
 				password: password ? password : undefined
 			})
 			.then(() => l.locale(locale));
+
+	const {
+		submit: refreshKey,
+		loading,
+		errors: refreshErr
+	} = submitter(() => service.refreshAPIKey().then((d) => (apiKey = d.api_key)), {
+		confirmation: l.translate('profile.key.refresh.confirm')
+	});
 </script>
 
 <Form handler={submit} let:submitting let:errors>
@@ -64,11 +74,19 @@
 			</FormSection>
 
 			<FormSection title="profile.integration">
+				<Button
+					slot="actions"
+					variant="outlined"
+					on:click={refreshKey}
+					loading={$loading}
+					text="profile.key.refresh"
+				/>
 				<Stack direction="column">
+					<FormErrors errors={$refreshErr} />
 					<Panel title="profile.integration.title" variant="help">
 						<p>{@html l.translate('profile.integration.description')}</p>
 					</Panel>
-					<TextArea label="profile.key" rows={1} code value={data.user.api_key} readonly>
+					<TextArea label="profile.key" rows={1} code value={apiKey} readonly>
 						<p>
 							{@html l.translate('profile.key.help')}
 						</p>

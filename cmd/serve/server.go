@@ -85,6 +85,7 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	v1secured.DELETE("/jobs/:id", s.deleteJobsHandler())
 	v1secured.GET("/profile", s.getProfileHandler())
 	v1secured.PATCH("/profile", s.updateProfileHandler())
+	v1secured.PUT("/profile/key", s.refreshProfileKeyHandler())
 	v1secured.POST("/targets", s.createTargetHandler())
 	v1secured.PATCH("/targets/:id", s.updateTargetHandler())
 	v1secured.POST("/targets/:id/reconfigure", s.reconfigureTargetHandler())

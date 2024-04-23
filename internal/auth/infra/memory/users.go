@@ -103,6 +103,14 @@ func (s *usersStore) Write(ctx context.Context, users ...*domain.User) error {
 					key:   evt.Key,
 					value: user,
 				})
+			case domain.UserAPIKeyChanged:
+				for _, u := range s.users {
+					if u.id == evt.ID {
+						u.key = evt.Key
+						*u.value = *user
+						break
+					}
+				}
 			default:
 				for _, u := range s.users {
 					if u.id == user.ID() {

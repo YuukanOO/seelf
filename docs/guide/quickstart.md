@@ -8,7 +8,7 @@ This quickstart will guide through installing and deploying your first applicati
 
 ![seelf home screenshot](/seelf-home.jpeg)
 
-At its core, **seelf** just reads a `compose.yml` file, **deploy** services which [must be exposed](/reference/faq#services-exposal) and manage **domains** and **certificates** for you.
+At its core, **seelf** just reads a `compose.yml` file, **deploy** services which [must be exposed](/reference/targets#docker) and manage **domains** and **certificates** for you.
 
 For the majority of cases, a locally working `compose.yml` file is sufficient, making the **transition from a local stack to a remote one a breeze**.
 

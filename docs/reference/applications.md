@@ -4,7 +4,7 @@ Defines a new **stack of services** exposed on a [target subdomain](/reference/t
 
 ## Multiple exposed services
 
-When you define a complete stack for your application, you may have multiple services exposed. This is totally allowed by **seelf**. When [identifying services](/reference/faq#services-exposal) which must be exposed, the first one in **alphabetical order** will become the **default service** and take the default subdomain.
+When you define a complete stack for your application, you may have multiple services exposed. This is totally allowed by **seelf**. When [identifying services](/reference/targets#exposing-services) which must be exposed, the first one in **alphabetical order** will become the **default service** and take the default subdomain.
 
 Other services will be exposed using a subdomain on the default one.
 
@@ -30,7 +30,7 @@ This prevent a target from having dangling applications.
 
 ### Production
 
-Represents the main environment. The default service will be exposed on `<target scheme>://<app name>.<target root url>`. Any additional exposed services will add another level such as `<target scheme>://<service name>.<app name>.<target root url>`.
+Represents the main environment. The **default service** will be exposed on `<target scheme>://<app name>.<target root url>`. Any additional exposed services will add another level such as `<target scheme>://<service name>.<app name>.<target root url>`.
 
 ### Staging
 

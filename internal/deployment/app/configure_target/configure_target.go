@@ -41,6 +41,8 @@ func Handler(
 			return bus.Unit, nil
 		}
 
+		var assigned domain.TargetEntrypointsAssigned
+
 		// Same as for the deployment, since the configuration can take some time, retrieve the latest
 		// target version before updating its state.
 		defer func() {
@@ -56,12 +58,12 @@ func Handler(
 				return
 			}
 
-			target.Configured(cmd.Version, finalErr)
+			target.Configured(cmd.Version, assigned, finalErr)
 
 			finalErr = writer.Write(ctx, &target)
 		}()
 
-		finalErr = provider.Setup(ctx, target)
+		assigned, finalErr = provider.Setup(ctx, target)
 
 		return
 	}

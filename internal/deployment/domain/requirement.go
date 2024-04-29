@@ -12,7 +12,7 @@ func NewEnvironmentConfigRequirement(config EnvironmentConfig, targetExists bool
 	return EnvironmentConfigRequirement{
 		config:       config,
 		targetExists: targetExists,
-		available:    available,
+		available:    targetExists && available,
 	}
 }
 

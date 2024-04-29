@@ -18,7 +18,8 @@ export type Job = {
 export enum JobPolicy {
 	PreserveOrder = 1,
 	WaitForOthersResourceID = 2,
-	Cancellable = 4
+	Cancellable = 4,
+	Mergeable = 8
 }
 
 export interface JobsService {

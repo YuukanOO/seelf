@@ -49,7 +49,7 @@ func Test_DeleteTarget(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		testutil.IsNil(t, target.RequestCleanup(false, "uid"))
 
 		uc, provider := sut(&target)

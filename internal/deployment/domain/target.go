@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"database/sql/driver"
 	"time"
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
@@ -31,20 +32,23 @@ const (
 )
 
 type (
-	TargetID        string
-	CleanupStrategy uint8 // Strategy to use when deleting a target (on the provider side) based on wether it has been successfully configured or not
+	TargetID                  string
+	CleanupStrategy           uint8                                                          // Strategy to use when deleting a target (on the provider side) based on wether it has been successfully configured or not
+	TargetEntrypoints         map[AppID]map[Environment]map[EntrypointName]monad.Maybe[Port] // Maps every custom entrypoints managed by this target
+	TargetEntrypointsAssigned map[AppID]map[Environment]map[EntrypointName]Port              // Maps every custom entrypoints managed by this target with their assigned port
 
 	// Represents a target where application could be deployed.
 	Target struct {
 		event.Emitter
 
-		id               TargetID
-		name             string
-		url              Url
-		provider         ProviderConfig
-		state            TargetState
-		cleanupRequested monad.Maybe[shared.Action[auth.UserID]]
-		created          shared.Action[auth.UserID]
+		id                TargetID
+		name              string
+		url               Url
+		provider          ProviderConfig
+		state             TargetState
+		customEntrypoints TargetEntrypoints
+		cleanupRequested  monad.Maybe[shared.Action[auth.UserID]]
+		created           shared.Action[auth.UserID]
 	}
 
 	TargetsReader interface {
@@ -61,12 +65,13 @@ type (
 	TargetCreated struct {
 		bus.Notification
 
-		ID       TargetID
-		Name     string
-		Url      Url
-		Provider ProviderConfig
-		State    TargetState
-		Created  shared.Action[auth.UserID]
+		ID          TargetID
+		Name        string
+		Url         Url
+		Provider    ProviderConfig
+		State       TargetState
+		Entrypoints TargetEntrypoints
+		Created     shared.Action[auth.UserID]
 	}
 
 	TargetStateChanged struct {
@@ -97,6 +102,13 @@ type (
 		Provider ProviderConfig
 	}
 
+	TargetEntrypointsChanged struct {
+		bus.Notification
+
+		ID          TargetID
+		Entrypoints TargetEntrypoints
+	}
+
 	TargetCleanupRequested struct {
 		bus.Notification
 
@@ -111,13 +123,14 @@ type (
 	}
 )
 
-func (TargetCreated) Name_() string          { return "deployment.event.target_created" }
-func (TargetStateChanged) Name_() string     { return "deployment.event.target_state_changed" }
-func (TargetRenamed) Name_() string          { return "deployment.event.target_renamed" }
-func (TargetUrlChanged) Name_() string       { return "deployment.event.target_url_changed" }
-func (TargetProviderChanged) Name_() string  { return "deployment.event.target_provider_changed" }
-func (TargetCleanupRequested) Name_() string { return "deployment.event.target_cleanup_requested" }
-func (TargetDeleted) Name_() string          { return "deployment.event.target_deleted" }
+func (TargetCreated) Name_() string            { return "deployment.event.target_created" }
+func (TargetStateChanged) Name_() string       { return "deployment.event.target_state_changed" }
+func (TargetRenamed) Name_() string            { return "deployment.event.target_renamed" }
+func (TargetUrlChanged) Name_() string         { return "deployment.event.target_url_changed" }
+func (TargetProviderChanged) Name_() string    { return "deployment.event.target_provider_changed" }
+func (TargetEntrypointsChanged) Name_() string { return "deployment.event.target_entrypoints_changed" }
+func (TargetCleanupRequested) Name_() string   { return "deployment.event.target_cleanup_requested" }
+func (TargetDeleted) Name_() string            { return "deployment.event.target_deleted" }
 
 // Builds a new deployment target.
 func NewTarget(
@@ -139,12 +152,13 @@ func NewTarget(
 	}
 
 	t.apply(TargetCreated{
-		ID:       id.New[TargetID](),
-		Name:     name,
-		Url:      url.Root(),
-		Provider: provider,
-		State:    newTargetState(),
-		Created:  shared.NewAction(createdBy),
+		ID:          id.New[TargetID](),
+		Name:        name,
+		Url:         url.Root(),
+		Provider:    provider,
+		State:       newTargetState(),
+		Entrypoints: make(TargetEntrypoints),
+		Created:     shared.NewAction(createdBy),
 	})
 
 	return t, nil
@@ -170,6 +184,7 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 		&t.state.version,
 		&t.state.errcode,
 		&t.state.lastReadyVersion,
+		&t.customEntrypoints,
 		&deleteRequestedAt,
 		&deleteRequestedBy,
 		&createdAt,
@@ -304,15 +319,54 @@ func (t *Target) Reconfigure() error {
 
 // Mark the target (in the given version) has configured (by an external system).
 // If the given version does not match the current one, nothing will be done.
-func (t *Target) Configured(version time.Time, err error) {
+func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigned, err error) {
 	if !t.state.Configured(version, err) {
 		return
+	}
+
+	if err == nil && t.customEntrypoints.assign(assigned) {
+		t.apply(TargetEntrypointsChanged{
+			ID:          t.id,
+			Entrypoints: t.customEntrypoints,
+		})
 	}
 
 	t.apply(TargetStateChanged{
 		ID:    t.id,
 		State: t.state,
 	})
+}
+
+// Inform the target that it should exposes entrypoints inside the services array
+// for the given application environment.
+// Only custom entrypoints will be added to the target.
+// If needed (new or removed entrypoints), a configuration will be triggered.
+func (t *Target) ExposeEntrypoints(app AppID, env Environment, services Services) {
+	// Target is being deleted, no need to reconfigure anything
+	if t.cleanupRequested.HasValue() || services == nil {
+		return
+	}
+
+	if !t.customEntrypoints.merge(app, env, services.CustomEntrypoints()) {
+		return
+	}
+
+	t.raiseEntrypointsChangedAndReconfigure()
+}
+
+// Un-expose entrypoints for the given application and environments. If no environment is given,
+// all entrypoints for the application will be removed.
+// If the entrypoints have changed, a configuration will be triggered.
+func (t *Target) UnExposeEntrypoints(app AppID, envs ...Environment) {
+	if t.cleanupRequested.HasValue() {
+		return
+	}
+
+	if !t.customEntrypoints.remove(app, envs...) {
+		return
+	}
+
+	t.raiseEntrypointsChangedAndReconfigure()
 }
 
 // Request the target cleanup, meaning it will be deleted with all its related data.
@@ -402,10 +456,11 @@ func (t *Target) Delete(cleanedUp bool) error {
 	return nil
 }
 
-func (t *Target) ID() TargetID              { return t.id }
-func (t *Target) Url() Url                  { return t.url }
-func (t *Target) Provider() ProviderConfig  { return t.provider }
-func (t *Target) CurrentVersion() time.Time { return t.state.version }
+func (t *Target) ID() TargetID                         { return t.id }
+func (t *Target) Url() Url                             { return t.url }
+func (t *Target) Provider() ProviderConfig             { return t.provider }
+func (t *Target) CustomEntrypoints() TargetEntrypoints { return t.customEntrypoints } // FIXME: Should we return a copy?
+func (t *Target) CurrentVersion() time.Time            { return t.state.version }
 
 // Returns true if the given configuration version is different from the current one.
 func (t *Target) IsOutdated(version time.Time) bool {
@@ -421,6 +476,15 @@ func (t *Target) reconfigure() {
 	})
 }
 
+func (t *Target) raiseEntrypointsChangedAndReconfigure() {
+	t.apply(TargetEntrypointsChanged{
+		ID:          t.id,
+		Entrypoints: t.customEntrypoints,
+	})
+
+	t.reconfigure()
+}
+
 func (t *Target) apply(e event.Event) {
 	switch evt := e.(type) {
 	case TargetCreated:
@@ -430,21 +494,150 @@ func (t *Target) apply(e event.Event) {
 		t.provider = evt.Provider
 		t.state = evt.State
 		t.created = evt.Created
+		t.customEntrypoints = evt.Entrypoints
 	case TargetRenamed:
 		t.name = evt.Name
 	case TargetUrlChanged:
 		t.url = evt.Url
 	case TargetProviderChanged:
 		t.provider = evt.Provider
+	case TargetEntrypointsChanged:
+		t.customEntrypoints = evt.Entrypoints
 	case TargetCleanupRequested:
 		t.cleanupRequested.Set(evt.Requested)
 	case TargetStateChanged:
 		t.state = evt.State
-		// Prevent multiple TargetStateChanged events to be dispatched in the same transaction
-		// because it would be useless to configure the target multiple times.
-		event.Replace(t, e)
-		return
 	}
 
 	event.Store(t, e)
+}
+
+func (e TargetEntrypoints) Value() (driver.Value, error) { return storage.ValueJSON(e) }
+func (e *TargetEntrypoints) Scan(value any) error        { return storage.ScanJSON(value, e) }
+
+func (e TargetEntrypoints) merge(app AppID, env Environment, entrypoints []Entrypoint) (updated bool) {
+	appEntries, found := e[app]
+
+	if !found {
+		appEntries = make(map[Environment]map[EntrypointName]monad.Maybe[Port])
+		e[app] = appEntries
+	}
+
+	envEntries, found := appEntries[env]
+
+	if !found {
+		envEntries = make(map[EntrypointName]monad.Maybe[Port])
+		appEntries[env] = envEntries
+	}
+
+	// Remove old entries
+	for existing := range envEntries {
+		stillExist := false
+
+		for _, entry := range entrypoints {
+			if entry.name == existing {
+				stillExist = true
+				break
+			}
+		}
+
+		if stillExist {
+			continue
+		}
+
+		updated = true
+		delete(envEntries, existing)
+	}
+
+	// Add new entries but do not overwrite existing ones
+	for _, entrypoint := range entrypoints {
+		if _, found := envEntries[entrypoint.name]; found {
+			continue
+		}
+
+		updated = true
+		envEntries[entrypoint.name] = monad.None[Port]()
+	}
+
+	// Clean useless entries
+	if len(envEntries) == 0 {
+		delete(appEntries, env)
+	}
+
+	if len(appEntries) == 0 {
+		delete(e, app)
+	}
+
+	return
+}
+
+func (e TargetEntrypoints) remove(app AppID, envs ...Environment) (updated bool) {
+	appEntries, found := e[app]
+
+	if !found {
+		return
+	}
+
+	if len(envs) == 0 {
+		delete(e, app)
+		return true
+	}
+
+	for _, env := range envs {
+		_, found := appEntries[env]
+
+		if !found {
+			continue
+		}
+
+		delete(appEntries, env)
+		updated = true
+	}
+
+	if len(appEntries) == 0 {
+		delete(e, app)
+	}
+
+	return
+}
+
+func (e TargetEntrypoints) assign(mapping TargetEntrypointsAssigned) (updated bool) {
+	for app, envEntries := range mapping {
+		for env, entries := range envEntries {
+			for name, assignedPort := range entries {
+				port, found := e[app][env][name]
+
+				if !found {
+					continue
+				}
+
+				port.Set(assignedPort)
+				e[app][env][name] = port
+				updated = true
+			}
+		}
+	}
+
+	return
+}
+
+// Sets the entrypoint port for the given entrypoint.
+// It will create the needed structure as needed.
+func (e TargetEntrypointsAssigned) Set(app AppID, env Environment, name EntrypointName, port Port) {
+	// Updates the assigned map to keep track of new ports assigned to this target
+	appEntries, found := e[app]
+
+	if !found {
+		appEntries = make(map[Environment]map[EntrypointName]Port)
+		e[app] = appEntries
+	}
+
+	envEntries, found := appEntries[env]
+
+	if !found {
+		envEntries = make(map[EntrypointName]Port)
+		appEntries[env] = envEntries
+	}
+
+	envEntries[name] = port
 }

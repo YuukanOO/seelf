@@ -87,7 +87,9 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		target.Configured(target.CurrentVersion(), provider.Setup(ctx, target))
+		assigned, err := provider.Setup(ctx, target)
+
+		target.Configured(target.CurrentVersion(), assigned, err)
 
 		if err := writer.Write(ctx, &target); err != nil {
 			return bus.Unit, err

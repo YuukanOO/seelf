@@ -71,7 +71,7 @@ func Test_CleanupApp(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		target.RequestCleanup(false, "uid")
 
 		uc, provider := sut(initialData{
@@ -90,7 +90,7 @@ func Test_CleanupApp(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		uc, provider := sut(initialData{
 			targets: []*domain.Target{&target},
@@ -108,7 +108,7 @@ func Test_CleanupApp(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		app := must.Panic(domain.NewApp("my-app",
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))

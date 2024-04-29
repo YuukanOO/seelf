@@ -37,7 +37,7 @@ func Test_Facade(t *testing.T) {
 	t.Run("should return an error if no provider can configure the target", func(t *testing.T) {
 		sut := provider.NewFacade()
 
-		err := sut.Setup(context.Background(), target)
+		_, err := sut.Setup(context.Background(), target)
 
 		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})

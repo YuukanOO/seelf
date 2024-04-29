@@ -69,8 +69,9 @@ type (
 	DeploymentStateChanged struct {
 		bus.Notification
 
-		ID    DeploymentID
-		State DeploymentState
+		ID     DeploymentID
+		Config DeploymentConfig
+		State  DeploymentState
 	}
 )
 
@@ -221,8 +222,9 @@ func (d *Deployment) HasEnded(services Services, deploymentErr error) error {
 
 func (d *Deployment) stateChanged() {
 	d.apply(DeploymentStateChanged{
-		ID:    d.id,
-		State: d.state,
+		ID:     d.id,
+		Config: d.config,
+		State:  d.state,
 	})
 }
 

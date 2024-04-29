@@ -34,7 +34,7 @@ func Test_CleanupTarget(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), errors.New("some error"))
+		target.Configured(target.CurrentVersion(), nil, errors.New("some error"))
 
 		uc, provider := sut(&target)
 
@@ -50,7 +50,7 @@ func Test_CleanupTarget(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		uc, provider := sut(&target)
 

@@ -7,6 +7,7 @@ import (
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/testutil"
 )
@@ -22,6 +23,11 @@ func Test_Target(t *testing.T) {
 		urlUnique       = domain.NewTargetUrlRequirement(targetUrl, true)
 		configNotUnique = domain.NewProviderConfigRequirement(config, false)
 		configUnique    = domain.NewProviderConfigRequirement(config, true)
+		app             = must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("production-target"), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("staging-target"), true, true),
+			"uid"))
+		deployConfig = must.Panic(app.ConfigSnapshotFor(domain.Production))
 	)
 
 	t.Run("should fail if the url is not unique", func(t *testing.T) {
@@ -64,7 +70,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("could not be renamed if delete requested", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
 
 		testutil.ErrorIs(t, domain.ErrTargetCleanupRequested, target.Rename("new-name"))
@@ -92,7 +98,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("could not have its domain changed if delete requested", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		newUrl := domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://new-url.com")), true)
 
@@ -134,39 +140,148 @@ func Test_Target(t *testing.T) {
 
 	t.Run("could not have its provider changed if delete requested", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
 		testutil.ErrorIs(t, domain.ErrTargetCleanupRequested, target.HasProvider(configUnique))
 	})
 
-	t.Run("should raise the TargetStateChanged only once when updating both the domain and the config", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		newUrl := domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://new-url.com")), true)
-		newConfig := domain.NewProviderConfigRequirement(dummyProviderConfig{data: "new-config"}, true)
-
-		testutil.IsNil(t, target.HasUrl(newUrl))
-		testutil.IsNil(t, target.HasProvider(newConfig))
-
-		testutil.HasNEvents(t, &target, 4)
-		evt := testutil.EventIs[domain.TargetStateChanged](t, &target, 3)
-		testutil.Equals(t, domain.TargetStatusConfiguring, evt.State.Status())
-	})
-
 	t.Run("could be marked as configured and raise the appropriate event", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
 
-		target.Configured(target.CurrentVersion().Add(-1*time.Hour), nil)
+		target.Configured(target.CurrentVersion().Add(-1*time.Hour), nil, nil)
 
 		testutil.HasNEvents(t, &target, 1)
 		testutil.EventIs[domain.TargetCreated](t, &target, 0)
 
-		target.Configured(target.CurrentVersion(), nil)
-		target.Configured(target.CurrentVersion(), nil) // Should not raise a new event
+		target.Configured(target.CurrentVersion(), nil, nil)
+		target.Configured(target.CurrentVersion(), nil, nil) // Should not raise a new event
 
 		testutil.HasNEvents(t, &target, 2)
 		changed := testutil.EventIs[domain.TargetStateChanged](t, &target, 1)
 		testutil.Equals(t, domain.TargetStatusReady, changed.State.Status())
+	})
+
+	t.Run("should handle entrypoints assignment on configuration", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+
+		// Assigning non existing entrypoints should just be ignored
+		target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			app.ID(): {
+				domain.Production: {
+					"non-existing-entrypoint": 5432,
+				},
+			},
+		}, nil)
+
+		testutil.HasNEvents(t, &target, 2)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{}, target.CustomEntrypoints())
+
+		dbService := deployConfig.NewService("db", "postgres:14-alpine")
+		http := dbService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+		tcp := dbService.AddTCPEntrypoint(5432)
+
+		target.ExposeEntrypoints(app.ID(), domain.Production, domain.Services{dbService})
+
+		// Assigning but with an error should ignore new entrypoints
+		target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			app.ID(): {
+				domain.Production: {
+					http.Name(): 8081,
+					tcp.Name():  8082,
+				},
+			},
+		}, errors.New("some error"))
+
+		testutil.HasNEvents(t, &target, 5)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				domain.Production: {
+					http.Name(): monad.None[domain.Port](),
+					tcp.Name():  monad.None[domain.Port](),
+				},
+			},
+		}, target.CustomEntrypoints())
+
+		testutil.IsNil(t, target.Reconfigure())
+
+		// No error, should update the entrypoints correctly
+		target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			app.ID(): {
+				domain.Production: {
+					http.Name():               8081,
+					tcp.Name():                8082,
+					"non-existing-entrypoint": 5432,
+				},
+				"non-existing-env": {
+					"non-existing-entrypoint": 5432,
+				},
+			},
+			"another-app": {
+				"non-existing-env": {
+					"non-existing-entrypoint": 5432,
+				},
+			},
+		}, nil)
+
+		testutil.HasNEvents(t, &target, 8)
+		testutil.EventIs[domain.TargetEntrypointsChanged](t, &target, 6)
+		changed := testutil.EventIs[domain.TargetStateChanged](t, &target, 7)
+		testutil.Equals(t, domain.TargetStatusReady, changed.State.Status())
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				domain.Production: {
+					http.Name(): monad.Value[domain.Port](8081),
+					tcp.Name():  monad.Value[domain.Port](8082),
+				},
+			},
+		}, target.CustomEntrypoints())
+	})
+
+	t.Run("should be able to unexpose entrypoints for a specific app", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+		dbService := deployConfig.NewService("db", "postgres:14-alpine")
+		http := dbService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+		tcp := dbService.AddTCPEntrypoint(5432)
+
+		target.UnExposeEntrypoints(app.ID())
+
+		testutil.HasNEvents(t, &target, 1)
+
+		target.ExposeEntrypoints(app.ID(), domain.Production, domain.Services{dbService})
+		target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			app.ID(): {
+				domain.Production: {
+					http.Name(): 8081,
+					tcp.Name():  8082,
+				},
+			},
+		}, nil)
+
+		target.UnExposeEntrypoints(app.ID())
+
+		testutil.HasNEvents(t, &target, 7)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{}, target.CustomEntrypoints())
+		changed := testutil.EventIs[domain.TargetStateChanged](t, &target, 6)
+		testutil.Equals(t, domain.TargetStatusConfiguring, changed.State.Status())
+
+		target.ExposeEntrypoints(app.ID(), domain.Production, domain.Services{dbService})
+		target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			app.ID(): {
+				domain.Production: {
+					http.Name(): 8081,
+					tcp.Name():  8082,
+				},
+			},
+		}, nil)
+
+		target.UnExposeEntrypoints(app.ID(), domain.Staging)
+		target.UnExposeEntrypoints(app.ID(), domain.Production)
+
+		testutil.HasNEvents(t, &target, 13)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{}, target.CustomEntrypoints())
+		changed = testutil.EventIs[domain.TargetStateChanged](t, &target, 12)
+		testutil.Equals(t, domain.TargetStatusConfiguring, changed.State.Status())
 	})
 
 	t.Run("could expose its availability based on its internal state", func(t *testing.T) {
@@ -178,7 +293,7 @@ func Test_Target(t *testing.T) {
 		testutil.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
 
 		// Configuration failed
-		target.Configured(target.CurrentVersion(), errors.New("configuration failed"))
+		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
 
 		err = target.CheckAvailability()
 
@@ -187,7 +302,7 @@ func Test_Target(t *testing.T) {
 		// Configuration success
 		target.Reconfigure()
 
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		err = target.CheckAvailability()
 
@@ -203,7 +318,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("could not be reconfigured if cleanup requested", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
 
 		testutil.ErrorIs(t, domain.ErrTargetCleanupRequested, target.Reconfigure())
@@ -217,7 +332,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should not be removed if still used by an app", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		testutil.ErrorIs(t, domain.ErrTargetInUse, target.RequestCleanup(true, uid))
 	})
@@ -230,7 +345,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("could be removed if no app is using it", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		err := target.RequestCleanup(false, uid)
 		testutil.IsNil(t, err)
@@ -243,7 +358,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should not raise an event is the target is already marked has deleting", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
@@ -261,7 +376,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should returns an err if trying to cleanup a target while deployments are still running", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		_, err := target.CleanupStrategy(true)
 
@@ -270,9 +385,9 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should returns the skip cleanup strategy if the configuration has failed and the target could not be updated anymore", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		target.Reconfigure()
-		target.Configured(target.CurrentVersion(), errors.New("configuration failed"))
+		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
 		target.RequestCleanup(false, uid)
 
 		s, err := target.CleanupStrategy(false)
@@ -283,7 +398,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should returns the skip cleanup strategy if the configuration has failed and has never been reachable", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), errors.New("configuration failed"))
+		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
 
 		s, err := target.CleanupStrategy(false)
 
@@ -293,9 +408,9 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should returns an err if the configuration has failed but the target is still updatable", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		target.Reconfigure()
-		target.Configured(target.CurrentVersion(), errors.New("configuration failed"))
+		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
 
 		_, err := target.CleanupStrategy(false)
 
@@ -304,7 +419,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should returns the default strategy if the target is correctly configured", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		s, err := target.CleanupStrategy(false)
 
@@ -322,7 +437,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("returns a skip strategy when trying to cleanup an app on a deleting target", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
 
 		s, err := target.AppCleanupStrategy(false, false)
@@ -342,9 +457,9 @@ func Test_Target(t *testing.T) {
 
 	t.Run("returns an error when trying to cleanup an app on a failed target", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		target.Reconfigure()
-		target.Configured(target.CurrentVersion(), errors.New("configuration failed"))
+		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
 
 		_, err := target.AppCleanupStrategy(false, true)
 
@@ -353,7 +468,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("returns an error when trying to cleanup an app but there are still running or pending deployments", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		_, err := target.AppCleanupStrategy(true, false)
 
@@ -362,12 +477,146 @@ func Test_Target(t *testing.T) {
 
 	t.Run("returns a default strategy when trying to remove an app and everything is good to process it", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		s, err := target.AppCleanupStrategy(false, true)
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, domain.CleanupStrategyDefault, s)
+	})
+
+	t.Run("should do nothing if trying to expose an empty entrypoints array", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+
+		target.ExposeEntrypoints(app.ID(), domain.Production, domain.Services{})
+		testutil.HasNEvents(t, &target, 1)
+
+		target.ExposeEntrypoints(app.ID(), domain.Production, nil)
+		testutil.HasNEvents(t, &target, 1)
+	})
+
+	t.Run("should switch to the configuring state if adding new entrypoints to expose", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+		appService := deployConfig.NewService("app", "")
+		http := appService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+		udp := appService.AddUDPEntrypoint(8080)
+		dbService := deployConfig.NewService("db", "postgres:14-alpine")
+		tcp := dbService.AddTCPEntrypoint(5432)
+
+		services := domain.Services{appService, dbService}
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), services)
+
+		testutil.HasNEvents(t, &target, 3)
+		evt := testutil.EventIs[domain.TargetEntrypointsChanged](t, &target, 1)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				deployConfig.Environment(): {
+					http.Name(): monad.None[domain.Port](),
+					udp.Name():  monad.None[domain.Port](),
+					tcp.Name():  monad.None[domain.Port](),
+				},
+			},
+		}, evt.Entrypoints)
+
+		changed := testutil.EventIs[domain.TargetStateChanged](t, &target, 2)
+		testutil.Equals(t, domain.TargetStatusConfiguring, changed.State.Status())
+
+		// Should not trigger it again
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), services)
+		testutil.HasNEvents(t, &target, 3)
+	})
+
+	t.Run("should switch to the configuring state if adding new entrypoints to an already exposed environment", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+		appService := deployConfig.NewService("app", "")
+
+		http := appService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{appService})
+
+		testutil.HasNEvents(t, &target, 3)
+		evt := testutil.EventIs[domain.TargetEntrypointsChanged](t, &target, 1)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				deployConfig.Environment(): {
+					http.Name(): monad.None[domain.Port](),
+				},
+			},
+		}, evt.Entrypoints)
+
+		// Adding a new entrypoint should trigger new events
+		dbService := deployConfig.NewService("db", "postgres:14-alpine")
+		tcp := dbService.AddTCPEntrypoint(5432)
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{appService, dbService})
+
+		testutil.HasNEvents(t, &target, 5)
+		evt = testutil.EventIs[domain.TargetEntrypointsChanged](t, &target, 3)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				deployConfig.Environment(): {
+					http.Name(): monad.None[domain.Port](),
+					tcp.Name():  monad.None[domain.Port](),
+				},
+			},
+		}, evt.Entrypoints)
+
+		// Again with the same entrypoints, should trigger nothing new
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{appService, dbService, deployConfig.NewService("cache", "redis:6-alpine")})
+		testutil.HasNEvents(t, &target, 5)
+	})
+
+	t.Run("should switch to the configuring state if removing entrypoints", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+		appService := deployConfig.NewService("app", "")
+
+		http := appService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+		appService.AddUDPEntrypoint(8080)
+		dbService := deployConfig.NewService("db", "postgres:14-alpine")
+		tcp := dbService.AddTCPEntrypoint(5432)
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{appService, dbService})
+
+		// Let's remove the UDP entrypoint
+		appService = deployConfig.NewService("app", "")
+		appService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{appService, dbService})
+
+		testutil.HasNEvents(t, &target, 5)
+		evt := testutil.EventIs[domain.TargetEntrypointsChanged](t, &target, 3)
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				deployConfig.Environment(): {
+					http.Name(): monad.None[domain.Port](),
+					tcp.Name():  monad.None[domain.Port](),
+				},
+			},
+		}, evt.Entrypoints)
+	})
+
+	t.Run("should remove empty map keys when updating entrypoints", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
+
+		appService := deployConfig.NewService("app", "")
+
+		http := appService.AddHttpEntrypoint(deployConfig, 80, domain.HttpEntrypointOptions{})
+		tcp := appService.AddTCPEntrypoint(5432)
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{appService})
+		testutil.DeepEquals(t, domain.TargetEntrypoints{
+			app.ID(): {
+				domain.Production: {
+					http.Name(): monad.None[domain.Port](),
+					tcp.Name():  monad.None[domain.Port](),
+				},
+			},
+		}, target.CustomEntrypoints())
+
+		target.ExposeEntrypoints(app.ID(), deployConfig.Environment(), domain.Services{})
+
+		testutil.DeepEquals(t, domain.TargetEntrypoints{}, target.CustomEntrypoints())
 	})
 
 	t.Run("should not be removed if no cleanup request has been set", func(t *testing.T) {
@@ -380,7 +629,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("should not be removed if target resources have not been cleaned up", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		testutil.IsNil(t, target.RequestCleanup(false, uid)) // No application is using it
 
 		err := target.Delete(false)
@@ -390,7 +639,7 @@ func Test_Target(t *testing.T) {
 
 	t.Run("could be removed if resources have been cleaned up", func(t *testing.T) {
 		target := must.Panic(domain.NewTarget(name, urlUnique, configUnique, uid))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		testutil.IsNil(t, target.RequestCleanup(false, uid))
 
 		err := target.Delete(true)

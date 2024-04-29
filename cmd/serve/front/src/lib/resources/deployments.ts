@@ -2,6 +2,7 @@ import { RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS, POLLING_INTERVAL_MS } from '$li
 import type { Paginated } from '$lib/pagination';
 import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import type { ByUserData } from '$lib/resources/users';
+import type { TargetStatus } from '$lib/resources/targets';
 
 export enum DeploymentStatus {
 	Pending = 0,
@@ -22,19 +23,31 @@ export type SourceData =
 
 export type SourceDataDiscriminator = SourceData['discriminator'];
 
+export type Entrypoint = {
+	name: string;
+	router: string;
+	port: number;
+	is_custom: boolean;
+	subdomain?: string;
+	url?: string;
+	published_port?: number;
+};
+
 export type Service = {
 	name: string;
 	image: string;
-	subdomain?: string;
-	url?: string;
+	entrypoints: Entrypoint[];
 };
 
-export type StateData = {
+export type State = {
 	status: DeploymentStatus;
 	error_code?: string;
 	started_at?: string;
 	finished_at?: string;
-	services?: Service[];
+};
+
+export type StateWithServices = State & {
+	services: Service[];
 };
 
 export type Environment = 'production' | 'staging';
@@ -43,6 +56,7 @@ export type TargetSummary = {
 	id: string;
 	name?: string;
 	url?: string;
+	status?: TargetStatus;
 };
 
 export type Deployment = {
@@ -51,9 +65,13 @@ export type Deployment = {
 	environment: Environment;
 	target: TargetSummary;
 	source: SourceData;
-	state: StateData;
+	state: State;
 	requested_at: string;
 	requested_by: ByUserData;
+};
+
+export type DeploymentDetail = Omit<Deployment, 'state'> & {
+	state: StateWithServices;
 };
 
 export type QueueDeployment =
@@ -73,8 +91,12 @@ export interface DeploymentsService {
 	promote(appid: string, number: number): Promise<Deployment>;
 	queryAllByApp(id: string, filters?: QueryDeploymentsFilters): QueryResult<Paginated<Deployment>>;
 	queryLogs(appid: string, number: number, poll?: boolean): QueryResult<string>;
-	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<Deployment>;
-	fetchByAppAndNumber(appid: string, number: number, options?: FetchOptions): Promise<Deployment>;
+	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<DeploymentDetail>;
+	fetchByAppAndNumber(
+		appid: string,
+		number: number,
+		options?: FetchOptions
+	): Promise<DeploymentDetail>;
 }
 
 type Options = {
@@ -85,7 +107,11 @@ type Options = {
 class RemoteDeploymentsService implements DeploymentsService {
 	constructor(private readonly _fetcher: FetchService, private readonly _options: Options) {}
 
-	fetchByAppAndNumber(appid: string, number: number, options?: FetchOptions): Promise<Deployment> {
+	fetchByAppAndNumber(
+		appid: string,
+		number: number,
+		options?: FetchOptions
+	): Promise<DeploymentDetail> {
 		return this._fetcher.get(`/api/v1/apps/${appid}/deployments/${number}`, options);
 	}
 
@@ -96,7 +122,11 @@ class RemoteDeploymentsService implements DeploymentsService {
 		});
 	}
 
-	queryByAppAndNumber(appid: string, number: number, poll?: boolean): QueryResult<Deployment> {
+	queryByAppAndNumber(
+		appid: string,
+		number: number,
+		poll?: boolean
+	): QueryResult<DeploymentDetail> {
 		return this._fetcher.query(`/api/v1/apps/${appid}/deployments/${number}`, {
 			refreshInterval: poll ? this._options.runningDeploymentsPollingInterval : undefined
 		});

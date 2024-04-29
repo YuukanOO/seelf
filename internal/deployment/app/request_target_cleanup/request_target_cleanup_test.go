@@ -42,7 +42,7 @@ func Test_RequestTargetCleanup(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true),
 			domain.NewProviderConfigRequirement(dummyProviderConfig{}, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 		app := must.Panic(domain.NewApp("my-app",
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))
@@ -63,7 +63,7 @@ func Test_RequestTargetCleanup(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true),
 			domain.NewProviderConfigRequirement(dummyProviderConfig{}, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		uc := sut(initialData{
 			targets: []*domain.Target{&target},

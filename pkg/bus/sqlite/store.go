@@ -2,7 +2,9 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"embed"
+	"errors"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -90,12 +92,35 @@ func (s *store) Create(
 		return err
 	}
 
+	var (
+		msgName    = msg.Name_()
+		resourceId = msg.ResourceID()
+	)
+
+	// Could not use the ON CONFLICT here :'(
+	if flag.IsSet(options.Policy, bus.JobPolicyMerge) {
+		var existingJobId string
+
+		if err = s.db.QueryRowContext(ctx, `
+		SELECT id
+		FROM scheduled_jobs
+		WHERE resource_id = ? AND message_name = ? AND retrieved = false`, resourceId, msgName).
+			Scan(&existingJobId); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+
+		if existingJobId != "" {
+			_, err = s.db.ExecContext(ctx, `UPDATE scheduled_jobs SET message_data = ? WHERE id = ?`, msgValue, existingJobId)
+			return err
+		}
+	}
+
 	return builder.
 		Insert("scheduled_jobs", builder.Values{
 			"id":           jobId,
-			"resource_id":  msg.ResourceID(),
+			"resource_id":  resourceId,
 			"[group]":      options.Group.Get(jobId), // Default to the job id if no group set
-			"message_name": msg.Name_(),
+			"message_name": msgName,
 			"message_data": msgValue,
 			"queued_at":    now,
 			"not_before":   now,

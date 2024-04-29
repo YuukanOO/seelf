@@ -80,7 +80,7 @@ func Test_Deploy(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		app := must.Panic(domain.NewApp("my-app",
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
@@ -113,7 +113,7 @@ func Test_Deploy(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		app := must.Panic(domain.NewApp("my-app",
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
@@ -146,7 +146,7 @@ func Test_Deploy(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		app := must.Panic(domain.NewApp("my-app",
 			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),

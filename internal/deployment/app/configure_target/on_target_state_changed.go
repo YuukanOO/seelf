@@ -17,6 +17,6 @@ func OnTargetStateChangedHandler(scheduler bus.Scheduler) bus.SignalHandler[doma
 		return scheduler.Queue(ctx, Command{
 			ID:      string(evt.ID),
 			Version: evt.State.Version(),
-		}, bus.WithGroup(app.TargetConfigurationGroup(evt.ID)))
+		}, bus.WithGroup(app.TargetConfigurationGroup(evt.ID)), bus.WithPolicy(bus.JobPolicyMerge))
 	}
 }

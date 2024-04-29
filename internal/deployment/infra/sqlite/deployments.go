@@ -134,7 +134,7 @@ func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app
 func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criterias domain.FailCriterias) error {
 	now := time.Now().UTC()
 
-	if err := builder.Update("deployments", builder.Values{
+	return builder.Update("deployments", builder.Values{
 		"state_status":      domain.DeploymentStatusFailed,
 		"state_errcode":     reason.Error(),
 		"state_started_at":  now,
@@ -147,19 +147,6 @@ func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, cr
 			builder.MaybeValue(criterias.Status, "AND state_status = ?"),
 			builder.MaybeValue(criterias.Environment, "AND config_environment = ?"),
 		).
-		Exec(s.db, ctx); err != nil {
-		return err
-	}
-
-	// Also remove scheduled jobs tied to the failed deployments because they will
-	// always fail, no need to keep them, this will speed up the job processing
-	return builder.
-		Command(`
-		DELETE FROM scheduled_jobs WHERE resource_id IN (
-			SELECT app_id || '-' || deployment_number -- deployment resource id is the concatenation of app_id and deployment_number
-			FROM deployments
-			WHERE state_status = ? AND state_errcode = ? AND state_finished_at = ?
-		)`, domain.DeploymentStatusFailed, reason.Error(), now).
 		Exec(s.db, ctx)
 }
 

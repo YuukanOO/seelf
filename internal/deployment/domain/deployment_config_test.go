@@ -59,15 +59,15 @@ func Test_Config(t *testing.T) {
 	t.Run("should generate a subdomain equals to app name if env is production", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Production)
 
-		testutil.Equals(t, "my-app", conf.SubDomain("app", false))
-		testutil.Equals(t, "db.my-app", conf.SubDomain("db", true))
+		testutil.Equals(t, "my-app", conf.SubDomain("app", true))
+		testutil.Equals(t, "db.my-app", conf.SubDomain("db", false))
 	})
 
 	t.Run("should generate a subdomain suffixed by the env if not production", func(t *testing.T) {
 		conf, _ := app.ConfigSnapshotFor(domain.Staging)
 
-		testutil.Equals(t, "my-app-staging", conf.SubDomain("app", false))
-		testutil.Equals(t, "db.my-app-staging", conf.SubDomain("db", true))
+		testutil.Equals(t, "my-app-staging", conf.SubDomain("app", true))
+		testutil.Equals(t, "db.my-app-staging", conf.SubDomain("db", false))
 	})
 
 	t.Run("should expose a unique project name", func(t *testing.T) {

@@ -20,6 +20,8 @@ Uses [Docker Compose](https://docs.docker.com/compose/) to launch your services 
 
 ::: warning
 [Docker >= (v18.0.9) must be installed](https://docs.docker.com/get-docker/) on the target!
+
+Docker engine `v1.41` can sometimes cause issues when attaching multiple networks on container creation. If you have any issue, consider updating.
 :::
 
 #### Files looked at

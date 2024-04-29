@@ -92,7 +92,7 @@ type dummyProvider struct {
 	called bool
 }
 
-func (d *dummyProvider) Setup(context.Context, domain.Target) error {
+func (d *dummyProvider) Setup(context.Context, domain.Target) (domain.TargetEntrypointsAssigned, error) {
 	d.called = true
-	return d.err
+	return nil, d.err
 }

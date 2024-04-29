@@ -290,7 +290,6 @@ func (q *queryBuilder[T]) ExtractAll(ex Executor, ctx context.Context) ([]T, err
 
 func (q *queryBuilder[T]) Exec(ex Executor, ctx context.Context) error {
 	_, err := ex.ExecContext(ctx, q.String(), q.arguments...)
-
 	return err
 }
 

@@ -31,7 +31,7 @@ func Test_ReconfigureTarget(t *testing.T) {
 		target := must.Panic(domain.NewTarget("my-target",
 			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
 			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil)
+		target.Configured(target.CurrentVersion(), nil, nil)
 
 		uc := sut(&target)
 
@@ -40,7 +40,8 @@ func Test_ReconfigureTarget(t *testing.T) {
 		})
 
 		testutil.IsNil(t, err)
-		changed := testutil.EventIs[domain.TargetStateChanged](t, &target, 1)
+		testutil.HasNEvents(t, &target, 3)
+		changed := testutil.EventIs[domain.TargetStateChanged](t, &target, 2)
 		testutil.Equals(t, domain.TargetStatusConfiguring, changed.State.Status())
 	})
 }

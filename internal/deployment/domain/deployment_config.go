@@ -69,7 +69,7 @@ func (c DeploymentConfig) EnvironmentVariablesFor(service string) (m monad.Maybe
 }
 
 // Returns the subdomain that will be used to expose a specific service.
-func (c DeploymentConfig) SubDomain(service string, hasExposedServices bool) string {
+func (c DeploymentConfig) SubDomain(service string, isDefault bool) string {
 	subdomain := string(c.appname)
 
 	if !c.environment.IsProduction() {
@@ -78,7 +78,7 @@ func (c DeploymentConfig) SubDomain(service string, hasExposedServices bool) str
 
 	// If the default domain has already been taken by another service, build a
 	// unique subdomain with the service name being exposed.
-	if hasExposedServices {
+	if !isDefault {
 		subdomain = service + "." + subdomain
 	}
 

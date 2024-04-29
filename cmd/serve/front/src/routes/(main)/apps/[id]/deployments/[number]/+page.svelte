@@ -11,6 +11,7 @@
 	import { submitter } from '$lib/form';
 	import routes from '$lib/path';
 	import service from '$lib/resources/deployments';
+	import { TargetStatus } from '$lib/resources/targets';
 	import l from '$lib/localization';
 
 	export let data;
@@ -19,7 +20,16 @@
 		data.app.latest_deployments[data.deployment.environment]?.deployment_number !==
 		data.deployment.deployment_number;
 
-	$: pollNeeded = !data.deployment.state.finished_at; // Poll or not based on wether the deployment has ended
+	$: latestUrl = isStale
+		? routes.deployment(
+				data.app.id,
+				data.app.latest_deployments[data.deployment.environment]!.deployment_number
+		  )
+		: undefined;
+
+	$: pollNeeded =
+		!data.deployment.state.finished_at ||
+		data.deployment.target.status === TargetStatus.Configuring; // Poll or not based on wether the deployment has ended or the target is configuring
 
 	$: ({ data: deployment } = service.queryByAppAndNumber(
 		data.app.id,
@@ -38,7 +48,8 @@
 		if (
 			pollNeeded &&
 			$deployment?.deployment_number === data.deployment.deployment_number &&
-			$deployment?.state.finished_at
+			$deployment?.state.finished_at &&
+			$deployment?.target.status !== TargetStatus.Configuring
 		) {
 			pollNeeded = false;
 		}
@@ -105,7 +116,7 @@
 	<FormErrors errors={$promoteErr} title="deployment.promote.failed" />
 
 	{#if $deployment}
-		<DeploymentCard {isStale} data={$deployment} />
+		<DeploymentCard {latestUrl} data={$deployment} />
 	{/if}
 
 	{#if $logs}

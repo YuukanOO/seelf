@@ -34,6 +34,10 @@
 			policies.push(l.translate('jobs.policy.cancellable'));
 		}
 
+		if ((policy & JobPolicy.Mergeable) !== 0) {
+			policies.push(l.translate('jobs.policy.mergeable'));
+		}
+
 		return policies.join(', ');
 	}
 

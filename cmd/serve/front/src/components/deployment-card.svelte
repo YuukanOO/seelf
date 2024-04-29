@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type Deployment, DeploymentStatus } from '$lib/resources/deployments';
+	import { type DeploymentDetail, DeploymentStatus } from '$lib/resources/deployments';
 	import type { ComponentProps } from 'svelte';
 	import routes from '$lib/path';
 	import Card from '$components/card.svelte';
@@ -8,11 +8,11 @@
 	import Panel from '$components/panel.svelte';
 	import DeploymentPill from '$components/deployment-pill.svelte';
 	import Display from '$components/display.svelte';
-	import ExternalLaunch from '$assets/icons/external-launch.svelte';
+	import ServiceInfo from '$components/service-info.svelte';
 	import l from '$lib/localization';
 
-	export let data: Deployment;
-	export let isStale = false;
+	export let data: DeploymentDetail;
+	export let latestUrl: Maybe<string> = undefined; // If set, show the oudated panel
 
 	function colorForStatus(status: DeploymentStatus): ComponentProps<Card>['color'] {
 		switch (status) {
@@ -76,24 +76,16 @@
 		{/if}
 		{#if data.state.services && data.state.services?.length > 0}
 			<Display class="large" label="deployment.services">
-				{#if isStale}
+				{#if latestUrl}
 					<Panel class="outdated" title="deployment.outdated" format="inline" variant="warning">
-						<p>{l.translate('deployment.outdated.description')}</p>
+						<p>{@html l.translate('deployment.outdated.description', [latestUrl])}</p>
 					</Panel>
 				{/if}
-				<ul>
+				<ul class="services">
 					{#each data.state.services as service (service.name)}
-						<Stack as="li" justify="space-between">
-							{#if service.url}
-								<Link class="service-url" href={service.url} external newWindow>
-									{service.name}
-									<ExternalLaunch />
-								</Link>
-							{:else}
-								<div>{service.name}</div>
-							{/if}
-							<div class="service-image">{service.image}</div>
-						</Stack>
+						<li class="service">
+							<ServiceInfo data={service} />
+						</li>
 					{/each}
 				</ul>
 			</Display>
@@ -120,35 +112,16 @@
 		grid-column: span 2;
 	}
 
+	.services {
+		margin-block-start: var(--sp-1);
+	}
+
+	.service + .service {
+		margin-block-start: var(--sp-2);
+	}
+
 	.outdated {
-		margin-block-start: var(--sp-2);
+		margin-block: var(--sp-2);
 		margin-inline: 1px;
-	}
-
-	.outdated + ul {
-		margin-block-start: var(--sp-2);
-	}
-
-	.service-url {
-		display: flex;
-		align-items: center;
-		gap: var(--sp-1);
-	}
-
-	.service-url svg {
-		height: 1rem;
-		width: 1rem;
-	}
-
-	.service-image {
-		background-color: var(--co-background-5);
-		border-radius: var(--ra-4);
-		border: 1px solid var(--co-divider-4);
-		font: var(--ty-caption);
-		color: var(--co-text-4);
-		padding: 0.125rem var(--sp-2);
-		white-space: nowrap;
-		text-overflow: ellipsis;
-		overflow: hidden;
 	}
 </style>

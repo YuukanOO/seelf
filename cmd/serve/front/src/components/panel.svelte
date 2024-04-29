@@ -52,6 +52,10 @@
 		font: var(--ty-caption);
 	}
 
+	.container a {
+		color: var(--panel-title-color);
+	}
+
 	details.container {
 		padding: 0;
 	}

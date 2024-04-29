@@ -119,6 +119,7 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'jobs.policy.preserve_group_order': "Préserve l'ordre au sein du groupe en cas d'erreur",
 		'jobs.policy.wait_others_resource_id': "Attend l'achèvement des tâches sur cette ressource",
 		'jobs.policy.cancellable': 'Annulable',
+		'jobs.policy.mergeable': 'Fusionnable',
 		'jobs.group': 'groupe',
 		'jobs.cancel': 'Annuler la tâche',
 		'jobs.cancel.confirm': 'Voulez-vous vraiment annuler la tâche ?',
@@ -176,8 +177,8 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 			'Commit spécifique à déployer. Laissez vide pour déployer le dernier commit de la branche.',
 		'deployment.logs': 'Logs de déploiement',
 		'deployment.outdated': 'Déploiement obsolète',
-		'deployment.outdated.description':
-			'Vous visualisez un ancien déploiement et les URLs exposées ici représentent ce qui a été exposé au moment du déploiement.',
+		'deployment.outdated.description': (href: string) =>
+			`Vous visualisez un ancien déploiement et les URLs exposées ici représentent ce qui a été exposé au moment du déploiement. Accéder à <a href="${href}">la dernière version</a>.`,
 		'deployment.started_at': 'démarré à',
 		'deployment.finished_at': 'terminé à',
 		'deployment.queued_at': 'demandé à',

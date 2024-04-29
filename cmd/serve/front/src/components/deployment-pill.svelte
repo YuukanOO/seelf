@@ -50,6 +50,7 @@
 	}
 
 	.pill svg {
+		display: block;
 		height: 1rem;
 		width: 1rem;
 	}

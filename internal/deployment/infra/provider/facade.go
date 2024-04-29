@@ -43,11 +43,11 @@ func (f *facade) Deploy(ctx context.Context, info domain.DeploymentContext, depl
 	return provider.Deploy(ctx, info, depl, target)
 }
 
-func (f *facade) Setup(ctx context.Context, target domain.Target) error {
+func (f *facade) Setup(ctx context.Context, target domain.Target) (domain.TargetEntrypointsAssigned, error) {
 	provider, err := f.providerForTarget(target)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	return provider.Setup(ctx, target)

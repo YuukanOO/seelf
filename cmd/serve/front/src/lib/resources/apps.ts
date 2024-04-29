@@ -1,7 +1,7 @@
 import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import { POLLING_INTERVAL_MS } from '$lib/config';
 import type { ByUserData } from '$lib/resources/users';
-import type { Deployment } from '$lib/resources/deployments';
+import type { Deployment, DeploymentDetail } from '$lib/resources/deployments';
 
 export type App = {
 	id: string;
@@ -9,14 +9,14 @@ export type App = {
 	cleanup_requested_at?: string;
 	created_at: string;
 	created_by: ByUserData;
-	latest_deployments: LatestDeployments;
+	latest_deployments: LatestDeployments<Deployment>;
 	production_target: TargetSummary;
 	staging_target: TargetSummary;
 };
 
-export type LatestDeployments = {
-	production?: Deployment;
-	staging?: Deployment;
+export type LatestDeployments<T> = {
+	production?: T;
+	staging?: T;
 };
 
 export type EnvironmentVariablesPerService = Record<string, Record<string, string>>;
@@ -34,7 +34,7 @@ export type AppDetail = {
 	cleanup_requested_at?: string;
 	created_at: string;
 	created_by: ByUserData;
-	latest_deployments: LatestDeployments;
+	latest_deployments: LatestDeployments<DeploymentDetail>;
 	version_control?: VersionControl;
 	production: EnvironmentConfig;
 	staging: EnvironmentConfig;

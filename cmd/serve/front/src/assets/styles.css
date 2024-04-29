@@ -8,6 +8,7 @@
      */
 	--co-background-4: #010409;
 	--co-background-5: #0d1117;
+	--co-background-6: #181c22;
 	--co-divider-4: #30363d;
 	--co-text-3: #6c7179;
 	--co-text-4: #8b949e;
@@ -20,8 +21,9 @@
 	--co-danger-4: #ef4444;
 	--co-warning-1: rgba(251, 191, 36, 0.1);
 	--co-warning-3: #f59e0b;
-	--co-warning-4: #fbbf24;
+	--co-warning-4: hwb(43 14% 2%);
 	--co-primary-0: #111;
+	--co-primary-1: rgba(16, 185, 129, 0.1);
 	--co-primary-3: #065f46;
 	--co-primary-4: #10b981;
 	--co-primary-5: #34d399;

@@ -67,14 +67,16 @@ func Test_UpdateTarget(t *testing.T) {
 
 		testutil.IsNil(t, err)
 		testutil.Equals(t, string(target.ID()), id)
+		testutil.HasNEvents(t, &target, 6)
 
 		renamed := testutil.EventIs[domain.TargetRenamed](t, &target, 1)
 		testutil.Equals(t, "new name", renamed.Name)
 		urlChanged := testutil.EventIs[domain.TargetUrlChanged](t, &target, 2)
 		testutil.Equals(t, "http://docker.localhost", urlChanged.Url.String())
-		providerChanged := testutil.EventIs[domain.TargetProviderChanged](t, &target, 3)
+		providerChanged := testutil.EventIs[domain.TargetProviderChanged](t, &target, 4)
 		testutil.Equals(t, domain.ProviderConfig(dummyConfig{"1"}), providerChanged.Provider)
-		testutil.EventIs[domain.TargetStateChanged](t, &target, 4)
+		testutil.EventIs[domain.TargetStateChanged](t, &target, 3)
+		testutil.EventIs[domain.TargetStateChanged](t, &target, 5)
 	})
 }
 

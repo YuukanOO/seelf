@@ -57,6 +57,7 @@ func (s *targetsStore) GetLocalTarget(ctx context.Context) (domain.Target, error
 			,state_version
 			,state_errcode
 			,state_last_ready_version
+			,entrypoints
 			,cleanup_requested_at
 			,cleanup_requested_by
 			,created_at
@@ -80,6 +81,7 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 			,state_version
 			,state_errcode
 			,state_last_ready_version
+			,entrypoints
 			,cleanup_requested_at
 			,cleanup_requested_by
 			,created_at
@@ -105,6 +107,7 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 					"state_version":            evt.State.Version(),
 					"state_errcode":            evt.State.ErrCode(),
 					"state_last_ready_version": evt.State.LastReadyVersion(),
+					"entrypoints":              evt.Entrypoints,
 					"created_at":               evt.Created.At(),
 					"created_by":               evt.Created.By(),
 				}).
@@ -139,6 +142,13 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 					"provider_kind":        evt.Provider.Kind(),
 					"provider_fingerprint": evt.Provider.Fingerprint(),
 					"provider":             evt.Provider,
+				}).
+				F("WHERE id = ?", evt.ID).
+				Exec(s.db, ctx)
+		case domain.TargetEntrypointsChanged:
+			return builder.
+				Update("targets", builder.Values{
+					"entrypoints": evt.Entrypoints,
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)

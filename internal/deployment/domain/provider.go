@@ -15,7 +15,7 @@ var (
 )
 
 type (
-	// Provider specific configuration.
+	// Provider specific configuration used by a target
 	ProviderConfig interface {
 		Kind() string
 		Equals(ProviderConfig) bool // Compare the provider configuration with another one
@@ -30,7 +30,7 @@ type (
 		// Deploy a deployment on the specified target and return services that has been deployed.
 		Deploy(context.Context, DeploymentContext, Deployment, Target) (Services, error)
 		// Setup a target by deploying the needed stuff to actually serve deployments.
-		Setup(context.Context, Target) error
+		Setup(context.Context, Target) (TargetEntrypointsAssigned, error)
 		// Remove target related configuration.
 		RemoveConfiguration(context.Context, Target) error
 		// Cleanup a target, removing every resources managed by seelf on it.

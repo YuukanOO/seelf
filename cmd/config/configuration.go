@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	databaseFilename              = "seelf.db?_foreign_keys=yes&_txlock=immediate"
+	databaseConnectionString      = "seelf.db?_journal=WAL&_timeout=5000&_foreign_keys=yes&_txlock=immediate"
 	defaultConfigFilename         = "conf.yml"
 	defaultPort                   = 8080
 	defaultHost                   = ""
@@ -189,7 +189,7 @@ func (c *configuration) IsSecure() bool {
 
 // Gets the connection string to be used.
 func (c *configuration) ConnectionString() string {
-	return "file:" + path.Join(c.Data.Path, databaseFilename)
+	return "file:" + path.Join(c.Data.Path, databaseConnectionString)
 }
 
 // Returns the address to bind the HTTP server to.

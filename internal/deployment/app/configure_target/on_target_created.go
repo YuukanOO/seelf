@@ -13,6 +13,6 @@ func OnTargetCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.Ta
 		return scheduler.Queue(ctx, Command{
 			ID:      string(evt.ID),
 			Version: evt.State.Version(),
-		}, bus.WithGroup(app.TargetConfigurationGroup(evt.ID)))
+		}, bus.WithGroup(app.TargetConfigurationGroup(evt.ID)), bus.WithPolicy(bus.JobPolicyMerge))
 	}
 }

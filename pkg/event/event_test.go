@@ -11,8 +11,6 @@ import (
 type (
 	domainEntity struct {
 		event.Emitter
-
-		name string
 	}
 
 	domainEventA struct {
@@ -21,8 +19,6 @@ type (
 
 	domainEventB struct {
 		bus.Notification
-
-		data string
 	}
 )
 
@@ -51,29 +47,4 @@ func Test_Emitter(t *testing.T) {
 
 	// 	testutil.HasLength(t, Unwrap(&ent), 0)
 	// })
-
-	t.Run("should replace an event if it already exists", func(t *testing.T) {
-		ent := domainEntity{}
-
-		ent.apply(domainEventA{})
-		ent.apply(domainEventB{})
-		ent.apply(domainEventA{})
-
-		event.Replace(&ent, domainEventB{data: "updated one"})
-
-		testutil.HasNEvents(t, &ent, 3)
-		evt := testutil.EventIs[domainEventB](t, &ent, 2)
-		testutil.Equals(t, "updated one", evt.data)
-	})
-}
-
-func (d *domainEntity) apply(e event.Event) {
-	switch e.(type) {
-	case domainEventA:
-		d.name = "eventA"
-	case domainEventB:
-		d.name = "eventB"
-	}
-
-	event.Store(d, e)
 }

@@ -86,13 +86,13 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("could be marked has ended with services", func(t *testing.T) {
-		var (
-			err      error
-			services domain.Services
-		)
+		var err error
 
 		dpl := must.Panic(app.NewDeployment(number, nonVcsMeta, domain.Production, uid))
-		services, _ = services.Append(dpl.Config(), "aservice", "an/image", false)
+		services := domain.Services{
+			dpl.Config().NewService("aservice", "an/image"),
+		}
+
 		dpl.HasStarted()
 
 		err = dpl.HasEnded(services, nil)

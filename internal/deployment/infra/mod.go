@@ -105,6 +105,9 @@ func Setup(
 	bus.On(b, cleanup_target.OnTargetCleanupRequestedHandler(scheduler))
 	bus.On(b, configure_target.OnTargetCreatedHandler(scheduler))
 	bus.On(b, configure_target.OnTargetStateChangedHandler(scheduler))
+	bus.On(b, configure_target.OnDeploymentStateChangedHandler(targetsStore, targetsStore))
+	bus.On(b, configure_target.OnAppEnvChangedHandler(targetsStore, targetsStore))
+	bus.On(b, configure_target.OnAppCleanupRequestedHandler(targetsStore, targetsStore))
 	bus.On(b, delete_target.OnTargetCleanupRequestedHandler(scheduler))
 
 	if err := db.Migrate(deploymentsqlite.Migrations); err != nil {

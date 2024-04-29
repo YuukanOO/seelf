@@ -9,7 +9,7 @@
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
 	import Dropdown from '$components/dropdown.svelte';
-	import { submitter } from '$lib/form.js';
+	import { submitter } from '$lib/form';
 	import service from '$lib/resources/users';
 	import l from '$lib/localization';
 

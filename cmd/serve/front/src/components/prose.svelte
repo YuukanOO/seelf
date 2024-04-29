@@ -16,6 +16,12 @@
 		color: var(--co-primary-4);
 	}
 
+	.prose a:hover,
+	.prose a:focus {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
 	.prose strong {
 		color: var(--co-text-5);
 		font-weight: 600;

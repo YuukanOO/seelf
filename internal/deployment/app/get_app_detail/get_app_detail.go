@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app"
-	"github.com/YuukanOO/seelf/internal/deployment/app/get_apps"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage"
@@ -19,16 +19,16 @@ type (
 	}
 
 	App struct {
-		ID                 string                       `json:"id"`
-		Name               string                       `json:"name"`
-		CleanupRequestedAt monad.Maybe[time.Time]       `json:"cleanup_requested_at"`
-		CleanupRequestedBy monad.Maybe[app.UserSummary] `json:"cleanup_requested_by"`
-		CreatedAt          time.Time                    `json:"created_at"`
-		CreatedBy          app.UserSummary              `json:"created_by"`
-		LatestDeployments  get_apps.LatestDeployments   `json:"latest_deployments"`
-		Production         EnvironmentConfig            `json:"production"`
-		Staging            EnvironmentConfig            `json:"staging"`
-		VersionControl     monad.Maybe[VersionControl]  `json:"version_control"`
+		ID                 string                                           `json:"id"`
+		Name               string                                           `json:"name"`
+		CleanupRequestedAt monad.Maybe[time.Time]                           `json:"cleanup_requested_at"`
+		CleanupRequestedBy monad.Maybe[app.UserSummary]                     `json:"cleanup_requested_by"`
+		CreatedAt          time.Time                                        `json:"created_at"`
+		CreatedBy          app.UserSummary                                  `json:"created_by"`
+		LatestDeployments  app.LatestDeployments[get_deployment.Deployment] `json:"latest_deployments"`
+		Production         EnvironmentConfig                                `json:"production"`
+		Staging            EnvironmentConfig                                `json:"staging"`
+		VersionControl     monad.Maybe[VersionControl]                      `json:"version_control"`
 	}
 
 	VersionControl struct {

@@ -32,9 +32,11 @@ type (
 	}
 
 	TargetSummary struct {
-		ID   string              `json:"id"`
-		Name monad.Maybe[string] `json:"name"` // Since the target could have been deleted, the name is nullable here.
-		Url  monad.Maybe[string] `json:"url"`
+		ID          string                   `json:"id"`
+		Name        monad.Maybe[string]      `json:"name"` // Since the target could have been deleted, the name is nullable here.
+		Url         monad.Maybe[string]      `json:"url"`
+		Status      monad.Maybe[uint8]       `json:"status"`
+		Entrypoints monad.Maybe[Entrypoints] `json:"-"`
 	}
 
 	Source struct {
@@ -56,11 +58,24 @@ type (
 
 	Services []Service
 
+	Entrypoints map[string]map[string]map[string]monad.Maybe[uint]
+
+	Entrypoint struct {
+		Name          string              `json:"name"`
+		Router        string              `json:"router"`
+		Subdomain     monad.Maybe[string] `json:"subdomain"`
+		IsCustom      bool                `json:"is_custom"`
+		Port          uint                `json:"port"`
+		Url           monad.Maybe[string] `json:"url"`
+		PublishedPort monad.Maybe[uint]   `json:"published_port"`
+	}
+
 	Service struct {
-		Name      string              `json:"name"`
-		Image     string              `json:"image"`
-		Subdomain monad.Maybe[string] `json:"subdomain"`
-		Url       monad.Maybe[string] `json:"url"`
+		Name        string              `json:"name"`
+		Image       string              `json:"image"`
+		Entrypoints []Entrypoint        `json:"entrypoints"`
+		Url         monad.Maybe[string] `json:"url"`       // For compatibility with prior versions
+		Subdomain   monad.Maybe[string] `json:"subdomain"` // For compatibility with prior versions
 	}
 )
 
@@ -68,4 +83,8 @@ func (Query) Name_() string { return "deployment.query.get_deployment" }
 
 func (s *Services) Scan(value any) error {
 	return storage.ScanJSON(value, s)
+}
+
+func (e *Entrypoints) Scan(value any) error {
+	return storage.ScanJSON(value, e)
 }

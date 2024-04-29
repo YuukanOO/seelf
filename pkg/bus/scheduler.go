@@ -16,6 +16,7 @@ const (
 	JobPolicyRetryPreserveOrder      JobPolicy = 1 << iota // Retry the job but preserve the order among the group
 	JobPolicyWaitForOthersResourceID                       // Wait for other jobs on the same resource id to finish before processing
 	JobPolicyCancellable                                   // The job can be cancellable by a user
+	JobPolicyMerge                                         // If another job for the same resource and the same message name exists and is pending, replace it's payload
 )
 
 type (
@@ -109,6 +110,11 @@ func NewScheduler(adapter ScheduledJobsStore, log log.Logger, bus Dispatcher, po
 	}
 
 	for i, g := range groups {
+		// Should always have at least one worker
+		if g.Size < 1 {
+			g.Size = 1
+		}
+
 		s.groups[i] = &workerGroup{
 			jobs: make(chan ScheduledJob),
 			size: g.Size,
@@ -224,7 +230,7 @@ func (s *defaultScheduler) handleJobReturn(ctx context.Context, job ScheduledJob
 		return
 	}
 
-	s.logger.Errorw("error while processing job, it will be retried later",
+	s.logger.Warnw("error while processing job, it will be retried later",
 		"job", job.ID(),
 		"name", job.Message().Name_(),
 		"error", err)

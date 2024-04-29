@@ -14,12 +14,12 @@ type Error struct {
 	Detail error  `json:"detail,omitempty"`
 }
 
-// Instantiates a new RuleError with the given code.
+// Instantiates a new Error with the given code.
 func New(code string) error {
 	return Error{code, nil}
 }
 
-// Instantiates a new RuleError error which wrap the detail error.
+// Instantiates a new Error error which wrap the detail error.
 func NewWithDetail(code string, detailErr error) error {
 	return Error{code, detailErr}
 }
@@ -45,8 +45,8 @@ func (e Error) Is(err error) bool {
 }
 
 // Wrap the given detail error into the base err.
-// If err is an RuleError, its Detail field will be populated, else
-// a new RuleError will be created.
+// If err is an Error, its Detail field will be populated, else
+// a new Error will be created.
 func Wrap(err error, detail error) error {
 	derr, ok := err.(Error)
 
@@ -64,15 +64,4 @@ func As[T error](err error) (T, bool) {
 	var target T
 	ok := errors.As(err, &target)
 	return target, ok
-}
-
-// Returns the first non nil error
-func Any(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

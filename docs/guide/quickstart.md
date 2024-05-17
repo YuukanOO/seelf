@@ -8,12 +8,12 @@ This quickstart will guide through installing and deploying your first applicati
 
 ![seelf home screenshot](/seelf-home.jpeg)
 
-At its core, **seelf** just reads a `compose.yml` file, **deploy** services which [must be exposed](/reference/targets#docker) and manage **domains** and **certificates** for you.
+At its core, **seelf** just reads a `compose.yml` file, **deploy** services which [must be exposed](/reference/providers/docker#exposing-services) and manage **domains** and **certificates** for you.
 
 For the majority of cases, a locally working `compose.yml` file is sufficient, making the **transition from a local stack to a remote one a breeze**.
 
 ::: info
-For now, only the [Docker provider](/reference/targets#docker) is available but that may change in the future to support others as well, such as **Docker swarm**, **Podman**, **Kubernetes** and so on.
+For now, only the [Docker provider](/reference/providers/docker) is available but that may change in the future to support others as well, such as **Docker swarm**, **Podman**, **Kubernetes** and so on.
 :::
 
 Think of it as an alternative to services like [Heroku](https://www.heroku.com/), [Dokku](https://dokku.com/), [Caprover](https://caprover.com/), [Coolify](https://coolify.io/).

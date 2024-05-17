@@ -12,7 +12,7 @@ An archive containing your project files to be deployed.
 
 ### Raw file
 
-A raw file. For example, a `compose.yml` content when using the [Docker provider](/reference/targets#docker).
+A raw file. For example, a `compose.yml` content when using the [Docker provider](/reference/providers/docker).
 
 ### Git
 

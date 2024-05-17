@@ -2,7 +2,7 @@
 
 ## How does seelf know which services to expose from a `compose.yml` file?
 
-See the [providers page](/reference/targets#docker) for more information.
+See the [providers page](/reference/providers/docker#exposing-services) for more information.
 
 ## Integrating seelf in your CI
 

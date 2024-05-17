@@ -1,6 +1,6 @@
 # API
 
-This part is currently being worked on. For now, only routes related to the deployment can be accessed with the API Key retrieved from the **profile page**. For more information, you can check the [`api.http` file](https://github.com/YuukanOO/seelf/blob/main/api.http) in the source code.
+This part is currently [being worked on](https://github.com/YuukanOO/seelf/issues/45). For now, only routes related to the deployment can be accessed with the API Key retrieved from the **profile page**. For more information, you can check the [`api.http` file](https://github.com/YuukanOO/seelf/blob/main/api.http) in the source code.
 
 Every other routes use a cookie authentication.
 

@@ -4,13 +4,9 @@ Defines a new **stack of services** exposed on a [target subdomain](/reference/t
 
 ## Multiple exposed services
 
-When you define a complete stack for your application, you may have multiple services exposed. This is totally allowed by **seelf**. When [identifying services](/reference/targets#exposing-services) which must be exposed, the first one in **alphabetical order** will become the **default service** and take the default subdomain.
+When you define a complete stack for your application, you may have multiple services exposed. This is totally allowed by **seelf**. When [identifying services](/reference/providers/docker#exposing-services) which must be exposed, the first one in **alphabetical order** will become the **default service** and take the default subdomain.
 
 Other services will be exposed using a subdomain on the default one.
-
-::: warning
-Only web services are supported [for now](https://github.com/YuukanOO/seelf/issues/17). No TCP / UDP services yet.
-:::
 
 ## Environments {#environments}
 

@@ -4,6 +4,10 @@ A number of **background tasks** are managed by **seelf**. You can check the job
 
 For the vast majority of cases, you may never have to look at them as they are processed without issues.
 
+::: info
+By default, **jobs in error** state are retried every **15 seconds**. This is because some errors (such as the `target_configuration_in_progress`) are expected and will delay the job.
+:::
+
 ## Cancellation
 
 Since a target on which you have, in the past, successfully deployed something can be destroyed from your side, **seelf** provides the ability to **cancel some tasks**.

@@ -43,7 +43,13 @@ export default defineConfig({
           },
           {
             text: "Providers",
-            link: "/reference/targets#providers",
+            link: "/reference/providers",
+            items: [
+              {
+                text: "Docker",
+                link: "/reference/providers/docker",
+              },
+            ],
           },
           {
             text: "Applications",

@@ -471,13 +471,19 @@ func populateServicesUrls(d *get_deployment.Deployment) {
 	for i, service := range services {
 		// Compatibility with old deployments
 		if service.Url.HasValue() || service.Subdomain.HasValue() {
-			services[i].Entrypoints = append(service.Entrypoints, get_deployment.Entrypoint{
+			compatEntrypoint := get_deployment.Entrypoint{
 				Name:      "default",
 				Router:    string(domain.RouterHttp),
 				Port:      80,
 				Subdomain: service.Subdomain, // (> 2.0.0 - < 2.2.0)
 				Url:       service.Url,       // (< 2.0.0)
-			})
+			}
+
+			if subdomain, isSet := compatEntrypoint.Subdomain.TryGet(); !service.Url.HasValue() && isSet {
+				compatEntrypoint.Url.Set(targetScheme + subdomain + "." + targetHost)
+			}
+
+			services[i].Entrypoints = append(service.Entrypoints, compatEntrypoint)
 			continue
 		}
 

@@ -69,7 +69,8 @@
 	--ra-4: 0.5rem;
 
 	/** Outlines */
-	--ou-primary: var(--co-primary-3) solid 3px;
+	--ou-size: 3px;
+	--ou-primary: var(--co-primary-3) solid var(--ou-size);
 
 	/** Misc. */
 	--mi-container-width: 56rem;

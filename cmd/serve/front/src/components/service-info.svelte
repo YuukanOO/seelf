@@ -12,7 +12,7 @@
 		<div class="image-pill">{data.image}</div>
 	</Stack>
 	{#if data.entrypoints && data.entrypoints.length > 0}
-		<Stack as="ul" wrap="wrap" gap={1}>
+		<Stack as="ul" class="entrypoints" wrap="wrap" gap={0}>
 			{#each data.entrypoints as entrypoint (entrypoint.name)}
 				<li class="entrypoint">
 					<EntrypointPill data={entrypoint} />
@@ -30,8 +30,13 @@
 		padding: var(--sp-2);
 	}
 
+	.entrypoints {
+		margin: calc(-1 * var(--ou-size));
+	}
+
 	.entrypoint {
 		overflow: hidden;
+		padding: var(--ou-size);
 	}
 
 	.image-pill {

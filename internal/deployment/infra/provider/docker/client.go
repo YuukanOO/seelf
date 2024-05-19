@@ -152,6 +152,6 @@ func (c *client) RemoveResources(ctx context.Context, criteria filters.Args) err
 	return nil
 }
 
-func (c *client) close() error {
+func (c *client) Close() error {
 	return c.api.Close()
 }

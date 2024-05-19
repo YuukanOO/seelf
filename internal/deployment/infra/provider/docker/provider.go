@@ -170,7 +170,7 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) (domain.Target
 		return nil, err
 	}
 
-	defer client.close()
+	defer client.Close()
 
 	project, assigned, err := newProxyProjectBuilder(client, target).Build(ctx)
 
@@ -204,7 +204,7 @@ func (d *docker) Expose(ctx context.Context, target domain.Target, container str
 		return err
 	}
 
-	defer client.close()
+	defer client.Close()
 
 	err = client.api.NetworkConnect(ctx, targetPublicNetworkName(target.ID()), container, nil)
 
@@ -230,7 +230,7 @@ func (d *docker) Deploy(ctx context.Context, deploymentCtx domain.DeploymentCont
 		return nil, ErrTargetConnectFailed
 	}
 
-	defer client.close()
+	defer client.Close()
 
 	logger.Stepf("successfully connected to docker version %s", client.version)
 
@@ -292,7 +292,7 @@ func (d *docker) CleanupTarget(ctx context.Context, target domain.Target, strate
 		return err
 	}
 
-	defer client.close()
+	defer client.Close()
 
 	// TODO: We should probably prune all images and docker builder cache to free up some space
 	return client.RemoveResources(ctx, filters.NewArgs(
@@ -311,7 +311,7 @@ func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Ta
 		return err
 	}
 
-	defer client.close()
+	defer client.Close()
 
 	return client.RemoveResources(ctx, filters.NewArgs(
 		filters.Arg("label", AppLabel+"="+string(app)),

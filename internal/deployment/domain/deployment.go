@@ -78,6 +78,10 @@ type (
 func (DeploymentCreated) Name_() string      { return "deployment.event.deployment_created" }
 func (DeploymentStateChanged) Name_() string { return "deployment.event.deployment_state_changed" }
 
+func (e DeploymentStateChanged) HasSucceeded() bool {
+	return e.State.Status() == DeploymentStatusSucceeded
+}
+
 // Creates a new deployment for this app. This method acts as a factory for the deployment
 // entity to make sure a new deployment can be created for an app.
 func (a *App) NewDeployment(

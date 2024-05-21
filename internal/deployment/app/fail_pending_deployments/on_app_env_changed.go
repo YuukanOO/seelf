@@ -10,8 +10,7 @@ import (
 
 func OnAppEnvChangedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.AppEnvChanged] {
 	return func(ctx context.Context, evt domain.AppEnvChanged) error {
-		// No target change, nothing to do
-		if evt.Config.Target() == evt.OldConfig.Target() {
+		if !evt.TargetHasChanged() {
 			return nil
 		}
 

@@ -194,6 +194,29 @@ func Test_Deployment(t *testing.T) {
 	})
 }
 
+func Test_DeploymentEvents(t *testing.T) {
+	t.Run("DeploymentStateChanged should expose a method to check for success state", func(t *testing.T) {
+		app := must.Panic(domain.NewApp("my-app",
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("production-target"), true, true),
+			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("staging-target"), true, true),
+			"uid",
+		))
+		dpl := must.Panic(app.NewDeployment(1, meta{}, domain.Staging, "uid"))
+		testutil.IsNil(t, dpl.HasStarted())
+		testutil.IsNil(t, dpl.HasEnded(nil, nil))
+
+		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
+		testutil.IsTrue(t, evt.HasSucceeded())
+
+		dpl = must.Panic(app.NewDeployment(2, meta{}, domain.Staging, "uid"))
+		testutil.IsNil(t, dpl.HasStarted())
+		testutil.IsNil(t, dpl.HasEnded(nil, errors.New("failed")))
+
+		evt = testutil.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
+		testutil.IsFalse(t, evt.HasSucceeded())
+	})
+}
+
 type meta struct {
 	isVCS bool
 }

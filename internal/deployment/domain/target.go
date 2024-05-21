@@ -132,6 +132,10 @@ func (TargetEntrypointsChanged) Name_() string { return "deployment.event.target
 func (TargetCleanupRequested) Name_() string   { return "deployment.event.target_cleanup_requested" }
 func (TargetDeleted) Name_() string            { return "deployment.event.target_deleted" }
 
+func (e TargetStateChanged) WentToConfiguringState() bool {
+	return e.State.status == TargetStatusConfiguring
+}
+
 // Builds a new deployment target.
 func NewTarget(
 	name string,

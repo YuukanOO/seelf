@@ -12,7 +12,7 @@ func OnDeploymentStateChangedHandler(
 	writer domain.TargetsWriter,
 ) bus.SignalHandler[domain.DeploymentStateChanged] {
 	return func(ctx context.Context, evt domain.DeploymentStateChanged) error {
-		if evt.State.Status() != domain.DeploymentStatusSucceeded {
+		if !evt.HasSucceeded() {
 			return nil
 		}
 

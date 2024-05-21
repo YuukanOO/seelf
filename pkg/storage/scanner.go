@@ -26,8 +26,7 @@ type (
 		Scan(...any) error
 	}
 
-	Mapper[T any]                  func(Scanner) (T, error)         // Mapper function from a simple Scanner to an object of type T
-	Merger[TParent, TChildren any] func(TParent, TChildren) TParent // Merger function to handle relations by configuring how a child should be merged into its parent
+	Mapper[T any] func(Scanner) (T, error) // Mapper function from a simple Scanner to an object of type T
 )
 
 // Ease the scan of a json serialized field.

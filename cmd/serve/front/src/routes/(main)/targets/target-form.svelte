@@ -169,6 +169,7 @@
 							<TextArea
 								label="target.docker.private_key"
 								bind:value={docker.private_key}
+								code
 								rows={7}
 								remoteError={errors?.['docker.private_key']}
 							>

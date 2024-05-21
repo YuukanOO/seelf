@@ -2,7 +2,13 @@ package storage
 
 import (
 	"encoding/json"
-	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+const (
+	secretChar  = "*"
+	newlineChar = "\n"
 )
 
 // Represents a specific string that should be kept secret and should never be exposed.
@@ -16,5 +22,11 @@ func (s *SecretString) Scan(src any) error {
 }
 
 func (s SecretString) MarshalJSON() ([]byte, error) {
-	return json.Marshal("<unexposed " + strconv.Itoa(len(s)) + " characters>")
+	lines := strings.Split(string(s), newlineChar)
+
+	for i, line := range lines {
+		lines[i] = strings.Repeat(secretChar, utf8.RuneCountInString(line))
+	}
+
+	return json.Marshal(strings.Join(lines, newlineChar))
 }

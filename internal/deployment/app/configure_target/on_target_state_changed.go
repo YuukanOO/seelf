@@ -10,7 +10,7 @@ import (
 
 func OnTargetStateChangedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.TargetStateChanged] {
 	return func(ctx context.Context, evt domain.TargetStateChanged) error {
-		if evt.State.Status() != domain.TargetStatusConfiguring {
+		if !evt.WentToConfiguringState() {
 			return nil
 		}
 

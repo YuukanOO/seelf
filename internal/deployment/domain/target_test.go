@@ -649,6 +649,24 @@ func Test_Target(t *testing.T) {
 	})
 }
 
+func Test_TargetEvents(t *testing.T) {
+	t.Run("TargetStateChanged should provide a function to check for configuration changes", func(t *testing.T) {
+		target := must.Panic(domain.NewTarget("my-target",
+			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://my-url.com")), true),
+			domain.NewProviderConfigRequirement(dummyProviderConfig{}, true), "uid",
+		))
+		target.Configured(target.CurrentVersion(), nil, nil)
+
+		evt := testutil.EventIs[domain.TargetStateChanged](t, &target, 1)
+		testutil.IsFalse(t, evt.WentToConfiguringState())
+
+		testutil.IsNil(t, target.Reconfigure())
+
+		evt = testutil.EventIs[domain.TargetStateChanged](t, &target, 2)
+		testutil.IsTrue(t, evt.WentToConfiguringState())
+	})
+}
+
 type dummyProviderConfig struct {
 	data        string
 	fingerprint string

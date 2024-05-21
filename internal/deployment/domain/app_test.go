@@ -243,3 +243,20 @@ func Test_App(t *testing.T) {
 		testutil.Equals(t, app.ID(), evt.ID)
 	})
 }
+
+func Test_AppEvents(t *testing.T) {
+	t.Run("AppEnvChanged should provide a function to check for target changes", func(t *testing.T) {
+		evt := domain.AppEnvChanged{
+			ID:          "app",
+			Environment: domain.Production,
+			Config:      domain.NewEnvironmentConfig("target"),
+			OldConfig:   domain.NewEnvironmentConfig("target"),
+		}
+
+		testutil.IsFalse(t, evt.TargetHasChanged())
+
+		evt.OldConfig = domain.NewEnvironmentConfig("another-target")
+
+		testutil.IsTrue(t, evt.TargetHasChanged())
+	})
+}

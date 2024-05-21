@@ -111,7 +111,7 @@ func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deploy
 			WHERE deployments.app_id = ?`, cmd.AppID).
 		S(builder.MaybeValue(cmd.Environment, "AND deployments.config_environment = ?")).
 		F("ORDER BY deployments.deployment_number DESC").
-		Paginate(s.db, ctx, deploymentMapper, cmd.Page.Get(1), 5)
+		Paginate(s.db, ctx, deploymentMapper(nil), cmd.Page.Get(1), 5)
 }
 
 func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Query) (get_deployment.Deployment, error) {
@@ -141,7 +141,7 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Quer
 		INNER JOIN users ON users.id = deployments.requested_by
 		LEFT JOIN targets ON targets.id = deployments.config_target
 		WHERE deployments.app_id = ? AND deployments.deployment_number = ?`, cmd.AppID, cmd.DeploymentNumber).
-		One(s.db, ctx, deploymentDetailMapper)
+		One(s.db, ctx, deploymentDetailMapper(nil))
 }
 
 func (s *gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]get_target.Target, error) {
@@ -202,8 +202,7 @@ var getDeploymentDataloader = builder.NewDataloader(
 		_, err := builder.
 			Query[get_app_deployments.Deployment](`
 			SELECT
-				deployments.app_id -- The first one will be used by the dataloader merge process
-				,deployments.app_id
+				deployments.app_id
 				,deployments.deployment_number
 				,deployments.config_environment
 				,deployments.config_target
@@ -225,7 +224,7 @@ var getDeploymentDataloader = builder.NewDataloader(
 			LEFT JOIN targets ON targets.id = deployments.config_target`).
 			S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
 			F("GROUP BY deployments.app_id, deployments.config_environment").
-			All(e, ctx, builder.Merge(kr, deploymentMapper, appMerger))
+			All(e, ctx, deploymentMapper(&kr))
 
 		return err
 	})
@@ -236,8 +235,7 @@ var getDeploymentDetailDataloader = builder.NewDataloader(
 		_, err := builder.
 			Query[get_deployment.Deployment](`
 			SELECT
-				deployments.app_id -- The first one will be used by the dataloader merge process
-				,deployments.app_id
+				deployments.app_id
 				,deployments.deployment_number
 				,deployments.config_environment
 				,deployments.config_target
@@ -261,30 +259,10 @@ var getDeploymentDetailDataloader = builder.NewDataloader(
 			LEFT JOIN targets ON targets.id = deployments.config_target`).
 			S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
 			F("GROUP BY deployments.app_id, deployments.config_environment").
-			All(e, ctx, builder.Merge(kr, deploymentDetailMapper, appDetailMerger))
+			All(e, ctx, deploymentDetailMapper(&kr))
 
 		return err
 	})
-
-func appMerger(a get_apps.App, d get_app_deployments.Deployment) get_apps.App {
-	switch domain.Environment(d.Environment) {
-	case domain.Production:
-		a.LatestDeployments.Production.Set(d)
-	case domain.Staging:
-		a.LatestDeployments.Staging.Set(d)
-	}
-	return a
-}
-
-func appDetailMerger(a get_app_detail.App, d get_deployment.Deployment) get_app_detail.App {
-	switch domain.Environment(d.Environment) {
-	case domain.Production:
-		a.LatestDeployments.Production.Set(d)
-	case domain.Staging:
-		a.LatestDeployments.Staging.Set(d)
-	}
-	return a
-}
 
 // AppData scanner which include last deployments by environment.
 func appDataMapper(s storage.Scanner) (a get_apps.App, err error) {
@@ -367,90 +345,118 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 	return a, err
 }
 
-func deploymentMapper(scanner storage.Scanner) (d get_app_deployments.Deployment, err error) {
-	var (
-		maxRequestedAt string
-		sourceData     string
-		targetStatus   *uint8
-	)
+func deploymentMapper(kr *builder.KeyedResult[get_apps.App]) storage.Mapper[get_app_deployments.Deployment] {
+	return func(scanner storage.Scanner) (d get_app_deployments.Deployment, err error) {
+		var (
+			maxRequestedAt string
+			sourceData     string
+			targetStatus   *uint8
+		)
 
-	err = scanner.Scan(
-		&d.AppID,
-		&d.DeploymentNumber,
-		&d.Environment,
-		&d.Target.ID,
-		&d.Target.Name,
-		&d.Target.Url,
-		&targetStatus,
-		&d.Source.Discriminator,
-		&sourceData,
-		&d.State.Status,
-		&d.State.ErrCode,
-		&d.State.StartedAt,
-		&d.State.FinishedAt,
-		&d.RequestedAt,
-		&d.RequestedBy.ID,
-		&d.RequestedBy.Email,
-		&maxRequestedAt,
-	)
+		err = scanner.Scan(
+			&d.AppID,
+			&d.DeploymentNumber,
+			&d.Environment,
+			&d.Target.ID,
+			&d.Target.Name,
+			&d.Target.Url,
+			&targetStatus,
+			&d.Source.Discriminator,
+			&sourceData,
+			&d.State.Status,
+			&d.State.ErrCode,
+			&d.State.StartedAt,
+			&d.State.FinishedAt,
+			&d.RequestedAt,
+			&d.RequestedBy.ID,
+			&d.RequestedBy.Email,
+			&maxRequestedAt,
+		)
 
-	if err != nil {
+		if err != nil {
+			return d, err
+		}
+
+		if kr != nil {
+			kr.Update(d.AppID, func(a get_apps.App) get_apps.App {
+				switch domain.Environment(d.Environment) {
+				case domain.Production:
+					a.LatestDeployments.Production.Set(d)
+				case domain.Staging:
+					a.LatestDeployments.Staging.Set(d)
+				}
+				return a
+			})
+		}
+
+		// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
+		if targetStatus != nil {
+			d.Target.Status.Set(*targetStatus)
+		}
+
+		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
+
 		return d, err
 	}
-
-	// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
-	if targetStatus != nil {
-		d.Target.Status.Set(*targetStatus)
-	}
-
-	d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
-
-	return d, err
 }
 
-func deploymentDetailMapper(scanner storage.Scanner) (d get_deployment.Deployment, err error) {
-	var (
-		maxRequestedAt string
-		sourceData     string
-		targetStatus   *uint8
-	)
+func deploymentDetailMapper(kr *builder.KeyedResult[get_app_detail.App]) storage.Mapper[get_deployment.Deployment] {
 
-	err = scanner.Scan(
-		&d.AppID,
-		&d.DeploymentNumber,
-		&d.Environment,
-		&d.Target.ID,
-		&d.Target.Name,
-		&d.Target.Url,
-		&targetStatus,
-		&d.Target.Entrypoints,
-		&d.Source.Discriminator,
-		&sourceData,
-		&d.State.Status,
-		&d.State.ErrCode,
-		&d.State.Services,
-		&d.State.StartedAt,
-		&d.State.FinishedAt,
-		&d.RequestedAt,
-		&d.RequestedBy.ID,
-		&d.RequestedBy.Email,
-		&maxRequestedAt,
-	)
+	return func(scanner storage.Scanner) (d get_deployment.Deployment, err error) {
+		var (
+			maxRequestedAt string
+			sourceData     string
+			targetStatus   *uint8
+		)
 
-	if err != nil {
+		err = scanner.Scan(
+			&d.AppID,
+			&d.DeploymentNumber,
+			&d.Environment,
+			&d.Target.ID,
+			&d.Target.Name,
+			&d.Target.Url,
+			&targetStatus,
+			&d.Target.Entrypoints,
+			&d.Source.Discriminator,
+			&sourceData,
+			&d.State.Status,
+			&d.State.ErrCode,
+			&d.State.Services,
+			&d.State.StartedAt,
+			&d.State.FinishedAt,
+			&d.RequestedAt,
+			&d.RequestedBy.ID,
+			&d.RequestedBy.Email,
+			&maxRequestedAt,
+		)
+
+		if err != nil {
+			return d, err
+		}
+
+		if kr != nil {
+			kr.Update(d.AppID, func(a get_app_detail.App) get_app_detail.App {
+				switch domain.Environment(d.Environment) {
+				case domain.Production:
+					a.LatestDeployments.Production.Set(d)
+				case domain.Staging:
+					a.LatestDeployments.Staging.Set(d)
+				}
+				return a
+			})
+		}
+		// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
+		if targetStatus != nil {
+			d.Target.Status.Set(*targetStatus)
+		}
+
+		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
+
+		populateServicesUrls(&d)
+
 		return d, err
 	}
-
-	// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
-	if targetStatus != nil {
-		d.Target.Status.Set(*targetStatus)
-	}
-
-	d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
-
-	populateServicesUrls(&d)
-
-	return d, err
 }
 
 // Since the target domain is dynamic, compute exposed service urls based on the presence

@@ -164,7 +164,6 @@ func (q *queryBuilder[T]) All(
 	results := make([]T, 0)
 
 	// Instantiates needed stuff for data loaders
-	// FIXME: maybe split this in a dedicated function to avoid the cost when no loaders are given
 	mappings := make([]KeysMapping, len(loaders))
 
 	for i := range mappings {

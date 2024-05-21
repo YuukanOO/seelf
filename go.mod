@@ -7,8 +7,9 @@ require (
 	github.com/docker/cli v26.0.1+incompatible
 	github.com/docker/compose/v2 v2.26.1
 	github.com/docker/docker v26.0.1+incompatible
+	github.com/docker/go-connections v0.5.0
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-git/go-git/v5 v5.10.0
+	github.com/go-git/go-git/v5 v5.11.0
 	github.com/golang-migrate/migrate/v4 v4.16.2
 	github.com/joho/godotenv v1.5.1
 	github.com/kevinburke/ssh_config v1.2.0
@@ -28,7 +29,6 @@ require (
 	github.com/Microsoft/hcsshim v0.11.4 // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20230923063757-afb1ddc0824c // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
-	github.com/acomagu/bufpipe v1.0.4 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.24.1 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.26.6 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.16 // indirect
@@ -63,7 +63,6 @@ require (
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.0 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203 // indirect

@@ -70,10 +70,7 @@ export interface TargetsService {
 	fetchAll(filters?: GetTargetsFilters, options?: FetchOptions): Promise<Target[]>;
 	fetchById(id: string, options?: FetchOptions): Promise<Target>;
 	queryAll(): QueryResult<Target[]>;
-	queryById(id: string): QueryResult<Target>;
 	delete(id: string): Promise<void>;
-	// fetchAll(options?: FetchOptions): Promise<AppData[]>;
-	// fetchById(id: string, options?: FetchOptions): Promise<AppDetailData>;
 }
 
 type Options = {
@@ -118,12 +115,6 @@ export class RemoteTargetsService implements TargetsService {
 
 	queryAll(): QueryResult<Target[]> {
 		return this._fetcher.query('/api/v1/targets', {
-			refreshInterval: this._options.pollingInterval
-		});
-	}
-
-	queryById(id: string): QueryResult<Target> {
-		return this._fetcher.query(`/api/v1/targets/${id}`, {
 			refreshInterval: this._options.pollingInterval
 		});
 	}

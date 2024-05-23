@@ -1,4 +1,5 @@
 import type { Locale, Translations } from '$lib/localization';
+import routes from '$lib/path';
 
 const translations = {
 	// Authentication
@@ -10,8 +11,7 @@ const translations = {
 		'You need at least one target to deploy your application. Head to the <a href="/targets">create target</a> page to create one.',
 	'app.not_found': "Looks like the application you're looking for does not exist. Head back to the",
 	'app.not_found.cta': 'homepage',
-	'app.blankslate.title': 'Looks like you have no application yet. Start by',
-	'app.blankslate.cta': 'creating one!',
+	'app.blankslate': `Looks like you have no application yet. <br />Applications represents <strong>services you want to deploy</strong> on your infrastructure. Start by <a href="${routes.createApp}">creating one!</a>`,
 	'app.new': 'New application',
 	'app.edit': 'Edit application',
 	'app.delete': 'Delete application',
@@ -38,9 +38,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'app.vcs.help':
 		'If not under version control, you will still be able to manually deploy your application.',
 	'app.vcs.token': 'Access token',
-	'app.vcs.token.help.instructions':
-		'Token used to fetch the provided repository. Generally known as <strong>Personal Access Token</strong>, you can find some instructions for',
-	'app.vcs.token.help.leave_empty': ', leave empty if the repository is public.',
+	'app.vcs.token.help': `Token used to fetch the provided repository. Generally known as <strong>Personal Access Token</strong>, you can find some instructions for <a href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token" rel="noopener noreferrer" target="_blank">Github</a> and <a href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html" rel="noopener noreferrer" target="_blank">Gitlab</a>, leave empty if the repository is public.`,
 	'app.environment.production': 'Production settings',
 	'app.environment.staging': 'Staging settings',
 	'app.environment.target': 'Deploy target',
@@ -76,8 +74,7 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'target.configuring': 'Target configuration in progress',
 	'target.configuring.description':
 		'Needed infrastructure is being deployed on the target, please wait.',
-	'target.blankslate.title': 'Looks like you have no target yet. Start by',
-	'target.blankslate.cta': 'creating one!',
+	'target.blankslate': `Looks like you have no target yet. <br />Targets determine on which host your <strong>applications will be deployed</strong> and which <strong>provider</strong> should be used. Start by <a href="${routes.createTarget}">creating one!</a>`,
 	'target.general': 'General settings',
 	'target.name.help': 'The name is being used only for display, it can be anything you want.',
 	'target.url.help':
@@ -127,6 +124,25 @@ You may reconsider and try to make the target reachable before deleting it.`,
 	'deployment.command.delete_target': 'Target removal',
 	'deployment.command.configure_target': 'Target configuration',
 	'deployment.command.deploy': 'Application deployment',
+	// Registries
+	'registry.new': 'New registry',
+	'registry.blankslate': `Looks like you have no custom registry yet. <br />If some of your images are <strong>hosted on private registries</strong>, <a href="${routes.createRegistry}">configure them here</a> to make them available.`,
+	'registry.not_found':
+		"Looks like the registry you're looking for does not exist. Head back to the",
+	'registry.not_found.cta': 'registries page',
+	'registry.delete': 'Delete registry',
+	'registry.delete.confirm': (name: string) =>
+		`Are you sure you want to delete the registry ${name}?`,
+	'registry.delete.failed': 'Deletion failed',
+	'registry.general': 'General settings',
+	'registry.url.help':
+		'Url of the registry. For a private Docker Hub registry, use the url <code>https://index.docker.io/v1/</code>.',
+	'registry.authentication': 'Authentication',
+	'registry.auth': 'Need authentication',
+	'registry.auth.help': 'Does the registry require authentication?',
+	'registry.username': 'Username',
+	'registry.password': 'Password',
+	'registry.name.help': 'The name is being used only for display, it can be anything you want.',
 	// Account
 	'profile.my': 'my profile',
 	'profile.logout': 'log out',
@@ -155,8 +171,10 @@ You may reconsider and try to make the target reachable before deleting it.`,
 	'deployment.promote.confirm': (number: number) =>
 		`The deployment #${number} will be promoted to the production environment. Do you confirm this action?`,
 	'deployment.promote.failed': 'Promote failed',
-	'deployment.blankslate.title': 'No deployment to show. Go ahead and',
-	'deployment.blankslate.cta': 'create the first one!',
+	'deployment.blankslate': (app: string) =>
+		`No deployment to show. Go ahead and <a href="${routes.createDeployment(
+			app
+		)}">create the first one!</a>`,
 	'deployment.environment': 'Environment',
 	'deployment.payload': 'Payload',
 	'deployment.payload.copy_curl': 'Copy cURL command',
@@ -204,6 +222,9 @@ You may reconsider and try to make the target reachable before deleting it.`,
 	'breadcrumb.target.new': 'New target',
 	'breadcrumb.target.settings': (name: string) => `${name} settings`,
 	'breadcrumb.jobs': 'Jobs',
+	'breadcrumb.registries': 'Registries',
+	'breadcrumb.registry.new': 'New registry',
+	'breadcrumb.registry.settings': (name: string) => `${name} settings`,
 	'breadcrumb.profile': 'Profile',
 	'breadcrumb.not_found': 'Not found',
 	// Footer

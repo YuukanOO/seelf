@@ -4,7 +4,6 @@
 	import Button from '$components/button.svelte';
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import EnvironmentCard from '$components/environment-card.svelte';
-	import Link from '$components/link.svelte';
 	import routes from '$lib/path';
 	import service from '$lib/resources/apps';
 	import l from '$lib/localization';
@@ -39,10 +38,7 @@
 {:else}
 	<BlankSlate>
 		<p>
-			{l.translate('deployment.blankslate.title')}
-			<Link href={routes.createDeployment(data.app.id)}>
-				{l.translate('deployment.blankslate.cta')}
-			</Link>
+			{@html l.translate('deployment.blankslate', [data.app.id])}
 		</p>
 	</BlankSlate>
 {/if}

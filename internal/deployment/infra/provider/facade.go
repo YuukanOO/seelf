@@ -33,14 +33,14 @@ func (f *facade) Prepare(ctx context.Context, payload any, existing ...domain.Pr
 	return nil, domain.ErrNoValidProviderFound
 }
 
-func (f *facade) Deploy(ctx context.Context, info domain.DeploymentContext, depl domain.Deployment, target domain.Target) (domain.Services, error) {
+func (f *facade) Deploy(ctx context.Context, info domain.DeploymentContext, depl domain.Deployment, target domain.Target, registries []domain.Registry) (domain.Services, error) {
 	provider, err := f.providerForTarget(target)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return provider.Deploy(ctx, info, depl, target)
+	return provider.Deploy(ctx, info, depl, target, registries)
 }
 
 func (f *facade) Setup(ctx context.Context, target domain.Target) (domain.TargetEntrypointsAssigned, error) {

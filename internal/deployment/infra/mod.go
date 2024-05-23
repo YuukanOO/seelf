@@ -8,8 +8,10 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/configure_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/create_registry"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/delete_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/delete_registry"
 	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/expose_seelf_container"
@@ -22,6 +24,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_app_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_target_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_app"
+	"github.com/YuukanOO/seelf/internal/deployment/app/update_registry"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_target"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
@@ -54,6 +57,7 @@ func Setup(
 	appsStore := deploymentsqlite.NewAppsStore(db)
 	deploymentsStore := deploymentsqlite.NewDeploymentsStore(db)
 	targetsStore := deploymentsqlite.NewTargetsStore(db)
+	registriesStore := deploymentsqlite.NewRegistriesStore(db)
 	deploymentQueryHandler := deploymentsqlite.NewGateway(db)
 
 	artifactManager := artifact.NewLocal(opts, logger)
@@ -73,7 +77,7 @@ func Setup(
 	bus.Register(b, create_app.Handler(appsStore, appsStore))
 	bus.Register(b, update_app.Handler(appsStore, appsStore))
 	bus.Register(b, queue_deployment.Handler(appsStore, deploymentsStore, deploymentsStore, sourceFacade))
-	bus.Register(b, deploy.Handler(deploymentsStore, deploymentsStore, artifactManager, sourceFacade, providerFacade, targetsStore))
+	bus.Register(b, deploy.Handler(deploymentsStore, deploymentsStore, artifactManager, sourceFacade, providerFacade, targetsStore, registriesStore))
 	bus.Register(b, request_app_cleanup.Handler(appsStore, appsStore))
 	bus.Register(b, delete_app.Handler(appsStore, appsStore, artifactManager))
 	bus.Register(b, cleanup_app.Handler(targetsStore, deploymentsStore, providerFacade))
@@ -87,12 +91,17 @@ func Setup(
 	bus.Register(b, request_target_cleanup.Handler(targetsStore, targetsStore, appsStore))
 	bus.Register(b, cleanup_target.Handler(targetsStore, deploymentsStore, providerFacade))
 	bus.Register(b, delete_target.Handler(targetsStore, targetsStore, providerFacade))
+	bus.Register(b, create_registry.Handler(registriesStore, registriesStore))
+	bus.Register(b, update_registry.Handler(registriesStore, registriesStore))
+	bus.Register(b, delete_registry.Handler(registriesStore, registriesStore))
 	bus.Register(b, deploymentQueryHandler.GetAllApps)
 	bus.Register(b, deploymentQueryHandler.GetAppByID)
 	bus.Register(b, deploymentQueryHandler.GetAllDeploymentsByApp)
 	bus.Register(b, deploymentQueryHandler.GetDeploymentByID)
 	bus.Register(b, deploymentQueryHandler.GetAllTargets)
 	bus.Register(b, deploymentQueryHandler.GetTargetByID)
+	bus.Register(b, deploymentQueryHandler.GetRegistries)
+	bus.Register(b, deploymentQueryHandler.GetRegistryByID)
 
 	bus.On(b, deploy.OnDeploymentCreatedHandler(scheduler))
 	bus.On(b, redeploy.OnAppEnvChangedHandler(appsStore, deploymentsStore, deploymentsStore))

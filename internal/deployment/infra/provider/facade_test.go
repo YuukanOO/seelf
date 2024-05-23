@@ -29,7 +29,7 @@ func Test_Facade(t *testing.T) {
 	t.Run("should return an error if no provider can handle the deployment", func(t *testing.T) {
 		sut := provider.NewFacade()
 
-		_, err := sut.Deploy(context.Background(), domain.DeploymentContext{}, depl, target)
+		_, err := sut.Deploy(context.Background(), domain.DeploymentContext{}, depl, target, nil)
 
 		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})

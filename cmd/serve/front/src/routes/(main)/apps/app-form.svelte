@@ -4,7 +4,6 @@
 	import FormErrors from '$components/form-errors.svelte';
 	import FormSection from '$components/form-section.svelte';
 	import Form from '$components/form.svelte';
-	import Link from '$components/link.svelte';
 	import Panel from '$components/panel.svelte';
 	import Stack from '$components/stack.svelte';
 	import TextInput from '$components/text-input.svelte';
@@ -204,20 +203,7 @@
 							bind:value={token}
 						>
 							<p>
-								{@html l.translate('app.vcs.token.help.instructions')}
-								<Link
-									external
-									newWindow
-									href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
-									>GitHub</Link
-								>
-								{l.translate('and')}
-								<Link
-									external
-									newWindow
-									href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
-									>GitLab</Link
-								>{l.translate('app.vcs.token.help.leave_empty')}
+								{@html l.translate('app.vcs.token.help')}
 							</p>
 						</TextInput>
 					{/if}

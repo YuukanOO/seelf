@@ -13,7 +13,8 @@ const schemeHttps = "https"
 
 // Url struct which embed an url.URL struct and provides additional methods and meaning.
 type Url struct {
-	value *url.URL
+	value url.URL
+	user  monad.Maybe[url.Userinfo]
 }
 
 var ErrInvalidUrl = apperr.New("invalid_url")
@@ -26,17 +27,26 @@ func UrlFrom(raw string) (Url, error) {
 		return Url{}, ErrInvalidUrl
 	}
 
-	return Url{u}, nil
+	var result Url
+
+	// We want to get rid of the pointer part so equality could work without specific handling
+	if u.User != nil {
+		result.user.Set(*u.User)
+		u.User = nil
+	}
+
+	result.value = *u
+
+	return result, nil
 }
 
-func (u Url) Host() string          { return u.value.Host }
-func (u Url) UseSSL() bool          { return u.value.Scheme == schemeHttps }
-func (u Url) Equals(other Url) bool { return u.value.String() == other.value.String() }
+func (u Url) Host() string { return u.value.Host }
+func (u Url) UseSSL() bool { return u.value.Scheme == schemeHttps }
 
 // Returns the user part of the url if any.
 func (u Url) User() (m monad.Maybe[string]) {
-	if u.value.User != nil {
-		m.Set(u.value.User.Username())
+	if usr, hasUser := u.user.TryGet(); hasUser {
+		m.Set(usr.Username())
 	}
 
 	return m
@@ -44,28 +54,33 @@ func (u Url) User() (m monad.Maybe[string]) {
 
 // Returns the root part of an url.
 func (u Url) Root() Url {
-	url := *u.value
-	url.RawQuery = ""
-	url.Path = ""
-	return Url{&url}
+	u.value.RawQuery = ""
+	u.value.Path = ""
+	return u
 }
 
 // Returns a new url representing a subdomain.
 func (u Url) SubDomain(subdomain string) Url {
-	url := *u.value
 	// FIXME: should we validate the given subdomain here? Or at least encode it
-	url.Host = subdomain + "." + u.Host()
-	return Url{&url}
+	u.value.Host = subdomain + "." + u.Host()
+	return u
 }
 
 // Returns a new url without the user part.
 func (u Url) WithoutUser() Url {
-	url := *u.value
-	url.User = nil
-	return Url{&url}
+	u.user.Unset()
+	return u
 }
 
-func (u Url) String() string { return u.value.String() }
+func (u Url) String() string {
+	raw := u.value
+
+	if usr, hasUser := u.user.TryGet(); hasUser {
+		raw.User = &usr
+	}
+
+	return raw.String()
+}
 
 func (u Url) Value() (driver.Value, error) {
 	return u.value.String(), nil
@@ -78,7 +93,7 @@ func (u *Url) Scan(value any) error {
 		return err
 	}
 
-	u.value = url.value
+	*u = url
 
 	return nil
 }

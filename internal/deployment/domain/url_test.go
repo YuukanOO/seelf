@@ -18,6 +18,7 @@ func Test_Url(t *testing.T) {
 			{"something.com", false},
 			{"http://something.com", true},
 			{"https://something.secure.com", true},
+			{"http://127.0.0.1", true},
 		}
 
 		for _, test := range tests {
@@ -103,6 +104,7 @@ func Test_Url(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://seelf@docker.localhost"))
 
 		testutil.Equals(t, "http://docker.localhost", url.WithoutUser().String())
+		testutil.Equals(t, "http://seelf@docker.localhost", url.String())
 
 		url = must.Panic(domain.UrlFrom("http://docker.localhost"))
 
@@ -113,5 +115,6 @@ func Test_Url(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://docker.localhost/some/path?query=value"))
 
 		testutil.Equals(t, "http://docker.localhost", url.Root().String())
+		testutil.Equals(t, "http://docker.localhost/some/path?query=value", url.String())
 	})
 }

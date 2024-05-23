@@ -34,7 +34,3 @@ func (c *VersionControl) HasUrl(url Url) {
 
 func (c VersionControl) Url() Url                   { return c.url }
 func (c VersionControl) Token() monad.Maybe[string] { return c.token }
-
-func (c VersionControl) Equals(other VersionControl) bool {
-	return other.url.Equals(c.url) && other.token == c.token
-}

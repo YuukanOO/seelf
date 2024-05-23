@@ -133,7 +133,12 @@ export default class CacheFetchService implements FetchService {
 		const result = await api<TOut, TIn>(method, url, body, options);
 
 		// Invalidate all the cache entries that matches the base key
-		const keys = [url, ...(options?.invalidate ?? [])];
+		const keys = options?.invalidate ?? [];
+
+		if (!options?.skipUrlInvalidate) {
+			keys.push(url);
+		}
+
 		await this._cache.invalidate(...keys);
 
 		return result;

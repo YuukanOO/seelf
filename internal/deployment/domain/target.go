@@ -241,7 +241,7 @@ func (t *Target) HasUrl(urlRequirement TargetUrlRequirement) error {
 		return err
 	}
 
-	if t.url.Equals(url) {
+	if t.url == url {
 		return nil
 	}
 

@@ -1,6 +1,7 @@
 package docker_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -12,27 +13,52 @@ import (
 
 func Test_Data(t *testing.T) {
 	t.Run("should be comparable", func(t *testing.T) {
-		var (
-			c1 domain.ProviderConfig = docker.Data{
-				Host: monad.Value[ssh.Host]("testdata"),
-				User: monad.Value("test"),
-			}
-			c2 domain.ProviderConfig = docker.Data{
-				Host: monad.Value[ssh.Host]("testdata"),
-				User: monad.Value("test"),
-			}
-			c3 domain.ProviderConfig = docker.Data{
-				Host: monad.Value[ssh.Host]("testdata"),
-			}
-			c4 domain.ProviderConfig = otherDataSameProperties{
-				Host: monad.Value[ssh.Host]("testdata"),
-				User: monad.Value("test"),
-			}
-		)
+		tests := []struct {
+			a        domain.ProviderConfig
+			b        domain.ProviderConfig
+			expected bool
+		}{
+			{
+				a: docker.Data{
+					Host: monad.Value[ssh.Host]("testdata"),
+					User: monad.Value("test"),
+				},
+				b: docker.Data{
+					Host: monad.Value[ssh.Host]("testdata"),
+					User: monad.Value("test"),
+				},
+				expected: true,
+			},
+			{
+				a: docker.Data{
+					Host: monad.Value[ssh.Host]("testdata"),
+					User: monad.Value("test"),
+				},
+				b: docker.Data{
+					Host: monad.Value[ssh.Host]("testdata"),
+				},
+				expected: false,
+			},
+			{
+				a: docker.Data{
+					Host: monad.Value[ssh.Host]("testdata"),
+					User: monad.Value("test"),
+				},
+				b: otherDataSameProperties{
+					Host: monad.Value[ssh.Host]("testdata"),
+					User: monad.Value("test"),
+				},
+				expected: false,
+			},
+		}
 
-		testutil.IsTrue(t, c1.Equals(c2))
-		testutil.IsFalse(t, c1.Equals(c3))
-		testutil.IsFalse(t, c2.Equals(c4))
+		for _, test := range tests {
+			t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+				got := test.a.Equals(test.b)
+
+				testutil.Equals(t, test.expected, got)
+			})
+		}
 	})
 }
 

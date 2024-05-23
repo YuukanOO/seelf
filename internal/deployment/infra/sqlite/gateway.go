@@ -10,6 +10,8 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_app_detail"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_apps"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_registries"
+	"github.com/YuukanOO/seelf/internal/deployment/app/get_registry"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_targets"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -194,6 +196,41 @@ func (s *gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_
 		LEFT JOIN users cusers ON cusers.id = targets.cleanup_requested_by
 		WHERE targets.id = ?`, cmd.ID).
 		One(s.db, ctx, targetMapper)
+}
+
+func (s *gateway) GetRegistries(ctx context.Context, cmd get_registries.Query) ([]get_registry.Registry, error) {
+	return builder.
+		Query[get_registry.Registry](`
+		SELECT
+			registries.id
+			,registries.name
+			,registries.url
+			,registries.credentials_username
+			,registries.credentials_password
+			,registries.created_at
+			,users.id
+			,users.email
+		FROM registries
+		INNER JOIN users ON users.id = registries.created_by`).
+		All(s.db, ctx, registryMapper)
+}
+
+func (s *gateway) GetRegistryByID(ctx context.Context, cmd get_registry.Query) (get_registry.Registry, error) {
+	return builder.
+		Query[get_registry.Registry](`
+		SELECT
+			registries.id
+			,registries.name
+			,registries.url
+			,registries.credentials_username
+			,registries.credentials_password
+			,registries.created_at
+			,users.id
+			,users.email
+		FROM registries
+		INNER JOIN users ON users.id = registries.created_by
+		WHERE registries.id = ?`, cmd.ID).
+		One(s.db, ctx, registryMapper)
 }
 
 var getDeploymentDataloader = builder.NewDataloader(
@@ -558,4 +595,35 @@ func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
 	t.Provider.Data, err = get_target.ProviderConfigTypes.From(t.Provider.Kind, providerData)
 
 	return t, err
+}
+
+func registryMapper(scanner storage.Scanner) (r get_registry.Registry, err error) {
+	var (
+		credentialsUsername monad.Maybe[string]
+		credentialsPassword monad.Maybe[storage.SecretString]
+	)
+
+	err = scanner.Scan(
+		&r.ID,
+		&r.Name,
+		&r.Url,
+		&credentialsUsername,
+		&credentialsPassword,
+		&r.CreatedAt,
+		&r.CreatedBy.ID,
+		&r.CreatedBy.Email,
+	)
+
+	if err != nil {
+		return r, err
+	}
+
+	if usr, isSet := credentialsUsername.TryGet(); isSet {
+		r.Credentials.Set(get_registry.Credentials{
+			Username: usr,
+			Password: credentialsPassword.Get(""),
+		})
+	}
+
+	return r, err
 }

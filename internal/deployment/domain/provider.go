@@ -28,7 +28,7 @@ type (
 		// Prepare the given payload representing a Provider specific configuration.
 		Prepare(ctx context.Context, payload any, existing ...ProviderConfig) (ProviderConfig, error)
 		// Deploy a deployment on the specified target and return services that has been deployed.
-		Deploy(context.Context, DeploymentContext, Deployment, Target) (Services, error)
+		Deploy(context.Context, DeploymentContext, Deployment, Target, []Registry) (Services, error)
 		// Setup a target by deploying the needed stuff to actually serve deployments.
 		Setup(context.Context, Target) (TargetEntrypointsAssigned, error)
 		// Remove target related configuration.

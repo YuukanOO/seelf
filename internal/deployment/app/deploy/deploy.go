@@ -31,6 +31,7 @@ func Handler(
 	source domain.Source,
 	provider domain.Provider,
 	targetsReader domain.TargetsReader,
+	registriesReader domain.RegistriesReader,
 ) bus.RequestHandler[bus.UnitType, Command] {
 	return func(ctx context.Context, cmd Command) (result bus.UnitType, finalErr error) {
 		result = bus.Unit
@@ -83,6 +84,7 @@ func Handler(
 		var (
 			deploymentCtx domain.DeploymentContext
 			services      domain.Services
+			registries    []domain.Registry
 		)
 
 		// This one is a special case to avoid to avoid many branches
@@ -139,8 +141,13 @@ func Handler(
 			return
 		}
 
+		// Fetch custom registries
+		if registries, finalErr = registriesReader.GetAll(ctx); finalErr != nil {
+			return
+		}
+
 		// Ask the provider to actually deploy the app
-		if services, finalErr = provider.Deploy(ctx, deploymentCtx, depl, target); finalErr != nil {
+		if services, finalErr = provider.Deploy(ctx, deploymentCtx, depl, target, registries); finalErr != nil {
 			return
 		}
 

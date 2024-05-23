@@ -207,7 +207,7 @@ func (a *App) UseVersionControl(config VersionControl) error {
 		return ErrAppCleanupRequested
 	}
 
-	if existing, isSet := a.versionControl.TryGet(); isSet && config.Equals(existing) {
+	if existing, isSet := a.versionControl.TryGet(); isSet && config == existing {
 		return nil
 	}
 

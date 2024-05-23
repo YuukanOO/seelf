@@ -22,6 +22,7 @@
 			<nav class="nav">
 				<Link href={routes.apps} class="link">{l.translate('breadcrumb.applications')}</Link>
 				<Link href={routes.targets} class="link">{l.translate('breadcrumb.targets')}</Link>
+				<Link href={routes.registries} class="link">{l.translate('breadcrumb.registries')}</Link>
 				<Link href={routes.jobs} class="link">{l.translate('breadcrumb.jobs')}</Link>
 			</nav>
 			<Account {user} />

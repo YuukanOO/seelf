@@ -2,7 +2,6 @@
 	import BlankSlate from '$components/blank-slate.svelte';
 	import Breadcrumb from '$components/breadcrumb.svelte';
 	import Button from '$components/button.svelte';
-	import Link from '$components/link.svelte';
 	import CardsGrid from '$components/cards-grid.svelte';
 	import routes from '$lib/path';
 	import service from '$lib/resources/targets';
@@ -25,8 +24,7 @@
 {:else}
 	<BlankSlate>
 		<p>
-			{l.translate('target.blankslate.title')}
-			<Link href={routes.createTarget}>{l.translate('target.blankslate.cta')}</Link>
+			{@html l.translate('target.blankslate')}
 		</p>
 	</BlankSlate>
 {/if}

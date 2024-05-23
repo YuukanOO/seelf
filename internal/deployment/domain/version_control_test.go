@@ -132,7 +132,7 @@ func Test_VersionControl(t *testing.T) {
 			f := tt.first()
 			s := tt.second()
 			t.Run(fmt.Sprintf("%v %v", f, s), func(t *testing.T) {
-				testutil.Equals(t, tt.expected, f.Equals(s))
+				testutil.Equals(t, tt.expected, f == s)
 			})
 		}
 	})

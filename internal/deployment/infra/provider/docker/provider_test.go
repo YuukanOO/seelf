@@ -207,7 +207,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 				data, err := provider.Prepare(context.Background(), tt.payload, tt.existing...)
 
 				testutil.IsNil(t, err)
-				testutil.IsTrue(t, tt.expected == data)
+				testutil.IsTrue(t, data.Equals(tt.expected))
 			})
 		}
 	})
@@ -548,7 +548,7 @@ volumes:
 
 		provider, mock := sut(opts)
 
-		services, err := provider.Deploy(context.Background(), ctx, depl, target)
+		services, err := provider.Deploy(context.Background(), ctx, depl, target, nil)
 
 		testutil.IsNil(t, err)
 		testutil.HasLength(t, mock.ups, 1)

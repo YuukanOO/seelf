@@ -37,13 +37,14 @@ func Test_Deploy(t *testing.T) {
 		opts := config.Default(config.WithTestDefaults())
 		store := memory.NewDeploymentsStore(data.deployments...)
 		targetsStore := memory.NewTargetsStore(data.targets...)
+		registriesStore := memory.NewRegistriesStore()
 		artifactManager := artifact.NewLocal(opts, logger)
 
 		t.Cleanup(func() {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return deploy.Handler(store, store, artifactManager, source, provider, targetsStore)
+		return deploy.Handler(store, store, artifactManager, source, provider, targetsStore, registriesStore)
 	}
 
 	t.Run("should fail silently if the deployment does not exists", func(t *testing.T) {
@@ -204,6 +205,6 @@ func (b *dummyProvider) Prepare(context.Context, any, ...domain.ProviderConfig) 
 	return nil, nil
 }
 
-func (b *dummyProvider) Deploy(context.Context, domain.DeploymentContext, domain.Deployment, domain.Target) (domain.Services, error) {
+func (b *dummyProvider) Deploy(context.Context, domain.DeploymentContext, domain.Deployment, domain.Target, []domain.Registry) (domain.Services, error) {
 	return domain.Services{}, b.err
 }

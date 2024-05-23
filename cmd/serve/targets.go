@@ -22,7 +22,7 @@ type createTargetBody struct {
 
 func (s *server) createTargetHandler() gin.HandlerFunc {
 	return http.Bind(s, func(c *gin.Context, body createTargetBody) error {
-		var ctx = c.Request.Context()
+		ctx := c.Request.Context()
 
 		if dockerBody, isSet := body.Docker.TryGet(); isSet {
 			body.Provider = dockerBody
@@ -54,7 +54,7 @@ type updateTargetBody struct {
 
 func (s *server) updateTargetHandler() gin.HandlerFunc {
 	return http.Bind(s, func(c *gin.Context, body updateTargetBody) error {
-		var ctx = c.Request.Context()
+		ctx := c.Request.Context()
 
 		body.ID = c.Param("id")
 

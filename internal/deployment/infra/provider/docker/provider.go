@@ -221,9 +221,15 @@ func (d *docker) Expose(ctx context.Context, target domain.Target, container str
 	return client.api.ContainerRestart(ctx, container, dockercontainer.StopOptions{})
 }
 
-func (d *docker) Deploy(ctx context.Context, deploymentCtx domain.DeploymentContext, depl domain.Deployment, target domain.Target) (domain.Services, error) {
+func (d *docker) Deploy(
+	ctx context.Context,
+	deploymentCtx domain.DeploymentContext,
+	depl domain.Deployment,
+	target domain.Target,
+	registries []domain.Registry,
+) (domain.Services, error) {
 	logger := deploymentCtx.Logger()
-	client, err := d.connect(ctx, logger, target)
+	client, err := d.connect(ctx, logger, target, registries...)
 
 	if err != nil {
 		logger.Error(err)
@@ -233,6 +239,10 @@ func (d *docker) Deploy(ctx context.Context, deploymentCtx domain.DeploymentCont
 	defer client.Close()
 
 	logger.Stepf("successfully connected to docker version %s", client.version)
+
+	if len(client.registries) > 0 {
+		logger.Infof("using custom registries: %s", strings.Join(client.registries, ", "))
+	}
 
 	project, services, err := newDeploymentProjectBuilder(deploymentCtx, depl).Build(ctx)
 
@@ -320,24 +330,24 @@ func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Ta
 	))
 }
 
-func (d *docker) tryConnect(ctx context.Context, out io.Writer, host monad.Maybe[ssh.Host]) (*client, error) {
+func (d *docker) tryConnect(ctx context.Context, out io.Writer, host monad.Maybe[ssh.Host], registries ...domain.Registry) (*client, error) {
 	// For tests, bypass the initialization and use the provided one
 	if d.client != nil {
 		return d.client, nil
 	}
 
-	return connect(ctx, out, host)
+	return connect(ctx, out, host, registries...)
 }
 
 // Connect to the docker daemon and return a new docker cli and compose service.
-func (d *docker) connect(ctx context.Context, logger domain.DeploymentLogger, target domain.Target) (*client, error) {
+func (d *docker) connect(ctx context.Context, logger domain.DeploymentLogger, target domain.Target, registries ...domain.Registry) (*client, error) {
 	data, ok := target.Provider().(Data)
 
 	if !ok {
 		return nil, domain.ErrInvalidProviderPayload
 	}
 
-	return d.tryConnect(ctx, logger, data.Host)
+	return d.tryConnect(ctx, logger, data.Host, registries...)
 }
 
 func (d *docker) configureTargetSSH(id domain.TargetID, config Data) error {

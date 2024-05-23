@@ -30,7 +30,7 @@
 	<tbody>
 		{#if !data || data.length === 0}
 			<tr>
-				<td colspan={columns.length}>
+				<td colspan={columns.length + ($$slots.expanded ? 1 : 0)}>
 					<BlankSlate>
 						<p>{l.translate('datatable.no_data')}</p>
 					</BlankSlate>

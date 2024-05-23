@@ -52,6 +52,28 @@ func (e TargetUrlRequirement) Error() error {
 
 func (e TargetUrlRequirement) Met() (Url, error) { return e.url, e.Error() }
 
+type RegistryUrlRequirement struct {
+	url    Url
+	unique bool
+}
+
+func NewRegistryUrlRequirement(url Url, unique bool) RegistryUrlRequirement {
+	return RegistryUrlRequirement{
+		url:    url,
+		unique: unique,
+	}
+}
+
+func (e RegistryUrlRequirement) Error() error {
+	if !e.unique {
+		return ErrUrlAlreadyTaken
+	}
+
+	return nil
+}
+
+func (e RegistryUrlRequirement) Met() (Url, error) { return e.url, e.Error() }
+
 type ProviderConfigRequirement struct {
 	config ProviderConfig
 	unique bool

@@ -14,7 +14,10 @@ const routes = {
 	targets: '/targets',
 	createTarget: '/targets/new',
 	editTarget: (id: string) => `/targets/${id}/edit`,
-	jobs: '/jobs'
+	jobs: '/jobs',
+	registries: '/registries',
+	createRegistry: '/registries/new',
+	editRegistry: (id: string) => `/registries/${id}/edit`
 } as const;
 
 export default routes;

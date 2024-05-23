@@ -31,6 +31,11 @@ export type MutateOptions = Pick<FetchOptions, 'fetch'> & {
 	 * url but you can specify other urls to invalidate here.
 	 */
 	invalidate?: string[];
+	/**
+	 * By default the url at which the mutate is done is invalidated but you
+	 * can override this behavior by setting this flag to true.
+	 */
+	skipUrlInvalidate?: boolean;
 };
 
 export type QueryResult<T> = {

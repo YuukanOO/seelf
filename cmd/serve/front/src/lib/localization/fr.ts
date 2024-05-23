@@ -1,4 +1,5 @@
 import type { AppTranslations, Locale } from '$lib/localization';
+import routes from '$lib/path';
 
 export default {
 	code: 'fr',
@@ -14,8 +15,7 @@ export default {
 		'app.not_found':
 			"Il semblerait que l'application que vous recherchez n'existe pas. Retournez à la",
 		'app.not_found.cta': "page d'accueil",
-		'app.blankslate.title': 'Aucune application trouvée, commencez par',
-		'app.blankslate.cta': 'en créer une !',
+		'app.blankslate': `Aucune application pour le moment. <br />Les applications représentent les <strong>services que vous souhaitez déployer</strong> sur votre infrastructure. Commencez par <a href="${routes.createApp}">en créer une !</a>`,
 		'app.new': 'Nouvelle application',
 		'app.edit': "Modifier l'application",
 		'app.delete': "Supprimer l'application",
@@ -42,9 +42,7 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées sur 
 		'app.vcs.help':
 			"Si vous n'utilisez pas de contrôle de version, vous pourrez toujours déployer manuellement votre application.",
 		'app.vcs.token': "Jeton d'accès",
-		'app.vcs.token.help.instructions':
-			"Jeton utilisé pour vous authentifier auprès du dépôt. Généralement connu sous le nom de <strong>Jeton d'accès personnel</strong>, vous pouvez trouver des instructions pour",
-		'app.vcs.token.help.leave_empty': ', laissez vide si le dépôt est public.',
+		'app.vcs.token.help': `Jeton utilisé pour vous authentifier auprès du dépôt. Généralement connu sous le nom de <strong>Jeton d'accès personnel</strong>, vous pouvez trouver des instructions pour <a href="https://docs.github.com/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token" rel="noopener noreferrer" target="_blank">Github</a> et <a href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html" rel="noopener noreferrer" target="_blank">Gitlab</a>, laissez vide si le dépôt est public.`,
 		'app.environment.production': 'Paramètres de production',
 		'app.environment.staging': 'Paramètres de staging',
 		'app.environment.target': 'Cible de déploiement',
@@ -82,8 +80,7 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées sur 
 		},
 		'target.configuring': 'Configuration de la cible en cours',
 		'target.configuring.description': `L'infrastructure nécessaire est en cours de déploiement, veuillez patienter.`,
-		'target.blankslate.title': 'Aucune cible trouvée, commencez par',
-		'target.blankslate.cta': 'en créer une !',
+		'target.blankslate': `Aucune cible pour le moment. <br />Les cibles déterminent sur quel hôte vos <strong>applications seront déployées</strong>. Commencez par <a href="${routes.createTarget}">en créer une !</a>`,
 		'target.general': 'Paramètres généraux',
 		'target.name.help': `Le nom est utilisé uniquement pour l'affichage. Vous pouvez choisir ce que vous voulez.`,
 		'target.url.help': `Toutes les applications déployées sur cette cible seront disponibles en tant que <strong>sous-domaine</strong> de cette URL racine (sans sous-chemin). Elle doit être <strong>unique</strong> parmi les cibles. Vous <strong>DEVEZ</strong> configurer un <strong>DNS wildcard</strong> pour les sous-domaines de telle sorte que <code>*.&lt;url configurée&gt;</code> redirige vers l'IP de cette cible.`,
@@ -130,6 +127,25 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'deployment.command.delete_target': 'Suppression de la cible',
 		'deployment.command.configure_target': 'Configuration de la cible',
 		'deployment.command.deploy': "Déploiement de l'application",
+		// Registries
+		'registry.new': 'Nouveau registre',
+		'registry.blankslate': `Aucun registre pour le moment. <br />Si certaines de vos images sont hébergées sur <strong>des registres privés</strong>, <a href="${routes.createRegistry}">configurer les ici</a> de manière à les rendre disponibles.`,
+		'registry.not_found':
+			"Il semblerait que le registre que vous recherchez n'existe pas. Retournez à la",
+		'registry.not_found.cta': 'page des registres',
+		'registry.delete': 'Supprimer le registre',
+		'registry.delete.confirm': (name: string) =>
+			`Voulez-vous vraiment supprimer le registre ${name} ?`,
+		'registry.delete.failed': 'Erreur de suppression',
+		'registry.general': 'Paramètres généraux',
+		'registry.url.help':
+			"Url du registre. Pour un registre privé Docker Hub, utiliser l'url <code>https://index.docker.io/v1/</code>.",
+		'registry.authentication': 'Authentification',
+		'registry.auth': 'Authentification nécessaire',
+		'registry.auth.help': 'Le registre nécessite t-il une authentification ?',
+		'registry.username': "Nom d'utilisateur",
+		'registry.password': 'Mot de passe',
+		'registry.name.help': `Le nom est utilisé uniquement pour l'affichage. Vous pouvez choisir ce que vous voulez.`,
 		// Account
 		'profile.my': 'mon profil',
 		'profile.logout': 'se déconnecter',
@@ -159,8 +175,10 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'deployment.promote.confirm': (number: number) =>
 			`Le déploiement #${number} sera promu sur l'environnement de production. Confirmez-vous cette action ?`,
 		'deployment.promote.failed': 'Erreur lors de la promotion',
-		'deployment.blankslate.title': 'Aucun déploiement trouvé. Commencez par',
-		'deployment.blankslate.cta': 'en créer un !',
+		'deployment.blankslate': (app: string) =>
+			`Aucun déploiement trouvé. Commencez par <a href="${routes.createDeployment(
+				app
+			)}">en créer un !</a>`,
 		'deployment.environment': 'Environnement',
 		'deployment.payload': 'Charge utile',
 		'deployment.payload.copy_curl': 'Copier la commande cURL',
@@ -209,6 +227,9 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'breadcrumb.target.new': 'Nouvelle cible',
 		'breadcrumb.target.settings': (name: string) => `Paramètres de ${name}`,
 		'breadcrumb.jobs': 'Tâches',
+		'breadcrumb.registries': 'Registres',
+		'breadcrumb.registry.new': 'Nouveau registre',
+		'breadcrumb.registry.settings': (name: string) => `Paramètes de ${name}`,
 		'breadcrumb.profile': 'Profil',
 		'breadcrumb.not_found': 'Ressource introuvable',
 		// Footer

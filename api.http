@@ -61,7 +61,9 @@ Content-Type: application/json
 {
     "name": "docker outside",
     "url": "http://docker.localhost",
-    "docker": {}
+    "docker": {
+        
+    }
 }
 
 ###
@@ -75,6 +77,44 @@ GET {{url}}/targets/{{createTarget.response.body.$.id}}
 ###
 
 DELETE {{url}}/targets/{{createTarget.response.body.$.id}}
+
+###
+
+GET {{url}}/registries
+
+###
+
+# @name createRegistry
+
+POST {{url}}/registries
+Content-Type: application/json
+
+{
+    "name": "Local registry",
+    "url": "http://localhost:5000"
+}
+
+###
+
+PATCH {{url}}/registries/{{createRegistry.response.body.$.id}}
+Content-Type: application/json
+
+{
+    "name": "Local registry",
+    "url": "http://localhost:5001",
+    "credentials": {
+        "username": "admin",
+        "password": "admin"
+    }
+}
+
+###
+
+DELETE {{url}}/registries/{{createRegistry.response.body.$.id}}
+
+###
+
+GET {{url}}/registries/{{createRegistry.response.body.$.id}}
 
 ###
 # @name createApp

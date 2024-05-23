@@ -4,9 +4,11 @@ import (
 	"context"
 	"io"
 
+	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/ssh"
 	"github.com/docker/cli/cli/command"
+	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/cli/cli/flags"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/compose/v2/pkg/compose"
@@ -20,13 +22,14 @@ import (
 
 // Wraps a docker API client and compose service and expose some utility methods.
 type client struct {
-	cli     command.Cli
-	api     dclient.APIClient
-	compose api.Service
-	version string
+	cli        command.Cli
+	api        dclient.APIClient
+	compose    api.Service
+	version    string
+	registries []string
 }
 
-func connect(ctx context.Context, out io.Writer, host monad.Maybe[ssh.Host]) (*client, error) {
+func connect(ctx context.Context, out io.Writer, host monad.Maybe[ssh.Host], registries ...domain.Registry) (*client, error) {
 	stream := io.Discard
 
 	if out != nil {
@@ -56,11 +59,34 @@ func connect(ctx context.Context, out io.Writer, host monad.Maybe[ssh.Host]) (*c
 		return nil, err
 	}
 
+	// Apply custom registries auth configuration
+	cfg := dockerCli.ConfigFile()
+	registriesNames := make([]string, len(registries))
+
+	cfg.CredentialsStore = "" // Fallback to the default credential store reading from the config file directly
+	cfg.AuthConfigs = make(map[string]clitypes.AuthConfig, len(registries))
+
+	for i, registry := range registries {
+		registriesNames[i] = registry.Name()
+
+		conf := clitypes.AuthConfig{
+			ServerAddress: registry.Url().String(),
+		}
+
+		if auth, hasAuth := registry.Credentials().TryGet(); hasAuth {
+			conf.Username = auth.Username()
+			conf.Password = auth.Password()
+		}
+
+		cfg.AuthConfigs[conf.ServerAddress] = conf
+	}
+
 	return &client{
-		cli:     dockerCli,
-		api:     dockerCli.Client(),
-		version: ping.APIVersion,
-		compose: compose.NewComposeService(dockerCli),
+		cli:        dockerCli,
+		api:        dockerCli.Client(),
+		version:    ping.APIVersion,
+		registries: registriesNames,
+		compose:    compose.NewComposeService(dockerCli),
 	}, nil
 }
 

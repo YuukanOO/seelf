@@ -111,7 +111,7 @@
 		<div>
 			<FormSection title="target.general">
 				<Stack direction="column">
-					<TextInput label="name" bind:value={name} required remoteError={errors?.name}>
+					<TextInput autofocus label="name" bind:value={name} required remoteError={errors?.name}>
 						<p>{l.translate('target.name.help')}</p>
 					</TextInput>
 					<TextInput label="url" bind:value={url} required type="url" remoteError={errors?.url}>

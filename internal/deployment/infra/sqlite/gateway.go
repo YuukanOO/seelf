@@ -414,6 +414,13 @@ func deploymentMapper(kr *builder.KeyedResult[get_apps.App]) storage.Mapper[get_
 			return d, err
 		}
 
+		// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
+		if targetStatus != nil {
+			d.Target.Status.Set(*targetStatus)
+		}
+
+		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
+
 		if kr != nil {
 			kr.Update(d.AppID, func(a get_apps.App) get_apps.App {
 				switch domain.Environment(d.Environment) {
@@ -425,13 +432,6 @@ func deploymentMapper(kr *builder.KeyedResult[get_apps.App]) storage.Mapper[get_
 				return a
 			})
 		}
-
-		// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
-		if targetStatus != nil {
-			d.Target.Status.Set(*targetStatus)
-		}
-
-		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
 
 		return d, err
 	}
@@ -472,6 +472,15 @@ func deploymentDetailMapper(kr *builder.KeyedResult[get_app_detail.App]) storage
 			return d, err
 		}
 
+		// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
+		if targetStatus != nil {
+			d.Target.Status.Set(*targetStatus)
+		}
+
+		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
+
+		populateServicesUrls(&d)
+
 		if kr != nil {
 			kr.Update(d.AppID, func(a get_app_detail.App) get_app_detail.App {
 				switch domain.Environment(d.Environment) {
@@ -483,14 +492,6 @@ func deploymentDetailMapper(kr *builder.KeyedResult[get_app_detail.App]) storage
 				return a
 			})
 		}
-		// Can't scan directly into a monad.Maybe or it will fail with a conversion error between int64/uint8
-		if targetStatus != nil {
-			d.Target.Status.Set(*targetStatus)
-		}
-
-		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
-
-		populateServicesUrls(&d)
 
 		return d, err
 	}

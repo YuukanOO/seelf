@@ -79,7 +79,7 @@ func (DeploymentCreated) Name_() string      { return "deployment.event.deployme
 func (DeploymentStateChanged) Name_() string { return "deployment.event.deployment_state_changed" }
 
 func (e DeploymentStateChanged) HasSucceeded() bool {
-	return e.State.Status() == DeploymentStatusSucceeded
+	return e.State.status == DeploymentStatusSucceeded
 }
 
 // Creates a new deployment for this app. This method acts as a factory for the deployment

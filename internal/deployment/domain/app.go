@@ -119,7 +119,7 @@ func (AppVersionControlRemoved) Name_() string { return "deployment.event.app_ve
 func (AppCleanupRequested) Name_() string      { return "deployment.event.app_cleanup_requested" }
 func (AppDeleted) Name_() string               { return "deployment.event.app_deleted" }
 
-func (e AppEnvChanged) TargetHasChanged() bool { return e.Config.Target() != e.OldConfig.Target() }
+func (e AppEnvChanged) TargetHasChanged() bool { return e.Config.target != e.OldConfig.target }
 
 // Instantiates a new App.
 func NewApp(

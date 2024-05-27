@@ -164,10 +164,10 @@ func (q *queryBuilder[T]) All(
 	results := make([]T, 0)
 
 	// Instantiates needed stuff for data loaders
-	mappings := make([]KeysMapping, len(loaders))
+	mappings := make([]keysMapping, len(loaders))
 
 	for i := range mappings {
-		mappings[i] = make(KeysMapping)
+		mappings[i] = make(keysMapping)
 	}
 
 	for rows.Next() {
@@ -185,7 +185,7 @@ func (q *queryBuilder[T]) All(
 	}
 
 	if len(loaders) > 0 {
-		kr := KeyedResult[T]{
+		kr := &keyedResult[T]{
 			data: results,
 		}
 
@@ -260,12 +260,12 @@ func (q *queryBuilder[T]) One(
 		return result, err
 	}
 
-	kr := KeyedResult[T]{
+	kr := &keyedResult[T]{
 		data: []T{result},
 	}
 
 	for _, loader := range loaders {
-		kr.indexByKeys = KeysMapping{
+		kr.indexByKeys = keysMapping{
 			loader.ExtractKey(result): 0,
 		}
 

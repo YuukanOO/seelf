@@ -65,7 +65,8 @@
 		transform: translateY(-50%);
 	}
 
-	.input option {
-		color: initial;
+	.input:not([multiple]) option {
+		background-color: var(--co-background-5);
+		color: var(--co-text-5);
 	}
 </style>

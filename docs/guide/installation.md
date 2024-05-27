@@ -68,6 +68,8 @@ You probably want to expose seelf itself on an url without a port and with a val
 
 ::: warning
 If you choose to expose **seelf** with the local target, you **should never** delete the target or things may break.
+
+If it happens, you can map the port `8080` to access your seelf instance (on the root domain and port) and reconfigure the target. Once done, you can remove the ports section since seelf will be exposed by the proxy.
 :::
 
 To do this, we recommend to use the [docker compose installation](#with-compose) and add the missing parts.

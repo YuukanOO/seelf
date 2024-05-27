@@ -52,6 +52,10 @@ export default defineConfig({
             ],
           },
           {
+            text: "Registries",
+            link: "/reference/registries",
+          },
+          {
             text: "Applications",
             link: "/reference/applications",
           },

@@ -27,6 +27,14 @@ type (
 	}
 
 	Mapper[T any] func(Scanner) (T, error) // Mapper function from a simple Scanner to an object of type T
+
+	// Represents a key indexed set of data.
+	KeyedResult[T any] interface {
+		// Retrieve the list of keys contained in this dataset.
+		Keys() []string
+		// Update the result with the given key by applying the given function if it exists.
+		Update(string, func(T) T)
+	}
 )
 
 // Ease the scan of a json serialized field.

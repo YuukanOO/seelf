@@ -2,8 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"strconv"
-	"strings"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_app_deployments"
@@ -235,7 +233,7 @@ func (s *gateway) GetRegistryByID(ctx context.Context, cmd get_registry.Query) (
 
 var getDeploymentDataloader = builder.NewDataloader(
 	func(a get_apps.App) string { return a.ID },
-	func(e builder.Executor, ctx context.Context, kr builder.KeyedResult[get_apps.App]) error {
+	func(e builder.Executor, ctx context.Context, kr storage.KeyedResult[get_apps.App]) error {
 		_, err := builder.
 			Query[get_app_deployments.Deployment](`
 			SELECT
@@ -261,14 +259,14 @@ var getDeploymentDataloader = builder.NewDataloader(
 			LEFT JOIN targets ON targets.id = deployments.config_target`).
 			S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
 			F("GROUP BY deployments.app_id, deployments.config_environment").
-			All(e, ctx, deploymentMapper(&kr))
+			All(e, ctx, deploymentMapper(kr))
 
 		return err
 	})
 
 var getDeploymentDetailDataloader = builder.NewDataloader(
 	func(a get_app_detail.App) string { return a.ID },
-	func(e builder.Executor, ctx context.Context, kr builder.KeyedResult[get_app_detail.App]) error {
+	func(e builder.Executor, ctx context.Context, kr storage.KeyedResult[get_app_detail.App]) error {
 		_, err := builder.
 			Query[get_deployment.Deployment](`
 			SELECT
@@ -296,7 +294,7 @@ var getDeploymentDetailDataloader = builder.NewDataloader(
 			LEFT JOIN targets ON targets.id = deployments.config_target`).
 			S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
 			F("GROUP BY deployments.app_id, deployments.config_environment").
-			All(e, ctx, deploymentDetailMapper(&kr))
+			All(e, ctx, deploymentDetailMapper(kr))
 
 		return err
 	})
@@ -382,7 +380,7 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 	return a, err
 }
 
-func deploymentMapper(kr *builder.KeyedResult[get_apps.App]) storage.Mapper[get_app_deployments.Deployment] {
+func deploymentMapper(kr storage.KeyedResult[get_apps.App]) storage.Mapper[get_app_deployments.Deployment] {
 	return func(scanner storage.Scanner) (d get_app_deployments.Deployment, err error) {
 		var (
 			maxRequestedAt string
@@ -437,8 +435,7 @@ func deploymentMapper(kr *builder.KeyedResult[get_apps.App]) storage.Mapper[get_
 	}
 }
 
-func deploymentDetailMapper(kr *builder.KeyedResult[get_app_detail.App]) storage.Mapper[get_deployment.Deployment] {
-
+func deploymentDetailMapper(kr storage.KeyedResult[get_app_detail.App]) storage.Mapper[get_deployment.Deployment] {
 	return func(scanner storage.Scanner) (d get_deployment.Deployment, err error) {
 		var (
 			maxRequestedAt string
@@ -479,7 +476,7 @@ func deploymentDetailMapper(kr *builder.KeyedResult[get_app_detail.App]) storage
 
 		d.Source.Data, err = get_deployment.SourceDataTypes.From(d.Source.Discriminator, sourceData)
 
-		populateServicesUrls(&d)
+		d.ResolveServicesUrls()
 
 		if kr != nil {
 			kr.Update(d.AppID, func(a get_app_detail.App) get_app_detail.App {
@@ -494,67 +491,6 @@ func deploymentDetailMapper(kr *builder.KeyedResult[get_app_detail.App]) storage
 		}
 
 		return d, err
-	}
-}
-
-// Since the target domain is dynamic, compute exposed service urls based on the presence
-// of the given current target url and resolve custom entrypoints urls too.
-func populateServicesUrls(d *get_deployment.Deployment) {
-	services, hasServices := d.State.Services.TryGet()
-	url, hasUrl := d.Target.Url.TryGet()
-	entrypoints, hasEntrypoints := d.Target.Entrypoints.TryGet()
-
-	// Target not found, could not populate services urls
-	if !hasUrl || !hasServices || !hasEntrypoints {
-		return
-	}
-
-	idx := strings.Index(url, "://")
-	targetScheme, targetHost := url[:idx+3], url[idx+3:]
-
-	for i, service := range services {
-		// Compatibility with old deployments
-		if service.Url.HasValue() || service.Subdomain.HasValue() {
-			compatEntrypoint := get_deployment.Entrypoint{
-				Name:      "default",
-				Router:    string(domain.RouterHttp),
-				Port:      80,
-				Subdomain: service.Subdomain, // (> 2.0.0 - < 2.2.0)
-				Url:       service.Url,       // (< 2.0.0)
-			}
-
-			if subdomain, isSet := compatEntrypoint.Subdomain.TryGet(); !service.Url.HasValue() && isSet {
-				compatEntrypoint.Url.Set(targetScheme + subdomain + "." + targetHost)
-			}
-
-			services[i].Entrypoints = append(service.Entrypoints, compatEntrypoint)
-			continue
-		}
-
-		for j, entrypoint := range service.Entrypoints {
-			host := targetHost
-
-			if subdomain, isSet := entrypoint.Subdomain.TryGet(); isSet {
-				host = subdomain + "." + targetHost
-			}
-
-			if !entrypoint.IsCustom {
-				entrypoint.Url.Set(targetScheme + host)
-				services[i].Entrypoints[j] = entrypoint
-				continue
-			}
-
-			publishedPort, isAssigned := entrypoints[d.AppID][d.Environment][entrypoint.Name].TryGet()
-
-			if !isAssigned {
-				continue
-			}
-
-			entrypoint.PublishedPort.Set(publishedPort)
-			entrypoint.Url.Set(entrypoint.Router + "://" + host + ":" + strconv.FormatUint(uint64(publishedPort), 10))
-
-			services[i].Entrypoints[j] = entrypoint
-		}
 	}
 }
 

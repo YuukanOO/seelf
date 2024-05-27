@@ -88,7 +88,7 @@ abbr {
 	cursor: help;
 }
 
-/** Apply global styles to make things simplier */
+/** Apply global styles to make things simpler */
 *:disabled,
 *[aria-disabled='true'] {
 	pointer-events: none;
@@ -136,7 +136,7 @@ table tbody tr {
 	display: block;
 }
 
-table tbody tr+tr {
+table tbody tr + tr {
 	border-block-start: 1px solid var(--co-divider-4);
 	margin-block-start: var(--sp-2);
 	padding-block-start: var(--sp-2);
@@ -151,7 +151,7 @@ table tbody tr+tr {
 		display: table-row;
 	}
 
-	table tbody tr+tr {
+	table tbody tr + tr {
 		margin: 0;
 		padding: 0;
 	}

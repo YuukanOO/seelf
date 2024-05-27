@@ -8,7 +8,7 @@
 
 <Breadcrumb
 	segments={[
-		{ path: routes.targets, title: l.translate('breadcrumb.registries') },
+		{ path: routes.registries, title: l.translate('breadcrumb.registries') },
 		l.translate('breadcrumb.not_found')
 	]}
 />

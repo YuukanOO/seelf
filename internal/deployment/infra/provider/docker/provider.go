@@ -272,7 +272,7 @@ func (d *docker) Deploy(
 	}
 
 	if len(services.CustomEntrypoints()) > 0 {
-		logger.Infof("this deployment uses custom entrypoints. If this is the first time, you may have to wait a few seconds for the target to expose them")
+		logger.Infof("this deployment uses custom entrypoints. If this is the first time, you may have to wait a few seconds for the target to find available ports and expose them appropriately")
 	}
 
 	prunedCount, err := client.PruneImages(ctx, filters.NewArgs(

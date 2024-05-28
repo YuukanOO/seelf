@@ -44,12 +44,16 @@ When working on a local compose stack, you make **services available by defining
 :::
 
 ::: warning Exposing TCP and UDP ports
-When you don't define a specific protocol, **compose** falls back to `tcp` when reading the project file. When exposing services, the distinction between `http` and `tcp` is mandatory for the proxy to work as intended.
+When you don't define a specific protocol, **compose** falls back to `tcp` when reading the project file. When exposing services, the distinction between `http` and `tcp` is mandatory for the proxy to work as intended and expose your services appropriately.
 
 To make the distinction, **seelf** rely on how ports are defined in the compose file:
 
 - **Without a specific protocol** (ex `- "8080:80"`), seelf will assumes it should use an `http` router.
 - **With a specific protocol** (ex `- "8080:80/tcp"` or `- "8080:80/udp"`), it will use the router associated: `tcp` or `udp`.
+
+When custom entrypoints are found (multiple `http` ports on the same container or `tcp` / `udp` ports), **seelf does not rely on the actual published ports defined** since it can't assume they will be available on the [target](/reference/targets).
+
+Instead, it will spawn a tiny container to **find available ports of the specified protocols** and map them to your entrypoints. This process **only happens the first time your custom entrypoints are seen** and as long as you do not change the **service name**, **container port** and **protocol**.
 
 Using this tiny rule, **seelf** can determine the router to use correctly and your compose file **still works locally**.
 :::

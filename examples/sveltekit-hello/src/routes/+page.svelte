@@ -11,7 +11,7 @@
 					rel="noopener noreferrer">Docs</a
 				>
 			</li>
-			<li><a href="https://liberapay.com/YuukanOO/" rel="noopener noreferrer">❤️ Donate</a></li>
+			<li><a href="https://yuukanoo.github.io/seelf/contributing/donating.html" rel="noopener noreferrer">❤️ Donate</a></li>
 		</ul>
 	</div>
 </div>

@@ -32,6 +32,10 @@ export default defineConfig({
           { text: "Updating", link: "/guide/updating" },
           { text: "Configuration", link: "/guide/configuration" },
           { text: "Migrating major versions", link: "/guide/migration" },
+          {
+            text: "Continuous Integration / Deployment",
+            link: "/guide/continuous-integration-deployment",
+          },
         ],
       },
       {

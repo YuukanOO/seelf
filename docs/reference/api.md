@@ -24,11 +24,3 @@ POST /apps/:id/deployments/:number/promote
 # Retrieve deployment logs
 GET /apps/:id/deployments/:number/logs
 ```
-
-## Triggering a deployment from your CI {#ci}
-
-On the **New deployment** page, you can copy the `curl` command associated with the payload represented by the form. You just have to embed this command to your CI job, update it according to your needs (filling the git branch from the environment for example and retrieve the API Key from a secret) and you're good to go.
-
-::: info
-In the future, this will be simplified, see [this issue](https://github.com/YuukanOO/seelf/issues/48) for more information.
-:::

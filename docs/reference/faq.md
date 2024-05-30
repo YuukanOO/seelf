@@ -4,6 +4,6 @@
 
 See the [providers page](/reference/providers/docker#exposing-services) for more information.
 
-## Integrating seelf in your CI
+## Integrating seelf in your Continuous Integration / Continuous Deployment pipeline
 
-See the [API related page](/reference/api#ci) for more information on how to do it.
+See the [CI / CD page](/guide/continuous-integration-deployment) for more information on how to do it.

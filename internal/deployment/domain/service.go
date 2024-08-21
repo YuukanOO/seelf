@@ -67,8 +67,8 @@ func ParsePort(raw string) (Port, error) {
 func (p Port) String() string { return strconv.FormatUint(uint64(p), 10) }
 func (p Port) Uint32() uint32 { return uint32(p) }
 
-func newEntrypointName(suffix string, router Router, port Port) EntrypointName {
-	return EntrypointName(suffix + "-" + port.String() + "-" + string(router))
+func newEntrypointName(prefix string, router Router, port Port) EntrypointName {
+	return EntrypointName(prefix + "-" + port.String() + "-" + string(router))
 }
 
 // Creates a new service. If the image is empty, a unique image name will be

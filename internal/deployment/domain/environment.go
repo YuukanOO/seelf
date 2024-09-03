@@ -73,6 +73,14 @@ func (e EnvironmentConfig) Target() TargetID               { return e.target }
 func (e EnvironmentConfig) Version() time.Time             { return e.version }
 func (e EnvironmentConfig) Vars() monad.Maybe[ServicesEnv] { return e.vars }
 
+func (e *EnvironmentConfig) consolidate(other EnvironmentConfig) {
+	if e.target != other.target {
+		return
+	}
+
+	e.version = other.version
+}
+
 // Builds the map of services variables from a raw value.
 func ServicesEnvFrom(raw map[string]map[string]string) ServicesEnv {
 	result := make(ServicesEnv, len(raw))

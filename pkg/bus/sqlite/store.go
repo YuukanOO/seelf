@@ -21,7 +21,7 @@ var (
 	//go:embed migrations/*.sql
 	migrations embed.FS
 
-	migrationsModule = sqlite.NewMigrationsModule("scheduler", "migrations", migrations)
+	Migrations = sqlite.NewMigrationsModule("scheduler", "migrations", migrations)
 )
 
 type (
@@ -67,7 +67,7 @@ func NewScheduledJobsStore(db *sqlite.Database) bus.ScheduledJobsStore {
 // them as not retrieved so they will be picked up next time GetNextPendingJobs is called.
 // You MUST call this method at the application startup.
 func (s *store) Setup() error {
-	if err := s.db.Migrate(migrationsModule); err != nil {
+	if err := s.db.Migrate(Migrations); err != nil {
 		return err
 	}
 

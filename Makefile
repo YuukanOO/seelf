@@ -7,10 +7,14 @@ serve-docs: # Launch the docs dev server
 serve-back: # Launch the backend API and creates an admin user if needed
 	ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin LOG_LEVEL=debug go run main.go serve
 
-test: # Launch every tests
+test-front: # Launch the frontend tests
 	cd cmd/serve/front && npm i && npm test && cd ../../..
+
+test-back: # Launch the backend tests
 	go vet ./...
 	go test ./... --cover
+
+test: test-front test-back # Launch every tests
 
 ts: # Print the current timestamp, useful for migrations
 	@date +%s
@@ -18,9 +22,13 @@ ts: # Print the current timestamp, useful for migrations
 outdated: # Print direct dependencies and their latest version
 	go list -v -u -m -f '{{if not .Indirect}}{{.}}{{end}}' all
 
-build: # Build the final binary for the current platform
+build-front: # Build the frontend
 	cd cmd/serve/front && npm i && npm run build && cd ../../..
-	go build -ldflags="-s -w" -o seelf
+
+build-back: # Build the backend
+	go build -tags release -ldflags="-s -w" -o seelf
+
+build: build-front build-back # Build the final binary for the current platform
 
 build-docs: # Build the docs
 	npm i && npm run docs:build

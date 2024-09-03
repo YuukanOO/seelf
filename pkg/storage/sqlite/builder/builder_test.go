@@ -3,9 +3,9 @@ package builder_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Builder(t *testing.T) {
@@ -13,7 +13,7 @@ func Test_Builder(t *testing.T) {
 		q := builder.
 			Query[any]("SELECT id, name FROM some_table WHERE name = ?", "john")
 
-		testutil.Equals(t, "SELECT id, name FROM some_table WHERE name = ?", q.String())
+		assert.Equal(t, "SELECT id, name FROM some_table WHERE name = ?", q.String())
 	})
 
 	t.Run("should handle statements", func(t *testing.T) {
@@ -34,7 +34,7 @@ func Test_Builder(t *testing.T) {
 			).
 			F("ORDER BY name")
 
-		testutil.Equals(t, "SELECT id, name FROM some_table WHERE name = ? AND id = ? AND age IN (?,?) AND TRUE ORDER BY name", q.String())
+		assert.Equal(t, "SELECT id, name FROM some_table WHERE name = ? AND id = ? AND age IN (?,?) AND TRUE ORDER BY name", q.String())
 	})
 
 	t.Run("should handle insert statements", func(t *testing.T) {
@@ -44,7 +44,7 @@ func Test_Builder(t *testing.T) {
 			"id":   1,
 		})
 
-		testutil.Match(t, "INSERT INTO some_table \\((,?(age|name|id)){3}\\) VALUES \\(\\?,\\?,\\?\\)", q.String())
+		assert.Match(t, "INSERT INTO some_table \\((,?(age|name|id)){3}\\) VALUES \\(\\?,\\?,\\?\\)", q.String())
 	})
 
 	t.Run("should handle update statements", func(t *testing.T) {
@@ -53,6 +53,6 @@ func Test_Builder(t *testing.T) {
 			"age":  21,
 		}).F("WHERE id = ?", 1)
 
-		testutil.Match(t, "UPDATE some_table SET (,?(age|name) = \\?){2} WHERE id = \\?", q.String())
+		assert.Match(t, "UPDATE some_table SET (,?(age|name) = \\?){2} WHERE id = \\?", q.String())
 	})
 }

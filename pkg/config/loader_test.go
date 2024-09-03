@@ -6,10 +6,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/config"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/ostools"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 type (
@@ -149,20 +149,20 @@ HTTP_TWO=true`,
 
 			if tt.conf != "" {
 				err := ostools.WriteFile(confFilename, []byte(tt.conf))
-				testutil.IsNil(t, err)
+				assert.Nil(t, err)
 			}
 
 			if tt.env != "" {
 				err := ostools.WriteFile(envFilename, []byte(tt.env))
-				testutil.IsNil(t, err)
+				assert.Nil(t, err)
 			}
 
 			var conf configuration
 
 			exists, err := config.Load(confFilename, &conf, envFilename)
-			testutil.IsNil(t, err)
-			testutil.Equals(t, tt.conf != "", exists)
-			testutil.DeepEquals(t, tt.expected, conf)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.conf != "", exists)
+			assert.DeepEqual(t, tt.expected, conf)
 		})
 	}
 
@@ -174,8 +174,8 @@ HTTP_TWO=true`,
 
 		exists, err := config.Load(confFilename, &conf)
 
-		testutil.ErrorIs(t, errPostLoad, err)
-		testutil.IsFalse(t, exists)
+		assert.ErrorIs(t, errPostLoad, err)
+		assert.False(t, exists)
 	})
 }
 
@@ -203,10 +203,10 @@ func Test_Save(t *testing.T) {
 
 		err := config.Save(confFilename, conf)
 
-		testutil.IsNil(t, err)
+		assert.Nil(t, err)
 		b, err := os.ReadFile(confFilename)
-		testutil.IsNil(t, err)
-		testutil.Equals(t, `verbose: true
+		assert.Nil(t, err)
+		assert.Equal(t, `verbose: true
 http:
     host: 127.0.0.1
     secure: true

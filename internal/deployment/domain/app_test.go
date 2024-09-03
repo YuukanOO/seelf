@@ -5,22 +5,23 @@ import (
 
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_App(t *testing.T) {
-	var (
-		appname             domain.AppName = "my-app"
-		uid                 auth.UserID    = "uid"
-		production                         = domain.NewEnvironmentConfig("production-target")
-		staging                            = domain.NewEnvironmentConfig("staging-target")
-		productionAvailable                = domain.NewEnvironmentConfigRequirement(production, true, true)
-		stagingAvailable                   = domain.NewEnvironmentConfigRequirement(staging, true, true)
-	)
 
 	t.Run("should require a unique name across both target environments", func(t *testing.T) {
+		var (
+			appname    domain.AppName = "my-app"
+			uid        auth.UserID    = "uid"
+			production                = domain.NewEnvironmentConfig("production-target")
+			staging                   = domain.NewEnvironmentConfig("staging-target")
+		)
+
 		tests := []struct {
 			production domain.EnvironmentConfigRequirement
 			staging    domain.EnvironmentConfigRequirement
@@ -51,196 +52,227 @@ func Test_App(t *testing.T) {
 		for _, test := range tests {
 			_, err := domain.NewApp(appname, test.production, test.staging, uid)
 
-			testutil.ErrorIs(t, test.expected, err)
+			assert.ErrorIs(t, test.expected, err)
 		}
 	})
 
 	t.Run("should correctly creates a new app", func(t *testing.T) {
-		app, err := domain.NewApp(appname, productionAvailable, stagingAvailable, uid)
+		var (
+			appname    domain.AppName = "my-app"
+			uid        auth.UserID    = "uid"
+			production                = domain.NewEnvironmentConfig("production-target")
+			staging                   = domain.NewEnvironmentConfig("staging-target")
+		)
 
-		testutil.IsNil(t, err)
-		testutil.NotEquals(t, "", app.ID())
-		testutil.IsFalse(t, app.VersionControl().HasValue())
+		app, err := domain.NewApp(appname,
+			domain.NewEnvironmentConfigRequirement(production, true, true),
+			domain.NewEnvironmentConfigRequirement(staging, true, true),
+			uid)
 
-		evt := testutil.EventIs[domain.AppCreated](t, &app, 0)
+		assert.Nil(t, err)
+		assert.NotZero(t, app.ID())
+		assert.False(t, app.VersionControl().HasValue())
 
-		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.Equals(t, evt.Created.By(), uid)
-		testutil.IsFalse(t, evt.Created.At().IsZero())
-		testutil.IsTrue(t, evt.Production.Equals(production))
-		testutil.IsTrue(t, evt.Staging.Equals(staging))
-		testutil.Equals(t, appname, evt.Name)
+		evt := assert.EventIs[domain.AppCreated](t, &app, 0)
+
+		assert.DeepEqual(t, domain.AppCreated{
+			ID:         app.ID(),
+			Name:       appname,
+			Created:    shared.ActionFrom(uid, assert.NotZero(t, evt.Created.At())),
+			Production: production,
+			Staging:    staging,
+		}, evt)
 	})
 
 	t.Run("could have a vcs config attached", func(t *testing.T) {
-		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		vcsConfig := domain.NewVersionControl(url)
+		vcsConfig := domain.NewVersionControl(must.Panic(domain.UrlFrom("http://somewhere.com")))
 		vcsConfig.Authenticated("vcskey")
 
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
-		app.UseVersionControl(vcsConfig)
+		app := fixture.App()
 
-		testutil.Equals(t, vcsConfig, app.VersionControl().MustGet())
-		testutil.HasNEvents(t, &app, 2)
-		evt := testutil.EventIs[domain.AppVersionControlConfigured](t, &app, 1)
-		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.Equals(t, vcsConfig, evt.Config)
+		err := app.UseVersionControl(vcsConfig)
+
+		assert.Nil(t, err)
+		assert.Equal(t, vcsConfig, app.VersionControl().MustGet())
+		assert.HasNEvents(t, 2, &app)
+		evt := assert.EventIs[domain.AppVersionControlConfigured](t, &app, 1)
+
+		assert.Equal(t, domain.AppVersionControlConfigured{
+			ID:     app.ID(),
+			Config: vcsConfig,
+		}, evt)
 	})
 
 	t.Run("could have a vcs config removed", func(t *testing.T) {
-		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
-		app.RemoveVersionControl()
+		app := fixture.App()
 
-		testutil.HasNEvents(t, &app, 1)
+		assert.Nil(t, app.RemoveVersionControl())
+		assert.HasNEvents(t, 1, &app, "should have nothing new since it didn't have a vcs config initially")
 
-		app.UseVersionControl(domain.NewVersionControl(url))
-		app.RemoveVersionControl()
+		assert.Nil(t, app.UseVersionControl(domain.NewVersionControl(must.Panic(domain.UrlFrom("http://somewhere.com")))))
+		assert.Nil(t, app.RemoveVersionControl())
 
-		testutil.HasNEvents(t, &app, 3)
-		testutil.EventIs[domain.AppVersionControlRemoved](t, &app, 2)
+		assert.HasNEvents(t, 3, &app, "should have 2 new events, one for the config added and one for the config removed")
+		assert.EventIs[domain.AppVersionControlRemoved](t, &app, 2)
 	})
 
 	t.Run("raise a VCS configured event only if configs are different", func(t *testing.T) {
-		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		vcsConfig := domain.NewVersionControl(url)
-		vcsConfig.Authenticated("vcskey")
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
-		app.UseVersionControl(vcsConfig)
-		app.UseVersionControl(vcsConfig)
+		vcsConfig := domain.NewVersionControl(must.Panic(domain.UrlFrom("http://somewhere.com")))
+		app := fixture.App()
 
-		testutil.HasNEvents(t, &app, 2)
+		assert.Nil(t, app.UseVersionControl(vcsConfig))
+		assert.Nil(t, app.UseVersionControl(vcsConfig))
 
-		anotherUrl, _ := domain.UrlFrom("http://somewhere.else.com")
-		otherConfig := domain.NewVersionControl(anotherUrl)
-		app.UseVersionControl(otherConfig)
-		testutil.HasNEvents(t, &app, 3)
-		evt := testutil.EventIs[domain.AppVersionControlConfigured](t, &app, 2)
-		testutil.Equals(t, otherConfig, evt.Config)
+		assert.HasNEvents(t, 2, &app, "should raise an event only once since the configs are equal")
+
+		otherConfig := domain.NewVersionControl(must.Panic(domain.UrlFrom("http://somewhere.else.com")))
+		assert.Nil(t, app.UseVersionControl(otherConfig))
+
+		assert.HasNEvents(t, 3, &app, "should raise an event since configs are different")
+		evt := assert.EventIs[domain.AppVersionControlConfigured](t, &app, 2)
+
+		assert.Equal(t, domain.AppVersionControlConfigured{
+			ID:     app.ID(),
+			Config: otherConfig,
+		}, evt)
 	})
 
 	t.Run("does not allow to modify the vcs config if the app is marked for deletion", func(t *testing.T) {
-		url := must.Panic(domain.UrlFrom("http://somewhere.com"))
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		app := fixture.App()
 		app.RequestCleanup("uid")
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.UseVersionControl(domain.NewVersionControl(url)))
-		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.RemoveVersionControl())
+		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.UseVersionControl(
+			domain.NewVersionControl(must.Panic(domain.UrlFrom("http://somewhere.com")))))
+		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.RemoveVersionControl())
 	})
 
 	t.Run("need the app naming to be available when modifying a configuration", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		app := fixture.App()
 
-		err := app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(staging, false, false))
+		err := app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("another-target"), false, false))
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
 	})
 
 	t.Run("should update the environment config version only if target has changed", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		config := domain.NewEnvironmentConfig("production-target")
+		app := fixture.App(fixture.WithEnvironmentConfig(config, config))
 
-		newConfig := domain.NewEnvironmentConfig(production.Target())
+		newConfig := domain.NewEnvironmentConfig(config.Target())
 		newConfig.HasEnvironmentVariables(domain.ServicesEnv{
 			"app": {"DEBUG": "another value"},
 		})
 
-		err := app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true))
+		assert.Nil(t, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true)))
+		changed := assert.EventIs[domain.AppEnvChanged](t, &app, 1)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, production.Version(), app.Production().Version())
+		assert.Equal(t, changed.OldConfig.Version(), changed.Config.Version(), "same target should keep the same version")
 
 		newConfig = domain.NewEnvironmentConfig("another-target")
 
-		err = app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true))
+		assert.Nil(t, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true)))
+		changed = assert.EventIs[domain.AppEnvChanged](t, &app, 2)
 
-		testutil.IsNil(t, err)
-		testutil.NotEquals(t, production.Version(), app.Production().Version())
-		testutil.Equals(t, newConfig.Version(), app.Production().Version())
+		assert.NotEqual(t, changed.OldConfig.Version(), changed.Config.Version())
+		assert.Equal(t, newConfig.Version(), changed.Config.Version(), "should match the new config version")
 	})
 
 	t.Run("raise an env changed event only if the new config is different", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		production := domain.NewEnvironmentConfig("production-target")
+		staging := domain.NewEnvironmentConfig("staging-target")
+		app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
 
-		errProd := app.HasProductionConfig(productionAvailable)
-		errStaging := app.HasStagingConfig(stagingAvailable)
+		assert.Nil(t, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(production, true, true)))
+		assert.Nil(t, app.HasStagingConfig(domain.NewEnvironmentConfigRequirement(staging, true, true)))
 
-		testutil.IsNil(t, errProd)
-		testutil.IsNil(t, errStaging)
-		testutil.HasNEvents(t, &app, 1)
+		assert.HasNEvents(t, 1, &app, "same configs should not trigger new events")
 
 		newConfig := domain.NewEnvironmentConfig("new-target")
 		newConfig.HasEnvironmentVariables(domain.ServicesEnv{
 			"app": {"DEBUG": "true"},
 		})
 
-		errProd = app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true))
-		errStaging = app.HasStagingConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true))
+		assert.Nil(t, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true)))
+		assert.Nil(t, app.HasStagingConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true)))
 
-		testutil.IsNil(t, errProd)
-		testutil.IsNil(t, errStaging)
-		testutil.HasNEvents(t, &app, 3)
-		evt := testutil.EventIs[domain.AppEnvChanged](t, &app, 1)
+		assert.HasNEvents(t, 3, &app, "new configs should trigger new events")
+		changed := assert.EventIs[domain.AppEnvChanged](t, &app, 1)
 
-		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.Equals(t, domain.Production, evt.Environment)
-		testutil.DeepEquals(t, newConfig, evt.Config)
+		assert.DeepEqual(t, domain.AppEnvChanged{
+			ID:          app.ID(),
+			Environment: domain.Production,
+			Config:      newConfig,
+			OldConfig:   production,
+		}, changed)
 
-		evt = testutil.EventIs[domain.AppEnvChanged](t, &app, 2)
+		changed = assert.EventIs[domain.AppEnvChanged](t, &app, 2)
 
-		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.Equals(t, domain.Staging, evt.Environment)
-		testutil.DeepEquals(t, newConfig, evt.Config)
+		assert.DeepEqual(t, domain.AppEnvChanged{
+			ID:          app.ID(),
+			Environment: domain.Staging,
+			Config:      newConfig,
+			OldConfig:   staging,
+		}, changed)
 	})
 
 	t.Run("does not allow to modify the environment config if the app is marked for deletion", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		app := fixture.App()
 		app.RequestCleanup("uid")
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasProductionConfig(productionAvailable))
-		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasStagingConfig(stagingAvailable))
+		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("another-target"), true, true)))
+		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasStagingConfig(domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("another-target"), true, true)))
 	})
 
 	t.Run("could be marked for deletion only if not already the case", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		production := domain.NewEnvironmentConfig("production-target")
+		staging := domain.NewEnvironmentConfig("staging-target")
+		app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
 
 		app.RequestCleanup("uid")
 		app.RequestCleanup("uid")
 
-		testutil.HasNEvents(t, &app, 2)
-		evt := testutil.EventIs[domain.AppCleanupRequested](t, &app, 1)
-		testutil.Equals(t, app.ID(), evt.ID)
-		testutil.Equals(t, "uid", evt.Requested.By())
+		assert.HasNEvents(t, 2, &app, "should raise the event once")
+		evt := assert.EventIs[domain.AppCleanupRequested](t, &app, 1)
+
+		assert.DeepEqual(t, domain.AppCleanupRequested{
+			ID:               app.ID(),
+			ProductionConfig: production,
+			StagingConfig:    staging,
+			Requested:        shared.ActionFrom[auth.UserID]("uid", evt.Requested.At()),
+		}, evt)
 	})
 
 	t.Run("should not allow a deletion if app resources have not been cleaned up", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
-
+		app := fixture.App()
 		app.RequestCleanup("uid")
 
 		err := app.Delete(false)
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
-		testutil.HasNEvents(t, &app, 2)
+		assert.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
+		assert.HasNEvents(t, 2, &app)
 	})
 
 	t.Run("raise an error if delete is called for a non cleaned up app", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		app := fixture.App()
 
 		err := app.Delete(false)
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
+		assert.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
 	})
 
 	t.Run("could be deleted", func(t *testing.T) {
-		app := must.Panic(domain.NewApp(appname, productionAvailable, stagingAvailable, uid))
+		app := fixture.App()
 		app.RequestCleanup("uid")
 
 		err := app.Delete(true)
 
-		testutil.IsNil(t, err)
-		testutil.HasNEvents(t, &app, 3)
-		evt := testutil.EventIs[domain.AppDeleted](t, &app, 2)
-		testutil.Equals(t, app.ID(), evt.ID)
+		assert.Nil(t, err)
+		assert.HasNEvents(t, 3, &app)
+		evt := assert.EventIs[domain.AppDeleted](t, &app, 2)
+
+		assert.Equal(t, domain.AppDeleted{
+			ID: app.ID(),
+		}, evt)
 	})
 }
 
@@ -253,10 +285,10 @@ func Test_AppEvents(t *testing.T) {
 			OldConfig:   domain.NewEnvironmentConfig("target"),
 		}
 
-		testutil.IsFalse(t, evt.TargetHasChanged())
+		assert.False(t, evt.TargetHasChanged())
 
 		evt.OldConfig = domain.NewEnvironmentConfig("another-target")
 
-		testutil.IsTrue(t, evt.TargetHasChanged())
+		assert.True(t, evt.TargetHasChanged())
 	})
 }

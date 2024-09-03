@@ -7,7 +7,7 @@ import (
 )
 
 // Holds data related to the configuration of the final application. It should
-// have everything needed to resolve service and image names and is the primarly used
+// have everything needed to resolve service and image names and is the primarily used
 // structure during the deployment by a provider.
 type DeploymentConfig struct {
 	appid       AppID
@@ -95,7 +95,7 @@ func (c DeploymentConfig) QualifiedName(service string) string {
 	return c.ProjectName() + "-" + service
 }
 
-// Retrieve the name of the project wich is the combination of the appname, environment and appid
+// Retrieve the name of the project which is the combination of the appname, environment and appid
 // targeted by this configuration.
 func (c DeploymentConfig) ProjectName() string {
 	return string(c.appname) + "-" + string(c.environment) + "-" + strings.ToLower(string(c.appid))

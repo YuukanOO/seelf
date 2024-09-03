@@ -131,7 +131,7 @@ func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app
 		domain.HasSuccessfulDeploymentsOnAppTargetEnv(c.successful), err
 }
 
-func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criterias domain.FailCriterias) error {
+func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criterias domain.FailCriteria) error {
 	now := time.Now().UTC()
 
 	return builder.Update("deployments", builder.Values{

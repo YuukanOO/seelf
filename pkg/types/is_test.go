@@ -3,7 +3,7 @@ package types_test
 import (
 	"testing"
 
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/types"
 )
 
@@ -19,7 +19,7 @@ func Test_Is(t *testing.T) {
 			t2 any = type2{}
 		)
 
-		testutil.IsTrue(t, types.Is[type1](t1))
-		testutil.IsFalse(t, types.Is[type1](t2))
+		assert.True(t, types.Is[type1](t1))
+		assert.False(t, types.Is[type1](t2))
 	})
 }

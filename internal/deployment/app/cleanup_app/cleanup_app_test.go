@@ -2,60 +2,61 @@ package cleanup_app_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
-type initialData struct {
-	deployments []*domain.Deployment
-	targets     []*domain.Target
-}
-
 func Test_CleanupApp(t *testing.T) {
-	ctx := context.Background()
 
-	sut := func(data initialData) (bus.RequestHandler[bus.UnitType, cleanup_app.Command], *dummyProvider) {
-		targetsStore := memory.NewTargetsStore(data.targets...)
-		deploymentsStore := memory.NewDeploymentsStore(data.deployments...)
-		provider := &dummyProvider{}
-		return cleanup_app.Handler(targetsStore, deploymentsStore, provider), provider
+	arrange := func(tb testing.TB, provider domain.Provider, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[bus.UnitType, cleanup_app.Command],
+		context.Context,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return cleanup_app.Handler(context.TargetsStore, context.DeploymentsStore, provider), context.Context
 	}
 
 	t.Run("should fail silently if the target does not exist anymore", func(t *testing.T) {
-		uc, provider := sut(initialData{})
+		var provider mockProvider
+		handler, ctx := arrange(t, &provider)
 
-		r, err := uc(ctx, cleanup_app.Command{})
+		r, err := handler(ctx, cleanup_app.Command{})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
-		testutil.IsFalse(t, provider.called)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
+		assert.False(t, provider.called)
 	})
 
-	t.Run("should fail if the target is configuring", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))
-		deployment := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
-		deployment.HasStarted()
-		deployment.HasEnded(domain.Services{}, nil)
+	t.Run("should fail if at least one deployment is running", func(t *testing.T) {
+		var provider mockProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			))
+		deployment := fixture.Deployment(fixture.FromApp(app),
+			fixture.ForEnvironment(domain.Production),
+			fixture.WithDeploymentRequestedBy(user.ID()))
+		assert.Nil(t, deployment.HasStarted())
 
-		uc, provider := sut(initialData{
-			targets:     []*domain.Target{&target},
-			deployments: []*domain.Deployment{&deployment},
-		})
+		handler, ctx := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
 
-		_, err := uc(ctx, cleanup_app.Command{
+		_, err := handler(ctx, cleanup_app.Command{
 			TargetID:    string(target.ID()),
 			AppID:       string(app.ID()),
 			Environment: string(domain.Production),
@@ -63,65 +64,106 @@ func Test_CleanupApp(t *testing.T) {
 			To:          deployment.Requested().At().Add(1 * time.Hour),
 		})
 
-		testutil.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
-		testutil.IsFalse(t, provider.called)
+		assert.ErrorIs(t, domain.ErrRunningOrPendingDeployments, err)
+		assert.False(t, provider.called)
+	})
+
+	t.Run("should fail if the target is configuring and at least one successful deployment has been made", func(t *testing.T) {
+		var provider mockProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			))
+		deployment := fixture.Deployment(fixture.FromApp(app),
+			fixture.ForEnvironment(domain.Production),
+			fixture.WithDeploymentRequestedBy(user.ID()))
+		assert.Nil(t, deployment.HasStarted())
+		assert.Nil(t, deployment.HasEnded(domain.Services{}, nil))
+
+		handler, ctx := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
+
+		_, err := handler(ctx, cleanup_app.Command{
+			TargetID:    string(target.ID()),
+			AppID:       string(app.ID()),
+			Environment: string(domain.Production),
+			From:        deployment.Requested().At().Add(-1 * time.Hour),
+			To:          deployment.Requested().At().Add(1 * time.Hour),
+		})
+
+		assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
+		assert.False(t, provider.called)
 	})
 
 	t.Run("should succeed if the target is being deleted", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "uid"))
+		var provider mockProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
-		target.RequestCleanup(false, "uid")
+		assert.Nil(t, target.RequestCleanup(false, "uid"))
 
-		uc, provider := sut(initialData{
-			targets: []*domain.Target{&target},
-		})
+		handler, ctx := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
 
-		_, err := uc(ctx, cleanup_app.Command{
+		_, err := handler(ctx, cleanup_app.Command{
 			TargetID: string(target.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.IsFalse(t, provider.called)
+		assert.Nil(t, err)
+		assert.False(t, provider.called)
 	})
 
 	t.Run("should succeed if no successful deployments has been made", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil, nil)
+		var provider mockProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 
-		uc, provider := sut(initialData{
-			targets: []*domain.Target{&target},
-		})
+		handler, ctx := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
 
-		_, err := uc(ctx, cleanup_app.Command{
+		_, err := handler(ctx, cleanup_app.Command{
 			TargetID: string(target.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.IsFalse(t, provider.called)
+		assert.Nil(t, err)
+		assert.False(t, provider.called)
 	})
 
-	t.Run("should succeed if the target is ready and successful deployments have been made", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "uid"))
-		target.Configured(target.CurrentVersion(), nil, nil)
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))
-		deployment := must.Panic(app.NewDeployment(1, raw.Data(""), domain.Production, "uid"))
-		deployment.HasStarted()
-		deployment.HasEnded(domain.Services{}, nil)
+	t.Run("should fail if the target is not ready and a successful deployment has been made", func(t *testing.T) {
+		var provider mockProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
+		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			))
+		deployment := fixture.Deployment(fixture.FromApp(app),
+			fixture.ForEnvironment(domain.Production),
+			fixture.WithDeploymentRequestedBy(user.ID()))
+		assert.Nil(t, deployment.HasStarted())
+		assert.Nil(t, deployment.HasEnded(domain.Services{}, nil))
 
-		uc, provider := sut(initialData{
-			targets:     []*domain.Target{&target},
-			deployments: []*domain.Deployment{&deployment},
-		})
+		handler, ctx := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
 
-		_, err := uc(ctx, cleanup_app.Command{
+		_, err := handler(ctx, cleanup_app.Command{
 			TargetID:    string(target.ID()),
 			AppID:       string(app.ID()),
 			Environment: string(domain.Production),
@@ -129,17 +171,52 @@ func Test_CleanupApp(t *testing.T) {
 			To:          deployment.Requested().At().Add(1 * time.Hour),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, provider.called)
+		assert.ErrorIs(t, domain.ErrTargetConfigurationFailed, err)
+		assert.False(t, provider.called)
+	})
+
+	t.Run("should succeed if the target is ready and successful deployments have been made", func(t *testing.T) {
+		var provider mockProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		target.Configured(target.CurrentVersion(), nil, nil)
+		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			))
+		deployment := fixture.Deployment(fixture.FromApp(app),
+			fixture.ForEnvironment(domain.Production),
+			fixture.WithDeploymentRequestedBy(user.ID()))
+		assert.Nil(t, deployment.HasStarted())
+		assert.Nil(t, deployment.HasEnded(domain.Services{}, nil))
+
+		handler, ctx := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
+
+		_, err := handler(ctx, cleanup_app.Command{
+			TargetID:    string(target.ID()),
+			AppID:       string(app.ID()),
+			Environment: string(domain.Production),
+			From:        deployment.Requested().At().Add(-1 * time.Hour),
+			To:          deployment.Requested().At().Add(1 * time.Hour),
+		})
+
+		assert.Nil(t, err)
+		assert.True(t, provider.called)
 	})
 }
 
-type dummyProvider struct {
+type mockProvider struct {
 	domain.Provider
 	called bool
 }
 
-func (d *dummyProvider) Cleanup(_ context.Context, _ domain.AppID, _ domain.Target, _ domain.Environment, s domain.CleanupStrategy) error {
+func (d *mockProvider) Cleanup(_ context.Context, _ domain.AppID, _ domain.Target, _ domain.Environment, s domain.CleanupStrategy) error {
 	d.called = s != domain.CleanupStrategySkip
 	return nil
 }

@@ -3,9 +3,9 @@ package ssh_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/ssh"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Host(t *testing.T) {
@@ -30,18 +30,18 @@ func Test_Host(t *testing.T) {
 				got, err := ssh.ParseHost(tt.value)
 
 				if !tt.valid {
-					testutil.ErrorIs(t, ssh.ErrInvalidHost, err)
+					assert.ErrorIs(t, ssh.ErrInvalidHost, err)
 					return
 				}
 
-				testutil.IsNil(t, err)
-				testutil.Equals(t, tt.value, string(got))
+				assert.Nil(t, err)
+				assert.Equal(t, tt.value, string(got))
 			})
 		}
 	})
 
 	t.Run("should returns a string representation", func(t *testing.T) {
 		h := must.Panic(ssh.ParseHost("localhost"))
-		testutil.Equals(t, "localhost", h.String())
+		assert.Equal(t, "localhost", h.String())
 	})
 }

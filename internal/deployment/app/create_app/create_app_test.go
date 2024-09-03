@@ -4,39 +4,81 @@ import (
 	"context"
 	"testing"
 
-	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 func Test_CreateApp(t *testing.T) {
-	ctx := auth.WithUserID(context.Background(), "some-uid")
-	sut := func(existingApps ...*domain.App) bus.RequestHandler[string, create_app.Command] {
-		store := memory.NewAppsStore(existingApps...)
-		return create_app.Handler(store, store)
+
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[string, create_app.Command],
+		context.Context,
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return create_app.Handler(context.AppsStore, context.AppsStore), context.Context, context.Dispatcher
 	}
 
 	t.Run("should require valid inputs", func(t *testing.T) {
-		uc := sut()
-		id, err := uc(ctx, create_app.Command{})
+		handler, ctx, _ := arrange(t)
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		testutil.Equals(t, "", id)
+		id, err := handler(ctx, create_app.Command{})
+
+		assert.Zero(t, id)
+		assert.ValidationError(t, validate.FieldErrors{
+			"name":              domain.ErrInvalidAppName,
+			"production.target": strings.ErrRequired,
+			"staging.target":    strings.ErrRequired,
+		}, err)
 	})
 
 	t.Run("should fail if the name is already taken", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("production-target"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("staging-target"), true, true), "uid"))
-		uc := sut(&a)
+		user := authfixture.User()
+		productionTarget := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		stagingTarget := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		existingApp := fixture.App(fixture.WithAppName("my-app"),
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(productionTarget.ID()),
+				domain.NewEnvironmentConfig(stagingTarget.ID()),
+			))
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&productionTarget, &stagingTarget),
+			fixture.WithApps(&existingApp),
+		)
 
-		id, err := uc(ctx, create_app.Command{
+		id, err := handler(ctx, create_app.Command{
+			Name: "my-app",
+			Production: create_app.EnvironmentConfig{
+				Target: string(productionTarget.ID()),
+			},
+			Staging: create_app.EnvironmentConfig{
+				Target: string(stagingTarget.ID()),
+			},
+		})
+
+		assert.Zero(t, id)
+		assert.ValidationError(t, validate.FieldErrors{
+			"production.target": domain.ErrAppNameAlreadyTaken,
+			"staging.target":    domain.ErrAppNameAlreadyTaken,
+		}, err)
+	})
+
+	t.Run("should fail if provided targets does not exists", func(t *testing.T) {
+		handler, ctx, _ := arrange(t)
+
+		id, err := handler(ctx, create_app.Command{
 			Name: "my-app",
 			Production: create_app.EnvironmentConfig{
 				Target: "production-target",
@@ -46,26 +88,53 @@ func Test_CreateApp(t *testing.T) {
 			},
 		})
 
-		validationErr, ok := apperr.As[validate.FieldErrors](err)
-		testutil.IsTrue(t, ok)
-		testutil.Equals(t, "", id)
-		testutil.ErrorIs(t, domain.ErrAppNameAlreadyTaken, validationErr["production.target"])
-		testutil.ErrorIs(t, domain.ErrAppNameAlreadyTaken, validationErr["staging.target"])
+		assert.Zero(t, id)
+		assert.ValidationError(t, validate.FieldErrors{
+			"production.target": apperr.ErrNotFound,
+			"staging.target":    apperr.ErrNotFound,
+		}, err)
 	})
 
 	t.Run("should create a new app if everything is good", func(t *testing.T) {
-		uc := sut()
-		id, err := uc(ctx, create_app.Command{
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
+
+		id, err := handler(ctx, create_app.Command{
 			Name: "my-app",
 			Production: create_app.EnvironmentConfig{
-				Target: "production-target",
+				Target: string(target.ID()),
 			},
 			Staging: create_app.EnvironmentConfig{
-				Target: "staging-target",
+				Target: string(target.ID()),
 			},
+			VersionControl: monad.Value(create_app.VersionControl{
+				Url:   "https://somewhere.git",
+				Token: monad.Value("some-token"),
+			}),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.NotEquals(t, "", id)
+		assert.Nil(t, err)
+		assert.NotZero(t, id)
+		assert.HasLength(t, 2, dispatcher.Signals())
+
+		created := assert.Is[domain.AppCreated](t, dispatcher.Signals()[0])
+		assert.DeepEqual(t, domain.AppCreated{
+			ID:         domain.AppID(id),
+			Name:       "my-app",
+			Production: created.Production,
+			Staging:    created.Staging,
+			Created:    shared.ActionFrom(user.ID(), assert.NotZero(t, created.Created.At())),
+		}, created)
+		assert.Equal(t, target.ID(), created.Production.Target())
+		assert.Equal(t, target.ID(), created.Staging.Target())
+
+		versionControlConfigured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[1])
+		assert.Equal(t, created.ID, versionControlConfigured.ID)
+		assert.Equal(t, "https://somewhere.git", versionControlConfigured.Config.Url().String())
+		assert.Equal(t, "some-token", versionControlConfigured.Config.Token().Get(""))
 	})
 }

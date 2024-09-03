@@ -13,7 +13,7 @@ COPY go.* ./
 RUN go mod download
 COPY . .
 COPY --from=front_builder /app/build ./cmd/serve/front/build
-RUN go build -ldflags="-s -w" -o seelf
+RUN make build-back
 
 FROM alpine:3.16
 LABEL org.opencontainers.image.authors="julien@leicher.me" \

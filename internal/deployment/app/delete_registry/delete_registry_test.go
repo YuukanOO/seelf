@@ -4,41 +4,51 @@ import (
 	"context"
 	"testing"
 
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/delete_registry"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 )
 
 func Test_DeleteRegistry(t *testing.T) {
-	sut := func(existing ...*domain.Registry) bus.RequestHandler[bus.UnitType, delete_registry.Command] {
-		store := memory.NewRegistriesStore(existing...)
-		return delete_registry.Handler(store, store)
+
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[bus.UnitType, delete_registry.Command],
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return delete_registry.Handler(context.RegistriesStore, context.RegistriesStore), context.Dispatcher
 	}
 
 	t.Run("should require an existing registry", func(t *testing.T) {
-		uc := sut()
+		handler, _ := arrange(t)
 
-		_, err := uc(context.Background(), delete_registry.Command{
+		_, err := handler(context.Background(), delete_registry.Command{
 			ID: "non-existing-id",
 		})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
 	})
 
 	t.Run("should delete the registry", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
-		uc := sut(&r)
+		user := authfixture.User()
+		registry := fixture.Registry(fixture.WithRegistryCreatedBy(user.ID()))
+		handler, dispatcher := arrange(t, fixture.WithUsers(&user), fixture.WithRegistries(&registry))
 
-		_, err := uc(context.Background(), delete_registry.Command{
-			ID: string(r.ID()),
+		_, err := handler(context.Background(), delete_registry.Command{
+			ID: string(registry.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		evt := testutil.EventIs[domain.RegistryDeleted](t, &r, 1)
-		testutil.Equals(t, r.ID(), evt.ID)
+		assert.Nil(t, err)
+		assert.HasLength(t, 1, dispatcher.Signals())
+
+		deleted := assert.Is[domain.RegistryDeleted](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.RegistryDeleted{
+			ID: registry.ID(),
+		}, deleted)
 	})
 }

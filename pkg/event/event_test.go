@@ -3,9 +3,9 @@ package event_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 type (
@@ -34,9 +34,9 @@ func Test_Emitter(t *testing.T) {
 
 		evts := event.Unwrap(&ent)
 
-		testutil.HasLength(t, evts, 2)
-		testutil.Equals(t, evt1, evts[0].(domainEventA))
-		testutil.Equals(t, evt2, evts[1].(domainEventB))
+		assert.HasLength(t, 2, evts)
+		assert.Equal(t, evt1, evts[0].(domainEventA))
+		assert.Equal(t, evt2, evts[1].(domainEventB))
 	})
 
 	// t.Run("should be able to clear all events from an Emitter", func(t *testing.T) {

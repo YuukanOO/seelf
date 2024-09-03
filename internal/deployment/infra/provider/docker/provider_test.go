@@ -15,16 +15,17 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/ssh"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/compose/v2/pkg/api"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -36,7 +37,7 @@ type options interface {
 func Test_Provider(t *testing.T) {
 	logger := must.Panic(log.NewLogger())
 
-	sut := func(opts options) (docker.Docker, *dockerMockService) {
+	arrange := func(opts options) (docker.Docker, *dockerMockService) {
 		mock := newMockService()
 
 		t.Cleanup(func() {
@@ -200,14 +201,14 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 			},
 		}
 
-		provider, _ := sut(config.Default(config.WithTestDefaults()))
+		provider, _ := arrange(config.Default(config.WithTestDefaults()))
 
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%v", tt.payload), func(t *testing.T) {
 				data, err := provider.Prepare(context.Background(), tt.payload, tt.existing...)
 
-				testutil.IsNil(t, err)
-				testutil.IsTrue(t, data.Equals(tt.expected))
+				assert.Nil(t, err)
+				assert.True(t, data.Equals(tt.expected))
 			})
 		}
 	})
@@ -216,14 +217,14 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		target := createTarget("http://docker.localhost")
 		targetIdLower := strings.ToLower(string(target.ID()))
 
-		provider, mock := sut(config.Default(config.WithTestDefaults()))
+		provider, mock := arrange(config.Default(config.WithTestDefaults()))
 
 		assigned, err := provider.Setup(context.Background(), target)
 
-		testutil.IsNil(t, err)
-		testutil.DeepEquals(t, domain.TargetEntrypointsAssigned{}, assigned)
-		testutil.HasLength(t, mock.ups, 1)
-		testutil.DeepEquals(t, &types.Project{
+		assert.Nil(t, err)
+		assert.DeepEqual(t, domain.TargetEntrypointsAssigned{}, assigned)
+		assert.HasLength(t, 1, mock.ups)
+		assert.DeepEqual(t, &types.Project{
 			Name: "seelf-internal-" + targetIdLower,
 			Services: types.Services{
 				"proxy": {
@@ -271,14 +272,14 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		target := createTarget("https://docker.localhost")
 		targetIdLower := strings.ToLower(string(target.ID()))
 
-		provider, mock := sut(config.Default(config.WithTestDefaults()))
+		provider, mock := arrange(config.Default(config.WithTestDefaults()))
 
 		assigned, err := provider.Setup(context.Background(), target)
 
-		testutil.IsNil(t, err)
-		testutil.DeepEquals(t, domain.TargetEntrypointsAssigned{}, assigned)
-		testutil.HasLength(t, mock.ups, 1)
-		testutil.DeepEquals(t, &types.Project{
+		assert.Nil(t, err)
+		assert.DeepEqual(t, domain.TargetEntrypointsAssigned{}, assigned)
+		assert.HasLength(t, 1, mock.ups)
+		assert.DeepEqual(t, &types.Project{
 			Name: "seelf-internal-" + targetIdLower,
 			Services: types.Services{
 				"proxy": {
@@ -349,21 +350,21 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 
 		target.ExposeEntrypoints(depl.ID().AppID(), depl.Config().Environment(), domain.Services{service})
 
-		provider, mock := sut(config.Default(config.WithTestDefaults()))
+		provider, mock := arrange(config.Default(config.WithTestDefaults()))
 
 		assigned, err := provider.Setup(context.Background(), target)
 
-		testutil.IsNil(t, err)
-		testutil.HasLength(t, mock.ups, 2)
-		testutil.HasLength(t, mock.downs, 1)
+		assert.Nil(t, err)
+		assert.HasLength(t, 2, mock.ups)
+		assert.HasLength(t, 1, mock.downs)
 
 		tcpPort := assigned[depl.ID().AppID()][depl.Config().Environment()][tcp.Name()]
 		udpPort := assigned[depl.ID().AppID()][depl.Config().Environment()][udp.Name()]
 
-		testutil.NotEquals(t, 0, tcpPort)
-		testutil.NotEquals(t, 0, udpPort)
+		assert.NotEqual(t, 0, tcpPort)
+		assert.NotEqual(t, 0, udpPort)
 
-		testutil.DeepEquals(t, &types.Project{
+		assert.DeepEqual(t, &types.Project{
 			Name: "seelf-internal-" + targetIdLower,
 			Services: types.Services{
 				"proxy": {
@@ -434,22 +435,22 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		newUdp := service.AddUDPEntrypoint(5435)
 		target.ExposeEntrypoints(depl.ID().AppID(), depl.Config().Environment(), domain.Services{service})
 
-		provider, mock := sut(config.Default(config.WithTestDefaults()))
+		provider, mock := arrange(config.Default(config.WithTestDefaults()))
 
 		assigned, err := provider.Setup(context.Background(), target)
 
-		testutil.IsNil(t, err)
-		testutil.HasLength(t, mock.ups, 2)
-		testutil.HasLength(t, mock.downs, 1)
-		testutil.Equals(t, 2, len(assigned[depl.ID().AppID()][depl.Config().Environment()]))
+		assert.Nil(t, err)
+		assert.HasLength(t, 2, mock.ups)
+		assert.HasLength(t, 1, mock.downs)
+		assert.Equal(t, 2, len(assigned[depl.ID().AppID()][depl.Config().Environment()]))
 
 		tcpPort := assigned[depl.ID().AppID()][depl.Config().Environment()][newTcp.Name()]
 		udpPort := assigned[depl.ID().AppID()][depl.Config().Environment()][newUdp.Name()]
 
-		testutil.NotEquals(t, 0, tcpPort)
-		testutil.NotEquals(t, 0, udpPort)
+		assert.NotEqual(t, 0, tcpPort)
+		assert.NotEqual(t, 0, udpPort)
 
-		testutil.DeepEquals(t, &types.Project{
+		assert.DeepEqual(t, &types.Project{
 			Name: "seelf-internal-" + targetIdLower,
 			Services: types.Services{
 				"proxy": {
@@ -501,6 +502,23 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 		}, mock.ups[1].project)
 	})
 
+	t.Run("should returns an error if no valid compose file was found for a deployment", func(t *testing.T) {
+		target := createTarget("http://docker.localhost")
+		depl := createDeployment(target.ID(), "")
+		opts := config.Default(config.WithTestDefaults())
+		artifactManager := artifact.NewLocal(opts, logger)
+
+		ctx, err := artifactManager.PrepareBuild(context.Background(), depl)
+		assert.Nil(t, err)
+		defer ctx.Logger().Close()
+
+		provider, _ := arrange(opts)
+
+		_, err = provider.Deploy(context.Background(), ctx, depl, target, nil)
+
+		assert.ErrorIs(t, docker.ErrOpenComposeFileFailed, err)
+	})
+
 	t.Run("should expose services from a compose file", func(t *testing.T) {
 		target := createTarget("http://docker.localhost")
 		depl := createDeployment(target.ID(), `services:
@@ -543,52 +561,53 @@ volumes:
 		opts := config.Default(config.WithTestDefaults())
 		artifactManager := artifact.NewLocal(opts, logger)
 		ctx, err := artifactManager.PrepareBuild(context.Background(), depl)
-		testutil.IsNil(t, err)
-		testutil.IsNil(t, raw.New().Fetch(context.Background(), ctx, depl))
+		assert.Nil(t, err)
+		assert.Nil(t, raw.New().Fetch(context.Background(), ctx, depl))
+		defer ctx.Logger().Close()
 
-		provider, mock := sut(opts)
+		provider, mock := arrange(opts)
 
 		services, err := provider.Deploy(context.Background(), ctx, depl, target, nil)
 
-		testutil.IsNil(t, err)
-		testutil.HasLength(t, mock.ups, 1)
-		testutil.HasLength(t, services, 3)
+		assert.Nil(t, err)
+		assert.HasLength(t, 1, mock.ups)
+		assert.HasLength(t, 3, services)
 
-		testutil.Equals(t, "app", services[0].Name())
-		testutil.Equals(t, "db", services[1].Name())
-		testutil.Equals(t, "sidecar", services[2].Name())
+		assert.Equal(t, "app", services[0].Name())
+		assert.Equal(t, "db", services[1].Name())
+		assert.Equal(t, "sidecar", services[2].Name())
 
 		entrypoints := services.Entrypoints()
-		testutil.HasLength(t, entrypoints, 4)
-		testutil.Equals(t, 8080, entrypoints[0].Port())
-		testutil.Equals(t, "http", entrypoints[0].Router())
-		testutil.Equals(t, string(depl.Config().AppName()), entrypoints[0].Subdomain().Get(""))
-		testutil.Equals(t, 8081, entrypoints[1].Port())
-		testutil.Equals(t, "udp", entrypoints[1].Router())
-		testutil.Equals(t, 8082, entrypoints[2].Port())
-		testutil.Equals(t, "http", entrypoints[2].Router())
-		testutil.Equals(t, string(depl.Config().AppName()), entrypoints[2].Subdomain().Get(""))
-		testutil.Equals(t, 5432, entrypoints[3].Port())
-		testutil.Equals(t, "tcp", entrypoints[3].Router())
+		assert.HasLength(t, 4, entrypoints)
+		assert.Equal(t, 8080, entrypoints[0].Port())
+		assert.Equal(t, "http", entrypoints[0].Router())
+		assert.Equal(t, string(depl.Config().AppName()), entrypoints[0].Subdomain().Get(""))
+		assert.Equal(t, 8081, entrypoints[1].Port())
+		assert.Equal(t, "udp", entrypoints[1].Router())
+		assert.Equal(t, 8082, entrypoints[2].Port())
+		assert.Equal(t, "http", entrypoints[2].Router())
+		assert.Equal(t, string(depl.Config().AppName()), entrypoints[2].Subdomain().Get(""))
+		assert.Equal(t, 5432, entrypoints[3].Port())
+		assert.Equal(t, "tcp", entrypoints[3].Router())
 
 		project := mock.ups[0].project
 		expectedProjectName := fmt.Sprintf("%s-%s-%s", depl.Config().AppName(), depl.Config().Environment(), appIdLower)
 		expectedGatewayNetworkName := "seelf-gateway-" + strings.ToLower(string(target.ID()))
-		testutil.Equals(t, expectedProjectName, project.Name)
-		testutil.Equals(t, 3, len(project.Services))
+		assert.Equal(t, expectedProjectName, project.Name)
+		assert.Equal(t, 3, len(project.Services))
 
 		for _, service := range project.Services {
 			switch service.Name {
 			case "sidecar":
-				testutil.Equals(t, "traefik/whoami", service.Image)
-				testutil.HasLength(t, service.Ports, 0)
-				testutil.DeepEquals(t, types.MappingWithEquals{}, service.Environment)
-				testutil.DeepEquals(t, types.Labels{
+				assert.Equal(t, "traefik/whoami", service.Image)
+				assert.HasLength(t, 0, service.Ports)
+				assert.DeepEqual(t, types.MappingWithEquals{}, service.Environment)
+				assert.DeepEqual(t, types.Labels{
 					docker.AppLabel:         string(depl.ID().AppID()),
 					docker.TargetLabel:      string(target.ID()),
 					docker.EnvironmentLabel: string(depl.Config().Environment()),
 				}, service.Labels)
-				testutil.DeepEquals(t, map[string]*types.ServiceNetworkConfig{
+				assert.DeepEqual(t, map[string]*types.ServiceNetworkConfig{
 					"default": nil,
 				}, service.Networks)
 			case "app":
@@ -597,9 +616,9 @@ volumes:
 				customHttpEntrypointName := string(entrypoints[2].Name())
 				dsn := depl.Config().EnvironmentVariablesFor("app").MustGet()["DSN"]
 
-				testutil.Equals(t, fmt.Sprintf("%s-%s/app:%s", depl.Config().AppName(), appIdLower, depl.Config().Environment()), service.Image)
-				testutil.Equals(t, types.RestartPolicyUnlessStopped, service.Restart)
-				testutil.DeepEquals(t, types.Labels{
+				assert.Equal(t, fmt.Sprintf("%s-%s/app:%s", depl.Config().AppName(), appIdLower, depl.Config().Environment()), service.Image)
+				assert.Equal(t, types.RestartPolicyUnlessStopped, service.Restart)
+				assert.DeepEqual(t, types.Labels{
 					docker.AppLabel:         string(depl.ID().AppID()),
 					docker.TargetLabel:      string(target.ID()),
 					docker.EnvironmentLabel: string(depl.Config().Environment()),
@@ -616,11 +635,11 @@ volumes:
 					fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", customHttpEntrypointName): "8082",
 				}, service.Labels)
 
-				testutil.HasLength(t, service.Ports, 0)
-				testutil.DeepEquals(t, types.MappingWithEquals{
+				assert.HasLength(t, 0, service.Ports)
+				assert.DeepEqual(t, types.MappingWithEquals{
 					"DSN": &dsn,
 				}, service.Environment)
-				testutil.DeepEquals(t, map[string]*types.ServiceNetworkConfig{
+				assert.DeepEqual(t, map[string]*types.ServiceNetworkConfig{
 					"default":                  nil,
 					expectedGatewayNetworkName: nil,
 				}, service.Networks)
@@ -629,9 +648,9 @@ volumes:
 				postgresUser := depl.Config().EnvironmentVariablesFor("db").MustGet()["POSTGRES_USER"]
 				postgresPassword := depl.Config().EnvironmentVariablesFor("db").MustGet()["POSTGRES_PASSWORD"]
 
-				testutil.Equals(t, "postgres:14-alpine", service.Image)
-				testutil.Equals(t, types.RestartPolicyUnlessStopped, service.Restart)
-				testutil.DeepEquals(t, types.Labels{
+				assert.Equal(t, "postgres:14-alpine", service.Image)
+				assert.Equal(t, types.RestartPolicyUnlessStopped, service.Restart)
+				assert.DeepEqual(t, types.Labels{
 					docker.AppLabel:         string(depl.ID().AppID()),
 					docker.TargetLabel:      string(target.ID()),
 					docker.EnvironmentLabel: string(depl.Config().Environment()),
@@ -641,16 +660,16 @@ volumes:
 					fmt.Sprintf("traefik.tcp.routers.%s.service", entrypointName):                   entrypointName,
 					fmt.Sprintf("traefik.tcp.services.%s.loadbalancer.server.port", entrypointName): "5432",
 				}, service.Labels)
-				testutil.HasLength(t, service.Ports, 0)
-				testutil.DeepEquals(t, types.MappingWithEquals{
+				assert.HasLength(t, 0, service.Ports)
+				assert.DeepEqual(t, types.MappingWithEquals{
 					"POSTGRES_USER":     &postgresUser,
 					"POSTGRES_PASSWORD": &postgresPassword,
 				}, service.Environment)
-				testutil.DeepEquals(t, map[string]*types.ServiceNetworkConfig{
+				assert.DeepEqual(t, map[string]*types.ServiceNetworkConfig{
 					"default":                  nil,
 					expectedGatewayNetworkName: nil,
 				}, service.Networks)
-				testutil.DeepEquals(t, []types.ServiceVolumeConfig{
+				assert.DeepEqual(t, []types.ServiceVolumeConfig{
 					{
 						Type:   types.VolumeTypeVolume,
 						Source: "dbdata",
@@ -663,7 +682,7 @@ volumes:
 			}
 		}
 
-		testutil.DeepEquals(t, types.Networks{
+		assert.DeepEqual(t, types.Networks{
 			"default": {
 				Name: expectedProjectName + "_default",
 				Labels: types.Labels{
@@ -677,7 +696,7 @@ volumes:
 				External: true,
 			},
 		}, project.Networks)
-		testutil.DeepEquals(t, types.Volumes{
+		assert.DeepEqual(t, types.Volumes{
 			"dbdata": {
 				Name: expectedProjectName + "_dbdata",
 				Labels: types.Labels{
@@ -688,7 +707,7 @@ volumes:
 			},
 		}, project.Volumes)
 
-		testutil.DeepEquals(t, filters.NewArgs(
+		assert.DeepEqual(t, filters.NewArgs(
 			filters.Arg("dangling", "true"),
 			filters.Arg("label", fmt.Sprintf("%s=%s", docker.AppLabel, depl.ID().AppID())),
 			filters.Arg("label", fmt.Sprintf("%s=%s", docker.TargetLabel, target.ID())),
@@ -822,9 +841,9 @@ func (d *dockerMockCli) ContainerInspect(_ context.Context, containerName string
 	return result, nil
 }
 
-func (d *dockerMockCli) ImagesPrune(_ context.Context, criteria filters.Args) (dockertypes.ImagesPruneReport, error) {
+func (d *dockerMockCli) ImagesPrune(_ context.Context, criteria filters.Args) (image.PruneReport, error) {
 	d.parent.pruneFilters = criteria
-	return dockertypes.ImagesPruneReport{}, nil
+	return image.PruneReport{}, nil
 }
 
 // func (d *dockerMockService) ContainerList(context.Context, container.ListOptions) ([]dockertypes.Container, error) {

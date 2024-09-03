@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
 func Test_DeploymentID(t *testing.T) {
@@ -16,7 +16,7 @@ func Test_DeploymentID(t *testing.T) {
 
 		id := domain.DeploymentIDFrom(app, number)
 
-		testutil.Equals(t, app, id.AppID())
-		testutil.Equals(t, number, id.DeploymentNumber())
+		assert.Equal(t, app, id.AppID())
+		assert.Equal(t, number, id.DeploymentNumber())
 	})
 }

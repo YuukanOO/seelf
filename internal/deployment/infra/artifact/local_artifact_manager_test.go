@@ -9,9 +9,9 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_LocalArtifactManager(t *testing.T) {
@@ -34,27 +34,27 @@ func Test_LocalArtifactManager(t *testing.T) {
 		manager := sut()
 
 		ctx, err := manager.PrepareBuild(context.Background(), depl)
-		testutil.IsNil(t, err)
-		testutil.IsNotNil(t, logger)
+		assert.Nil(t, err)
+		assert.NotNil(t, logger)
 
 		defer ctx.Logger().Close()
 
 		_, err = os.ReadDir(ctx.BuildDirectory())
-		testutil.IsNil(t, err)
+		assert.Nil(t, err)
 	})
 
 	t.Run("should correctly cleanup an app directory", func(t *testing.T) {
 		manager := sut()
 
 		ctx, err := manager.PrepareBuild(context.Background(), depl)
-		testutil.IsNil(t, err)
+		assert.Nil(t, err)
 
 		ctx.Logger().Close() // Do not defer or else the directory will be locked
 
 		err = manager.Cleanup(context.Background(), app.ID())
-		testutil.IsNil(t, err)
+		assert.Nil(t, err)
 
 		_, err = os.ReadDir(ctx.BuildDirectory())
-		testutil.IsTrue(t, os.IsNotExist(err))
+		assert.True(t, os.IsNotExist(err))
 	})
 }

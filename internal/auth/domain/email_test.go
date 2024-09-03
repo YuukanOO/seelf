@@ -4,15 +4,17 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
 func Test_Email_ValidatesAnEmail(t *testing.T) {
 	r, err := domain.EmailFrom("")
-	testutil.Equals(t, "", r)
-	testutil.ErrorIs(t, domain.ErrInvalidEmail, err)
+
+	assert.Equal(t, "", r)
+	assert.ErrorIs(t, domain.ErrInvalidEmail, err)
 
 	r, err = domain.EmailFrom("agood@email.com")
-	testutil.Equals(t, "agood@email.com", r)
-	testutil.IsNil(t, err)
+
+	assert.Equal(t, "agood@email.com", r)
+	assert.Nil(t, err)
 }

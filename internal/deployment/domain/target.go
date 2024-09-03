@@ -28,7 +28,7 @@ var (
 
 const (
 	CleanupStrategyDefault CleanupStrategy = iota // Default strategy, try to remove the target data but returns an error if it fails
-	CleanupStrategySkip                           // Skip the cleanup because no resource has been deployed
+	CleanupStrategySkip                           // Skip the cleanup because no resource has been deployed or we can't remove them anymore
 )
 
 type (

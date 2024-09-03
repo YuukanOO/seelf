@@ -14,7 +14,7 @@ func OnAppEnvChangedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[d
 			return nil
 		}
 
-		return writer.FailDeployments(ctx, domain.ErrAppTargetChanged, domain.FailCriterias{
+		return writer.FailDeployments(ctx, domain.ErrAppTargetChanged, domain.FailCriteria{
 			Status:      monad.Value(domain.DeploymentStatusPending),
 			App:         monad.Value(evt.ID),
 			Environment: monad.Value(evt.Environment),

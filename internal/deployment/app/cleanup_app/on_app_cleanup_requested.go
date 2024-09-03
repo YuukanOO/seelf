@@ -13,15 +13,13 @@ func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[dom
 	return func(ctx context.Context, evt domain.AppCleanupRequested) error {
 		now := time.Now().UTC()
 
-		err := scheduler.Queue(ctx, Command{
+		if err := scheduler.Queue(ctx, Command{
 			AppID:       string(evt.ID),
 			Environment: string(domain.Production),
 			TargetID:    string(evt.ProductionConfig.Target()),
 			From:        evt.ProductionConfig.Version(),
 			To:          now,
-		}, bus.WithPolicy(bus.JobPolicyCancellable))
-
-		if err != nil {
+		}, bus.WithPolicy(bus.JobPolicyCancellable)); err != nil {
 			return err
 		}
 

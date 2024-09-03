@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,19 +13,19 @@ func Test_Maybe(t *testing.T) {
 	t.Run("should have a default state without value", func(t *testing.T) {
 		var m monad.Maybe[time.Time]
 
-		testutil.IsFalse(t, m.HasValue())
+		assert.False(t, m.HasValue())
 	})
 
 	t.Run("could be created empty", func(t *testing.T) {
 		m := monad.None[time.Time]()
-		testutil.IsFalse(t, m.HasValue())
+		assert.False(t, m.HasValue())
 	})
 
 	t.Run("could be created with a defined value", func(t *testing.T) {
 		m := monad.Value("ok")
 
-		testutil.Equals(t, "ok", m.MustGet())
-		testutil.IsTrue(t, m.HasValue())
+		assert.Equal(t, "ok", m.MustGet())
+		assert.True(t, m.HasValue())
 	})
 
 	t.Run("could returns its internal value and a boolean indicating if it has been set", func(t *testing.T) {
@@ -33,15 +33,15 @@ func Test_Maybe(t *testing.T) {
 
 		value, hasValue := m.TryGet()
 
-		testutil.IsFalse(t, hasValue)
-		testutil.Equals(t, "", value)
+		assert.False(t, hasValue)
+		assert.Equal(t, "", value)
 
 		m.Set("ok")
 
 		value, hasValue = m.TryGet()
 
-		testutil.IsTrue(t, hasValue)
-		testutil.Equals(t, "ok", value)
+		assert.True(t, hasValue)
+		assert.Equal(t, "ok", value)
 	})
 
 	t.Run("could be assigned a value", func(t *testing.T) {
@@ -51,8 +51,8 @@ func Test_Maybe(t *testing.T) {
 		)
 
 		m.Set(now)
-		testutil.Equals(t, now, m.MustGet())
-		testutil.IsTrue(t, m.HasValue())
+		assert.Equal(t, now, m.MustGet())
+		assert.True(t, m.HasValue())
 	})
 
 	t.Run("could unset its value", func(t *testing.T) {
@@ -60,14 +60,14 @@ func Test_Maybe(t *testing.T) {
 
 		m.Unset()
 
-		testutil.IsFalse(t, m.HasValue())
+		assert.False(t, m.HasValue())
 	})
 
 	t.Run("should panic if trying to access a value with MustGet", func(t *testing.T) {
 		defer func() {
 			err := recover()
-			testutil.IsNotNil(t, err)
-			testutil.Equals(t, "trying to access a monad's value but none is set", err.(string))
+			assert.NotNil(t, err)
+			assert.Equal(t, "trying to access a monad's value but none is set", err.(string))
 		}()
 
 		var m monad.Maybe[time.Time]
@@ -80,7 +80,7 @@ func Test_Maybe(t *testing.T) {
 
 		m := monad.Value(now)
 
-		testutil.Equals(t, now, m.MustGet())
+		assert.Equal(t, now, m.MustGet())
 	})
 
 	t.Run("could returns its value or fallback if not set", func(t *testing.T) {
@@ -89,8 +89,8 @@ func Test_Maybe(t *testing.T) {
 			wValue  = monad.Value("got a value")
 		)
 
-		testutil.Equals(t, "got a value", wValue.Get("default"))
-		testutil.Equals(t, "default", woValue.Get("default"))
+		assert.Equal(t, "got a value", wValue.Get("default"))
+		assert.Equal(t, "default", woValue.Get("default"))
 	})
 
 	t.Run("should implements the valuer interface", func(t *testing.T) {
@@ -98,15 +98,15 @@ func Test_Maybe(t *testing.T) {
 
 		driverValue, err := m.Value()
 
-		testutil.IsNil(t, err)
-		testutil.IsNil(t, driverValue)
+		assert.Nil(t, err)
+		assert.Nil(t, driverValue)
 
 		now := time.Now().UTC()
 		m.Set(now)
 		driverValue, err = m.Value()
 
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, driverValue == now)
+		assert.Nil(t, err)
+		assert.True(t, driverValue == now)
 	})
 
 	t.Run("should implements the Scanner interface", func(t *testing.T) {
@@ -114,14 +114,14 @@ func Test_Maybe(t *testing.T) {
 
 		err := m.Scan(nil)
 
-		testutil.IsNil(t, err)
-		testutil.IsFalse(t, m.HasValue())
+		assert.Nil(t, err)
+		assert.False(t, m.HasValue())
 
 		err = m.Scan("data")
 
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, m.HasValue())
-		testutil.Equals(t, "data", m.MustGet())
+		assert.Nil(t, err)
+		assert.True(t, m.HasValue())
+		assert.Equal(t, "data", m.MustGet())
 	})
 
 	t.Run("should correctly marshal to json", func(t *testing.T) {
@@ -129,15 +129,15 @@ func Test_Maybe(t *testing.T) {
 
 		data, err := m.MarshalJSON()
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, "null", string(data))
+		assert.Nil(t, err)
+		assert.Equal(t, "null", string(data))
 
 		m.Set("ok")
 
 		data, err = m.MarshalJSON()
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, `"ok"`, string(data))
+		assert.Nil(t, err)
+		assert.Equal(t, `"ok"`, string(data))
 	})
 
 	t.Run("should correctly marshal to yaml", func(t *testing.T) {
@@ -145,17 +145,17 @@ func Test_Maybe(t *testing.T) {
 
 		data, err := m.MarshalYAML()
 
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, m.IsZero())
-		testutil.IsNil(t, data)
+		assert.Nil(t, err)
+		assert.True(t, m.IsZero())
+		assert.Nil(t, data)
 
 		m.Set("ok")
 
 		data, err = m.MarshalYAML()
 
-		testutil.IsNil(t, err)
-		testutil.IsFalse(t, m.IsZero())
-		testutil.Equals(t, "ok", data)
+		assert.Nil(t, err)
+		assert.False(t, m.IsZero())
+		assert.Equal(t, "ok", data)
 	})
 
 	t.Run("should correctly unmarshal from yaml", func(t *testing.T) {
@@ -163,9 +163,9 @@ func Test_Maybe(t *testing.T) {
 
 		err := m.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "ok"})
 
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, m.HasValue())
-		testutil.Equals(t, "ok", m.MustGet())
+		assert.Nil(t, err)
+		assert.True(t, m.HasValue())
+		assert.Equal(t, "ok", m.MustGet())
 	})
 
 	t.Run("should correctly unmarshal from env variables", func(t *testing.T) {
@@ -173,12 +173,12 @@ func Test_Maybe(t *testing.T) {
 
 		err := m.UnmarshalEnvironmentValue("")
 
-		testutil.IsNil(t, err)
-		testutil.IsFalse(t, m.HasValue())
+		assert.Nil(t, err)
+		assert.False(t, m.HasValue())
 
 		err = m.UnmarshalEnvironmentValue("ok")
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, m.HasValue())
-		testutil.Equals(t, "ok", m.MustGet())
+		assert.Nil(t, err)
+		assert.True(t, m.HasValue())
+		assert.Equal(t, "ok", m.MustGet())
 	})
 }

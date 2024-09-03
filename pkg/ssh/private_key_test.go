@@ -3,8 +3,8 @@ package ssh_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/ssh"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_PrivateKey(t *testing.T) {
@@ -38,12 +38,12 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 				got, err := ssh.ParsePrivateKey(tt.value)
 
 				if !tt.valid {
-					testutil.ErrorIs(t, ssh.ErrInvalidSSHKey, err)
+					assert.ErrorIs(t, ssh.ErrInvalidSSHKey, err)
 					return
 				}
 
-				testutil.IsNil(t, err)
-				testutil.Equals(t, tt.value, string(got))
+				assert.Nil(t, err)
+				assert.Equal(t, tt.value, string(got))
 			})
 		}
 	})

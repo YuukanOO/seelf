@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/domain"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_TimeInterval(t *testing.T) {
 	t.Run("should fail if the from date is after the to date", func(t *testing.T) {
 		_, err := domain.NewTimeInterval(time.Now(), time.Now().Add(-time.Second))
 
-		testutil.ErrorIs(t, domain.ErrInvalidTimeInterval, err)
+		assert.ErrorIs(t, domain.ErrInvalidTimeInterval, err)
 	})
 
 	t.Run("should succeed if the from date is before the to date", func(t *testing.T) {
@@ -20,8 +20,8 @@ func Test_TimeInterval(t *testing.T) {
 		to := time.Now().Add(time.Second)
 		ti, err := domain.NewTimeInterval(from, to)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, from, ti.From())
-		testutil.Equals(t, to, ti.To())
+		assert.Nil(t, err)
+		assert.Equal(t, from, ti.From())
+		assert.Equal(t, to, ti.To())
 	})
 }

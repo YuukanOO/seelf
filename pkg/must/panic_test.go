@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Panic(t *testing.T) {
@@ -14,8 +14,8 @@ func Test_Panic(t *testing.T) {
 		defer func() {
 			r := recover()
 
-			testutil.IsNotNil(t, r)
-			testutil.ErrorIs(t, err, r.(error))
+			assert.NotNil(t, r)
+			assert.ErrorIs(t, err, r.(error))
 		}()
 
 		must.Panic(42, err)
@@ -24,6 +24,6 @@ func Test_Panic(t *testing.T) {
 	t.Run("should return the value if no error is given", func(t *testing.T) {
 		value := must.Panic(42, nil)
 
-		testutil.Equals(t, 42, value)
+		assert.Equal(t, 42, value)
 	})
 }

@@ -6,8 +6,8 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Facade(t *testing.T) {
@@ -23,7 +23,7 @@ func Test_Facade(t *testing.T) {
 
 		_, err := sut.Prepare(context.Background(), "payload")
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
 	t.Run("should return an error if no provider can handle the deployment", func(t *testing.T) {
@@ -31,7 +31,7 @@ func Test_Facade(t *testing.T) {
 
 		_, err := sut.Deploy(context.Background(), domain.DeploymentContext{}, depl, target, nil)
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
 	t.Run("should return an error if no provider can configure the target", func(t *testing.T) {
@@ -39,7 +39,7 @@ func Test_Facade(t *testing.T) {
 
 		_, err := sut.Setup(context.Background(), target)
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
 	t.Run("should return an error if no provider can unconfigure the target", func(t *testing.T) {
@@ -47,7 +47,7 @@ func Test_Facade(t *testing.T) {
 
 		err := sut.RemoveConfiguration(context.Background(), target)
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
 	t.Run("should return an error if no provider can cleanup the target", func(t *testing.T) {
@@ -55,7 +55,7 @@ func Test_Facade(t *testing.T) {
 
 		err := sut.CleanupTarget(context.Background(), target, domain.CleanupStrategyDefault)
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
 	t.Run("should return an error if no provider can cleanup the app", func(t *testing.T) {
@@ -63,7 +63,7 @@ func Test_Facade(t *testing.T) {
 
 		err := sut.Cleanup(context.Background(), app.ID(), target, domain.Production, domain.CleanupStrategyDefault)
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 }
 

@@ -6,9 +6,9 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider/docker"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/ssh"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Data(t *testing.T) {
@@ -56,7 +56,7 @@ func Test_Data(t *testing.T) {
 			t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
 				got := test.a.Equals(test.b)
 
-				testutil.Equals(t, test.expected, got)
+				assert.Equal(t, test.expected, got)
 			})
 		}
 	})

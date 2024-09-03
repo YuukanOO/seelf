@@ -4,82 +4,96 @@ import (
 	"context"
 	"testing"
 
-	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_target_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
 )
 
-type initialData struct {
-	targets []*domain.Target
-	apps    []*domain.App
-}
-
 func Test_RequestTargetCleanup(t *testing.T) {
-	ctx := auth.WithUserID(context.Background(), "some-uid")
 
-	sut := func(existing initialData) bus.RequestHandler[bus.UnitType, request_target_cleanup.Command] {
-		targetsStore := memory.NewTargetsStore(existing.targets...)
-		appsStore := memory.NewAppsStore(existing.apps...)
-		return request_target_cleanup.Handler(targetsStore, targetsStore, appsStore)
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[bus.UnitType, request_target_cleanup.Command],
+		context.Context,
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return request_target_cleanup.Handler(context.TargetsStore, context.TargetsStore, context.AppsStore), context.Context, context.Dispatcher
 	}
 
 	t.Run("should returns an error if the target does not exist", func(t *testing.T) {
-		uc := sut(initialData{})
+		handler, ctx, _ := arrange(t)
 
-		_, err := uc(ctx, request_target_cleanup.Command{
+		_, err := handler(ctx, request_target_cleanup.Command{
 			ID: "some-id",
 		})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
 	})
 
 	t.Run("should returns an error if the target has still apps using it", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true),
-			domain.NewProviderConfigRequirement(dummyProviderConfig{}, true), "uid"))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "uid"))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(initialData{
-			targets: []*domain.Target{&target},
-			apps:    []*domain.App{&app},
-		})
-
-		_, err := uc(ctx, request_target_cleanup.Command{
+		_, err := handler(ctx, request_target_cleanup.Command{
 			ID: string(target.ID()),
 		})
 
-		testutil.ErrorIs(t, domain.ErrTargetInUse, err)
+		assert.ErrorIs(t, domain.ErrTargetInUse, err)
+	})
+
+	t.Run("should returns an error if the target is configuring", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
+
+		_, err := handler(ctx, request_target_cleanup.Command{
+			ID: string(target.ID()),
+		})
+
+		assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
 	})
 
 	t.Run("should correctly mark the target for cleanup", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true),
-			domain.NewProviderConfigRequirement(dummyProviderConfig{}, true), "uid"))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
 
-		uc := sut(initialData{
-			targets: []*domain.Target{&target},
-		})
-
-		_, err := uc(ctx, request_target_cleanup.Command{
+		_, err := handler(ctx, request_target_cleanup.Command{
 			ID: string(target.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.HasNEvents(t, &target, 3)
-		evt := testutil.EventIs[domain.TargetCleanupRequested](t, &target, 2)
-		testutil.Equals(t, target.ID(), evt.ID)
+		assert.Nil(t, err)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		requested := assert.Is[domain.TargetCleanupRequested](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.TargetCleanupRequested{
+			ID:        target.ID(),
+			Requested: shared.ActionFrom(user.ID(), assert.NotZero(t, requested.Requested.At())),
+		}, requested)
 	})
-}
-
-type dummyProviderConfig struct {
-	domain.ProviderConfig
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
+	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/validate"
 	"github.com/YuukanOO/seelf/pkg/validate/numbers"
 )
@@ -136,6 +137,11 @@ func (c *configuration) Initialize(logger log.ConfigurableLogger, path string) e
 	exists, err := config.Load(path, c)
 
 	if err != nil {
+		return err
+	}
+
+	// Make sure the data path exists
+	if err = ostools.MkdirAll(c.Data.Path); err != nil {
 		return err
 	}
 

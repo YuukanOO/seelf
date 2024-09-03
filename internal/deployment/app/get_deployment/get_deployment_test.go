@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/app/get_deployment"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Deployment(t *testing.T) {
@@ -54,7 +54,7 @@ func Test_Deployment(t *testing.T) {
 
 		d.ResolveServicesUrls()
 
-		testutil.DeepEquals(t, get_deployment.Services{
+		assert.DeepEqual(t, get_deployment.Services{
 			{
 				Name:  "app",
 				Image: "app-image",
@@ -112,7 +112,7 @@ func Test_Deployment(t *testing.T) {
 
 		d.ResolveServicesUrls()
 
-		testutil.DeepEquals(t, get_deployment.Services{
+		assert.DeepEqual(t, get_deployment.Services{
 			{
 				Name:  "app",
 				Image: "app-image",
@@ -152,7 +152,7 @@ func Test_Deployment(t *testing.T) {
 
 		d.ResolveServicesUrls()
 
-		testutil.DeepEquals(t, get_deployment.Services{
+		assert.DeepEqual(t, get_deployment.Services{
 			{
 				Name:      "app",
 				Image:     "app-image",
@@ -233,7 +233,7 @@ func Test_Deployment(t *testing.T) {
 
 		d.ResolveServicesUrls()
 
-		testutil.DeepEquals(t, get_deployment.Services{
+		assert.DeepEqual(t, get_deployment.Services{
 			{
 				Name:  "app",
 				Image: "app-image",

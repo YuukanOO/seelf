@@ -44,7 +44,7 @@ type (
 		HasDeploymentsOnAppTargetEnv(context.Context, AppID, TargetID, Environment, shared.TimeInterval) (HasRunningOrPendingDeploymentsOnAppTargetEnv, HasSuccessfulDeploymentsOnAppTargetEnv, error)
 	}
 
-	FailCriterias struct {
+	FailCriteria struct {
 		Status      monad.Maybe[DeploymentStatus]
 		Target      monad.Maybe[TargetID]
 		App         monad.Maybe[AppID]
@@ -52,7 +52,7 @@ type (
 	}
 
 	DeploymentsWriter interface {
-		FailDeployments(context.Context, error, FailCriterias) error // Fail all deployments matching the given filters
+		FailDeployments(context.Context, error, FailCriteria) error // Fail all deployments matching the given filters
 		Write(context.Context, ...*Deployment) error
 	}
 

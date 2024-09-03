@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/memory"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func TestBus(t *testing.T) {
@@ -38,7 +38,7 @@ func TestBus(t *testing.T) {
 
 		_, err := bus.Send(local, context.Background(), &addCommand{})
 
-		testutil.ErrorIs(t, bus.ErrNoHandlerRegistered, err)
+		assert.ErrorIs(t, bus.ErrNoHandlerRegistered, err)
 	})
 
 	t.Run("should returns the request handler error back if any", func(t *testing.T) {
@@ -51,7 +51,7 @@ func TestBus(t *testing.T) {
 
 		_, err := bus.Send(local, context.Background(), addCommand{})
 
-		testutil.ErrorIs(t, expectedErr, err)
+		assert.ErrorIs(t, expectedErr, err)
 	})
 
 	t.Run("should call the appropriate request handler and returns the result", func(t *testing.T) {
@@ -64,13 +64,13 @@ func TestBus(t *testing.T) {
 
 		result, err := bus.Send(local, context.Background(), addCommand{A: 1, B: 2})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, 3, result)
+		assert.Nil(t, err)
+		assert.Equal(t, 3, result)
 
 		result, err = bus.Send(local, context.Background(), getQuery{})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, 42, result)
+		assert.Nil(t, err)
+		assert.Equal(t, 42, result)
 	})
 
 	t.Run("should do nothing if no signal handler is registered for a given signal", func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestBus(t *testing.T) {
 
 		err := local.Notify(context.Background(), registeredNotification{})
 
-		testutil.IsNil(t, err)
+		assert.Nil(t, err)
 	})
 
 	t.Run("should returns a signal handler error back if any", func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestBus(t *testing.T) {
 
 		err := local.Notify(context.Background(), registeredNotification{})
 
-		testutil.ErrorIs(t, expectedErr, err)
+		assert.ErrorIs(t, expectedErr, err)
 	})
 
 	t.Run("should call every signal handlers registered for the given signal", func(t *testing.T) {
@@ -117,8 +117,8 @@ func TestBus(t *testing.T) {
 
 		err := local.Notify(context.Background(), registeredNotification{})
 
-		testutil.IsNil(t, err)
-		testutil.IsTrue(t, firstOneCalled && secondOneCalled)
+		assert.Nil(t, err)
+		assert.True(t, firstOneCalled && secondOneCalled)
 	})
 
 	t.Run("should call every middlewares registered", func(t *testing.T) {
@@ -153,16 +153,16 @@ func TestBus(t *testing.T) {
 			B: 2,
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, 3, r)
-		testutil.DeepEquals(t, []int{1, 2, 2, 1}, calls)
+		assert.Nil(t, err)
+		assert.Equal(t, 3, r)
+		assert.DeepEqual(t, []int{1, 2, 2, 1}, calls)
 
 		calls = make([]int, 0)
 
-		local.Notify(context.Background(), registeredNotification{})
+		assert.Nil(t, local.Notify(context.Background(), registeredNotification{}))
 
 		// Should have been called twice cuz 2 signal handlers are registered
-		testutil.DeepEquals(t, []int{1, 2, 2, 1, 1, 2, 2, 1}, calls)
+		assert.DeepEqual(t, []int{1, 2, 2, 1, 1, 2, 2, 1}, calls)
 	})
 }
 

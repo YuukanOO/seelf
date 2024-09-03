@@ -3,8 +3,8 @@ package bus_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func TestMessage(t *testing.T) {
@@ -15,9 +15,9 @@ func TestMessage(t *testing.T) {
 			notif   registeredNotification
 		)
 
-		testutil.Equals(t, bus.MessageKindCommand, command.Kind_())
-		testutil.Equals(t, bus.MessageKindQuery, query.Kind_())
-		testutil.Equals(t, bus.MessageKindNotification, notif.Kind_())
+		assert.Equal(t, bus.MessageKindCommand, command.Kind_())
+		assert.Equal(t, bus.MessageKindQuery, query.Kind_())
+		assert.Equal(t, bus.MessageKindNotification, notif.Kind_())
 	})
 }
 

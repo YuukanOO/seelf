@@ -4,317 +4,425 @@ import (
 	"context"
 	"testing"
 
-	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_UpdateApp(t *testing.T) {
-	production := domain.NewEnvironmentConfig("1")
-	production.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
-	staging := domain.NewEnvironmentConfig("1")
-	staging.HasEnvironmentVariables(domain.ServicesEnv{"app": {"DEBUG": "false"}})
-	ctx := auth.WithUserID(context.Background(), "some-uid")
 
-	sut := func(existingApps ...*domain.App) bus.RequestHandler[string, update_app.Command] {
-		store := memory.NewAppsStore(existingApps...)
-		return update_app.Handler(store, store)
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[string, update_app.Command],
+		context.Context,
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return update_app.Handler(context.AppsStore, context.AppsStore), context.Context, context.Dispatcher
 	}
 
 	t.Run("should require a valid application id", func(t *testing.T) {
-		uc := sut()
-		id, err := uc(ctx, update_app.Command{})
+		handler, ctx, _ := arrange(t)
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
-		testutil.Equals(t, "", id)
+		id, err := handler(ctx, update_app.Command{})
+
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.Zero(t, id)
 	})
 
 	t.Run("should update nothing if no fields are provided", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "some-uid"))
-		uc := sut(&a)
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 1)
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 0, dispatcher.Signals())
 	})
 
 	t.Run("should validate new target naming availability", func(t *testing.T) {
-		a1 := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("2"), true, true), "some-uid"))
-		a2 := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("3"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("4"), true, true), "some-uid"))
-		uc := sut(&a1, &a2)
+		user := authfixture.User()
+		targetOne := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		targetTwo := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		appOne := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithAppName("my-app"),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(targetOne.ID()),
+				domain.NewEnvironmentConfig(targetOne.ID()),
+			),
+		)
+		appTwo := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithAppName("my-app"),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(targetTwo.ID()),
+				domain.NewEnvironmentConfig(targetTwo.ID()),
+			),
+		)
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&targetOne, &targetTwo),
+			fixture.WithApps(&appOne, &appTwo),
+		)
 
-		_, err := uc(ctx, update_app.Command{
-			ID: string(a2.ID()),
+		_, err := handler(ctx, update_app.Command{
+			ID: string(appTwo.ID()),
 			Production: monad.Value(update_app.EnvironmentConfig{
-				Target: "1",
+				Target: string(targetOne.ID()),
 			}),
 			Staging: monad.Value(update_app.EnvironmentConfig{
-				Target: "2",
+				Target: string(targetOne.ID()),
 			}),
 		})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		validationErr, ok := apperr.As[validate.FieldErrors](err)
-		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrAppNameAlreadyTaken, validationErr["production.target"])
-		testutil.ErrorIs(t, domain.ErrAppNameAlreadyTaken, validationErr["staging.target"])
+		assert.ValidationError(t, validate.FieldErrors{
+			"production.target": domain.ErrAppNameAlreadyTaken,
+			"staging.target":    domain.ErrAppNameAlreadyTaken,
+		}, err)
 	})
 
 	t.Run("should remove an application env variables", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		otherTarget := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		configWithEnvVariables := domain.NewEnvironmentConfig(target.ID())
+		configWithEnvVariables.HasEnvironmentVariables(domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+		})
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				configWithEnvVariables,
+				configWithEnvVariables,
+			),
+		)
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target, &otherTarget),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			Production: monad.Value(update_app.EnvironmentConfig{
-				Target: "new-production-target",
+				Target: string(otherTarget.ID()),
 			}),
 			Staging: monad.Value(update_app.EnvironmentConfig{
-				Target: "new-staging-target",
+				Target: string(otherTarget.ID()),
 			}),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 2, dispatcher.Signals())
 
-		evt := testutil.EventIs[domain.AppEnvChanged](t, &a, 1)
+		changed := assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.Production, changed.Environment)
+		assert.Equal(t, otherTarget.ID(), changed.Config.Target())
+		assert.False(t, changed.Config.Vars().HasValue())
 
-		testutil.Equals(t, domain.Production, evt.Environment)
-		testutil.Equals(t, "new-production-target", evt.Config.Target())
-		testutil.IsFalse(t, evt.Config.Vars().HasValue())
-
-		evt = testutil.EventIs[domain.AppEnvChanged](t, &a, 2)
-
-		testutil.Equals(t, domain.Staging, evt.Environment)
-		testutil.Equals(t, "new-staging-target", evt.Config.Target())
-		testutil.IsFalse(t, evt.Config.Vars().HasValue())
+		changed = assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.Staging, changed.Environment)
+		assert.Equal(t, otherTarget.ID(), changed.Config.Target())
+		assert.False(t, changed.Config.Vars().HasValue())
 	})
 
 	t.Run("should update an application env variables", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		configWithEnvVariables := domain.NewEnvironmentConfig(target.ID())
+		configWithEnvVariables.HasEnvironmentVariables(domain.ServicesEnv{
+			"app": {"DEBUG": "false"},
+		})
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				configWithEnvVariables,
+				configWithEnvVariables,
+			),
+		)
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			Production: monad.Value(update_app.EnvironmentConfig{
-				Target: "new-production-target",
+				Target: string(target.ID()),
 				Vars: monad.Value(map[string]map[string]string{
 					"app": {"OTHER": "value"},
 				}),
 			}),
 			Staging: monad.Value(update_app.EnvironmentConfig{
-				Target: "new-staging-target",
+				Target: string(target.ID()),
 				Vars: monad.Value(map[string]map[string]string{
 					"app": {"SOMETHING": "else"},
 				}),
 			}),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 2, dispatcher.Signals())
 
-		evt := testutil.EventIs[domain.AppEnvChanged](t, &a, 1)
-
-		testutil.Equals(t, domain.Production, evt.Environment)
-		testutil.Equals(t, "new-production-target", evt.Config.Target())
-		testutil.DeepEquals(t, domain.ServicesEnv{
+		changed := assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.Production, changed.Environment)
+		assert.Equal(t, target.ID(), changed.Config.Target())
+		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"OTHER": "value"},
-		}, evt.Config.Vars().MustGet())
+		}, changed.Config.Vars().MustGet())
 
-		evt = testutil.EventIs[domain.AppEnvChanged](t, &a, 2)
-
-		testutil.Equals(t, domain.Staging, evt.Environment)
-		testutil.Equals(t, "new-staging-target", evt.Config.Target())
-		testutil.DeepEquals(t, domain.ServicesEnv{
+		changed = assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.Staging, changed.Environment)
+		assert.Equal(t, target.ID(), changed.Config.Target())
+		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"SOMETHING": "else"},
-		}, evt.Config.Vars().MustGet())
+		}, changed.Config.Vars().MustGet())
 	})
 
 	t.Run("should require valid vcs inputs", func(t *testing.T) {
-		uc := sut()
-		id, err := uc(ctx, update_app.Command{
-			ID: "an-app",
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
+
+		_, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			VersionControl: monad.PatchValue(update_app.VersionControl{
 				Url: "invalid-url",
 			}),
 		})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		testutil.Equals(t, "", id)
+		assert.ValidationError(t, validate.FieldErrors{
+			"version_control.url": domain.ErrInvalidUrl,
+		}, err)
 	})
 
 	t.Run("should fail if trying to update an app being deleted", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
-		a.RequestCleanup("uid")
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		app.RequestCleanup(user.ID())
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		_, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		_, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			VersionControl: monad.PatchValue(update_app.VersionControl{
 				Url: "https://some.url",
 			}),
 		})
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupRequested, err)
+		assert.ErrorIs(t, domain.ErrAppCleanupRequested, err)
 	})
 
 	t.Run("should fail if trying to add a vcs config without an url defined", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		handler, ctx, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID:             string(a.ID()),
+		_, err := handler(ctx, update_app.Command{
+			ID:             string(app.ID()),
 			VersionControl: monad.PatchValue(update_app.VersionControl{}),
 		})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		testutil.Equals(t, "", id)
+		assert.ValidationError(t, validate.FieldErrors{
+			"version_control.url": domain.ErrInvalidUrl,
+		}, err)
 	})
 
 	t.Run("should remove the vcs config if nil given", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
-		url := must.Panic(domain.UrlFrom("https://some.url"))
-		a.UseVersionControl(domain.NewVersionControl(url))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		assert.Nil(t, app.UseVersionControl(domain.NewVersionControl(must.Panic(domain.UrlFrom("https://some.url")))))
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID:             string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID:             string(app.ID()),
 			VersionControl: monad.Nil[update_app.VersionControl](),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
-		testutil.EventIs[domain.AppVersionControlRemoved](t, &a, 2)
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		removed := assert.Is[domain.AppVersionControlRemoved](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.AppVersionControlRemoved{
+			ID: app.ID(),
+		}, removed)
 	})
 
-	t.Run("should update the vcs url", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
-		url := must.Panic(domain.UrlFrom("https://some.url"))
-		vcs := domain.NewVersionControl(url)
+	t.Run("should update the vcs url and keep the token if defined", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		vcs := domain.NewVersionControl(must.Panic(domain.UrlFrom("https://some.url")))
 		vcs.Authenticated("a token")
-		a.UseVersionControl(vcs)
+		assert.Nil(t, app.UseVersionControl(vcs))
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			VersionControl: monad.PatchValue(update_app.VersionControl{
 				Url: "https://some.other.url",
 			}),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
-		evt := testutil.EventIs[domain.AppVersionControlConfigured](t, &a, 2)
-		testutil.Equals(t, "https://some.other.url", evt.Config.Url().String())
-		testutil.Equals(t, "a token", evt.Config.Token().MustGet())
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		configured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[0])
+		assert.Equal(t, app.ID(), configured.ID)
+		assert.Equal(t, "https://some.other.url", configured.Config.Url().String())
+		assert.Equal(t, "a token", configured.Config.Token().MustGet())
 	})
 
 	t.Run("should remove the vcs token", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
 		url := must.Panic(domain.UrlFrom("https://some.url"))
 		vcs := domain.NewVersionControl(url)
 		vcs.Authenticated("a token")
-		a.UseVersionControl(vcs)
+		assert.Nil(t, app.UseVersionControl(vcs))
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			VersionControl: monad.PatchValue(update_app.VersionControl{
 				Url:   "https://some.url",
 				Token: monad.Nil[string](),
 			}),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
-		evt := testutil.EventIs[domain.AppVersionControlConfigured](t, &a, 2)
-		testutil.Equals(t, "https://some.url", evt.Config.Url().String())
-		testutil.IsFalse(t, evt.Config.Token().HasValue())
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		configured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[0])
+		assert.Equal(t, app.ID(), configured.ID)
+		assert.Equal(t, url, configured.Config.Url())
+		assert.False(t, configured.Config.Token().HasValue())
 	})
 
 	t.Run("should update the vcs token", func(t *testing.T) {
-		a := must.Panic(domain.NewApp("an-app",
-			domain.NewEnvironmentConfigRequirement(production, true, true),
-			domain.NewEnvironmentConfigRequirement(staging, true, true),
-			"uid",
-		))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
 		url := must.Panic(domain.UrlFrom("https://some.url"))
 		vcs := domain.NewVersionControl(url)
 		vcs.Authenticated("a token")
-		a.UseVersionControl(vcs)
+		assert.Nil(t, app.UseVersionControl(vcs))
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&a)
-
-		id, err := uc(ctx, update_app.Command{
-			ID: string(a.ID()),
+		id, err := handler(ctx, update_app.Command{
+			ID: string(app.ID()),
 			VersionControl: monad.PatchValue(update_app.VersionControl{
 				Url:   "https://some.url",
 				Token: monad.PatchValue("new token"),
 			}),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(a.ID()), id)
-		testutil.HasNEvents(t, &a, 3)
-		evt := testutil.EventIs[domain.AppVersionControlConfigured](t, &a, 2)
-		testutil.Equals(t, "https://some.url", evt.Config.Url().String())
-		testutil.Equals(t, "new token", evt.Config.Token().Get(""))
+		assert.Nil(t, err)
+		assert.Equal(t, string(app.ID()), id)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		configured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[0])
+		assert.Equal(t, app.ID(), configured.ID)
+		assert.Equal(t, url, configured.Config.Url())
+		assert.Equal(t, "new token", configured.Config.Token().Get(""))
 	})
 }

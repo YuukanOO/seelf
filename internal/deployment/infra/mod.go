@@ -124,7 +124,7 @@ func Setup(
 	}
 
 	// Fail running deployments in case of a hard reset.
-	return deploymentsStore.FailDeployments(context.Background(), errors.New("server_reset"), domain.FailCriterias{
+	return deploymentsStore.FailDeployments(context.Background(), errors.New("server_reset"), domain.FailCriteria{
 		Status: monad.Value(domain.DeploymentStatusRunning),
 	})
 }

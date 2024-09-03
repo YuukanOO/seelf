@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
 func Test_AppNameFrom(t *testing.T) {
@@ -26,15 +26,15 @@ func Test_AppNameFrom(t *testing.T) {
 		}
 
 		for _, test := range tests {
-			t.Run("", func(t *testing.T) {
+			t.Run(test.input, func(t *testing.T) {
 				r, err := domain.AppNameFrom(test.input)
 
 				if test.valid {
-					testutil.Equals(t, domain.AppName(test.input), r)
-					testutil.IsNil(t, err)
+					assert.Nil(t, err)
+					assert.Equal(t, domain.AppName(test.input), r)
 				} else {
-					testutil.Equals(t, "", r)
-					testutil.ErrorIs(t, domain.ErrInvalidAppName, err)
+					assert.ErrorIs(t, domain.ErrInvalidAppName, err)
+					assert.Equal(t, "", r)
 				}
 			})
 		}

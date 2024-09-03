@@ -6,43 +6,49 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/app/refresh_api_key"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/auth/infra/crypto"
-	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 )
 
 func Test_RefreshApiKey(t *testing.T) {
-	sut := func(existingUsers ...*domain.User) bus.RequestHandler[string, refresh_api_key.Command] {
-		store := memory.NewUsersStore(existingUsers...)
 
-		return refresh_api_key.Handler(store, store, crypto.NewKeyGenerator())
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[string, refresh_api_key.Command],
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return refresh_api_key.Handler(context.UsersStore, context.UsersStore, crypto.NewKeyGenerator()), context.Dispatcher
 	}
 
 	t.Run("should fail if the user does not exists", func(t *testing.T) {
-		uc := sut()
+		handler, _ := arrange(t)
 
-		_, err := uc(context.Background(), refresh_api_key.Command{})
+		_, err := handler(context.Background(), refresh_api_key.Command{})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
 	})
 
 	t.Run("should refresh the user's API key if everything is good", func(t *testing.T) {
-		user := must.Panic(domain.NewUser(domain.NewEmailRequirement("some@email.com", true), "someHashedPassword", "apikey"))
-		uc := sut(&user)
+		existingUser := fixture.User()
+		handler, dispatcher := arrange(t, fixture.WithUsers(&existingUser))
 
-		key, err := uc(context.Background(), refresh_api_key.Command{
-			ID: string(user.ID())},
+		key, err := handler(context.Background(), refresh_api_key.Command{
+			ID: string(existingUser.ID())},
 		)
 
-		testutil.IsNil(t, err)
-		testutil.NotEquals(t, "", key)
+		assert.Nil(t, err)
+		assert.NotEqual(t, "", key)
 
-		evt := testutil.EventIs[domain.UserAPIKeyChanged](t, &user, 1)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		keyChanged := assert.Is[domain.UserAPIKeyChanged](t, dispatcher.Signals()[0])
 
-		testutil.Equals(t, user.ID(), evt.ID)
-		testutil.Equals(t, key, string(evt.Key))
+		assert.Equal(t, domain.UserAPIKeyChanged{
+			ID:  existingUser.ID(),
+			Key: domain.APIKey(key),
+		}, keyChanged)
 	})
 }

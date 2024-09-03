@@ -3,8 +3,8 @@ package storage_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/storage"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 type (
@@ -45,18 +45,18 @@ func Test_Discriminated(t *testing.T) {
 	t.Run("should error if the discriminator is not known", func(t *testing.T) {
 		_, err := mapper.From("unknown", "")
 
-		testutil.ErrorIs(t, err, storage.ErrCouldNotUnmarshalGivenType)
+		assert.ErrorIs(t, err, storage.ErrCouldNotUnmarshalGivenType)
 	})
 
 	t.Run("should return the correct type", func(t *testing.T) {
 		t1, err := mapper.From("type1", "data1")
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, type1{"data1"}, t1.(type1))
+		assert.Nil(t, err)
+		assert.Equal(t, type1{"data1"}, t1.(type1))
 
 		t2, err := mapper.From("type2", "data2")
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, type2{"data2"}, t2.(type2))
+		assert.Nil(t, err)
+		assert.Equal(t, type2{"data2"}, t2.(type2))
 	})
 }

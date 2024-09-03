@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
 func Test_Environment(t *testing.T) {
@@ -25,11 +25,11 @@ func Test_Environment(t *testing.T) {
 				r, err := domain.EnvironmentFrom(test.input)
 
 				if test.valid {
-					testutil.Equals(t, domain.Environment(test.input), r)
-					testutil.IsNil(t, err)
+					assert.Equal(t, domain.Environment(test.input), r)
+					assert.Nil(t, err)
 				} else {
-					testutil.ErrorIs(t, domain.ErrInvalidEnvironmentName, err)
-					testutil.Equals(t, "", r)
+					assert.ErrorIs(t, domain.ErrInvalidEnvironmentName, err)
+					assert.Equal(t, "", r)
 				}
 			})
 		}
@@ -46,7 +46,7 @@ func Test_Environment(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(string(test.input), func(t *testing.T) {
-				testutil.Equals(t, test.production, test.input.IsProduction())
+				assert.Equal(t, test.production, test.input.IsProduction())
 			})
 		}
 	})
@@ -61,7 +61,7 @@ func Test_ServicesEnv(t *testing.T) {
 
 		r := domain.ServicesEnvFrom(rawEnvs)
 
-		testutil.DeepEquals(t, domain.ServicesEnv{
+		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"DEBUG": "false"},
 			"db":  {"USERNAME": "admin"},
 		}, r)
@@ -70,7 +70,7 @@ func Test_ServicesEnv(t *testing.T) {
 	t.Run("should returns an empty map if the raw one is nil", func(t *testing.T) {
 		r := domain.ServicesEnvFrom(nil)
 
-		testutil.DeepEquals(t, domain.ServicesEnv{}, r)
+		assert.DeepEqual(t, domain.ServicesEnv{}, r)
 	})
 
 	t.Run("should skip nil environment variables values", func(t *testing.T) {
@@ -81,7 +81,7 @@ func Test_ServicesEnv(t *testing.T) {
 
 		r := domain.ServicesEnvFrom(rawEnvs)
 
-		testutil.DeepEquals(t, domain.ServicesEnv{
+		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"DEBUG": "false"},
 		}, r)
 	})
@@ -92,9 +92,9 @@ func Test_ServicesEnv(t *testing.T) {
 			"db":  {"USERNAME": "admin"},
 		}.Value()
 
-		testutil.IsNil(t, err)
+		assert.Nil(t, err)
 
-		testutil.Equals(t, `{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`, str)
+		assert.Equal(t, `{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`, str)
 	})
 
 	t.Run("should implement the Scanner interface", func(t *testing.T) {
@@ -102,8 +102,8 @@ func Test_ServicesEnv(t *testing.T) {
 
 		err := r.Scan(`{"app":{"DEBUG":"false"},"db":{"USERNAME":"admin"}}`)
 
-		testutil.IsNil(t, err)
-		testutil.DeepEquals(t, domain.ServicesEnv{
+		assert.Nil(t, err)
+		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"DEBUG": "false"},
 			"db":  {"USERNAME": "admin"},
 		}, r)
@@ -116,8 +116,8 @@ func Test_EnvironmentConfig(t *testing.T) {
 
 		r := domain.NewEnvironmentConfig(target)
 
-		testutil.Equals(t, target, r.Target())
-		testutil.IsFalse(t, r.Vars().HasValue())
+		assert.Equal(t, target, r.Target())
+		assert.False(t, r.Vars().HasValue())
 	})
 
 	t.Run("should be able to configure environment variables", func(t *testing.T) {
@@ -130,9 +130,9 @@ func Test_EnvironmentConfig(t *testing.T) {
 		r := domain.NewEnvironmentConfig(target)
 		r.HasEnvironmentVariables(vars)
 
-		testutil.Equals(t, target, r.Target())
-		testutil.IsTrue(t, r.Vars().HasValue())
-		testutil.DeepEquals(t, vars, r.Vars().MustGet())
+		assert.Equal(t, target, r.Target())
+		assert.True(t, r.Vars().HasValue())
+		assert.DeepEqual(t, vars, r.Vars().MustGet())
 	})
 
 	t.Run("should be able to compare itself with another config", func(t *testing.T) {
@@ -193,10 +193,10 @@ func Test_EnvironmentConfig(t *testing.T) {
 			b := test.b()
 			t.Run(fmt.Sprintf("%v %v", a, b), func(t *testing.T) {
 				r := a.Equals(b)
-				testutil.Equals(t, test.expected, r)
+				assert.Equal(t, test.expected, r)
 
 				r = b.Equals(a)
-				testutil.Equals(t, test.expected, r)
+				assert.Equal(t, test.expected, r)
 			})
 		}
 	})

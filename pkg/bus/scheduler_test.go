@@ -8,13 +8,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/memory"
 	"github.com/YuukanOO/seelf/pkg/flag"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/storage"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func TestScheduler(t *testing.T) {
@@ -41,35 +41,35 @@ func TestScheduler(t *testing.T) {
 		withUnwrapedErr := returnCommand{err: innerErr}
 		withPreservedOrderErr := returnCommand{err: innerErr}
 
-		testutil.IsNil(t, scheduler.Queue(context.Background(), withoutErr))
-		testutil.IsNil(t, scheduler.Queue(context.Background(), withUnwrapedErr))
-		testutil.IsNil(t, scheduler.Queue(context.Background(), withPreservedOrderErr, bus.WithPolicy(bus.JobPolicyRetryPreserveOrder)))
-		testutil.IsNil(t, scheduler.Queue(context.Background(), addCommand{}))
+		assert.Nil(t, scheduler.Queue(context.Background(), withoutErr))
+		assert.Nil(t, scheduler.Queue(context.Background(), withUnwrapedErr))
+		assert.Nil(t, scheduler.Queue(context.Background(), withPreservedOrderErr, bus.WithPolicy(bus.JobPolicyRetryPreserveOrder)))
+		assert.Nil(t, scheduler.Queue(context.Background(), addCommand{}))
 
 		adapter.wait()
 
-		testutil.HasLength(t, adapter.done, 1)
+		assert.HasLength(t, 1, adapter.done)
 		slices.SortFunc(adapter.done, func(a, b *job) int {
 			return a.id - b.id
 		})
 
-		testutil.Equals(t, 0, adapter.done[0].id)
+		assert.Equal(t, 0, adapter.done[0].id)
 
-		testutil.HasLength(t, adapter.retried, 3)
+		assert.HasLength(t, 3, adapter.retried)
 		slices.SortFunc(adapter.retried, func(a, b *job) int {
 			return a.id - b.id
 		})
 
-		testutil.Equals(t, 1, adapter.retried[0].id)
-		testutil.ErrorIs(t, innerErr, adapter.retried[0].err)
-		testutil.IsFalse(t, adapter.retried[0].preserveOrder)
+		assert.Equal(t, 1, adapter.retried[0].id)
+		assert.ErrorIs(t, innerErr, adapter.retried[0].err)
+		assert.False(t, adapter.retried[0].preserveOrder)
 
-		testutil.Equals(t, 2, adapter.retried[1].id)
-		testutil.ErrorIs(t, innerErr, adapter.retried[1].err)
-		testutil.IsTrue(t, adapter.retried[1].preserveOrder)
+		assert.Equal(t, 2, adapter.retried[1].id)
+		assert.ErrorIs(t, innerErr, adapter.retried[1].err)
+		assert.True(t, adapter.retried[1].preserveOrder)
 
-		testutil.Equals(t, 3, adapter.retried[2].id)
-		testutil.ErrorIs(t, bus.ErrNoHandlerRegistered, adapter.retried[2].err)
+		assert.Equal(t, 3, adapter.retried[2].id)
+		assert.ErrorIs(t, bus.ErrNoHandlerRegistered, adapter.retried[2].err)
 	})
 }
 

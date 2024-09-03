@@ -1,12 +1,15 @@
 package ostools
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 )
 
 const defaultPermissions fs.FileMode = 0744
+
+var ErrTooManyPermissionsGiven = errors.New("too_many_permissions_given")
 
 // Open or create the file to append data only. It also creates intermediate directories as needed.
 func OpenAppend(name string) (*os.File, error) {
@@ -25,10 +28,15 @@ func WriteFile(name string, data []byte, perm ...fs.FileMode) error {
 		return err
 	}
 
-	filePermissions := defaultPermissions
+	var filePermissions fs.FileMode
 
-	if len(perm) > 0 {
+	switch len(perm) {
+	case 0:
+		filePermissions = defaultPermissions
+	case 1:
 		filePermissions = perm[0]
+	default:
+		return ErrTooManyPermissionsGiven
 	}
 
 	return os.WriteFile(name, data, filePermissions)

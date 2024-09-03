@@ -10,7 +10,7 @@ import (
 
 func OnTargetDeleteRequestedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.TargetCleanupRequested] {
 	return func(ctx context.Context, evt domain.TargetCleanupRequested) error {
-		return writer.FailDeployments(ctx, domain.ErrTargetCleanupRequested, domain.FailCriterias{
+		return writer.FailDeployments(ctx, domain.ErrTargetCleanupRequested, domain.FailCriteria{
 			Status: monad.Value(domain.DeploymentStatusPending),
 			Target: monad.Value(evt.ID),
 		})

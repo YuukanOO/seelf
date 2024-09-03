@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 type userId string
@@ -16,8 +16,8 @@ func Test_Action(t *testing.T) {
 		var user userId = "john"
 		act := domain.NewAction(user)
 
-		testutil.Equals(t, user, act.By())
-		testutil.IsFalse(t, act.At().IsZero())
+		assert.Equal(t, user, act.By())
+		assert.False(t, act.At().IsZero())
 	})
 
 	t.Run("should be rehydrated with the From function", func(t *testing.T) {
@@ -28,7 +28,7 @@ func Test_Action(t *testing.T) {
 
 		act := domain.ActionFrom(user, at)
 
-		testutil.Equals(t, user, act.By())
-		testutil.Equals(t, at, act.At())
+		assert.Equal(t, user, act.By())
+		assert.Equal(t, at, act.At())
 	})
 }

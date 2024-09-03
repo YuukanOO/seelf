@@ -4,34 +4,34 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Patch(t *testing.T) {
 	t.Run("should default to a not set, empty value", func(t *testing.T) {
 		var p monad.Patch[int]
 
-		testutil.IsFalse(t, p.IsSet())
-		testutil.IsFalse(t, p.IsNil())
-		testutil.IsFalse(t, p.HasValue())
+		assert.False(t, p.IsSet())
+		assert.False(t, p.IsNil())
+		assert.False(t, p.HasValue())
 	})
 
 	t.Run("should be instantiable with a value", func(t *testing.T) {
 		p := monad.PatchValue(42)
 
-		testutil.IsTrue(t, p.IsSet())
-		testutil.IsFalse(t, p.IsNil())
-		testutil.IsTrue(t, p.HasValue())
-		testutil.Equals(t, 42, p.MustGet())
+		assert.True(t, p.IsSet())
+		assert.False(t, p.IsNil())
+		assert.True(t, p.HasValue())
+		assert.Equal(t, 42, p.MustGet())
 	})
 
 	t.Run("should be instantiable with a nil value", func(t *testing.T) {
 		p := monad.Nil[int]()
 
-		testutil.IsTrue(t, p.IsSet())
-		testutil.IsTrue(t, p.IsNil())
-		testutil.IsFalse(t, p.HasValue())
+		assert.True(t, p.IsSet())
+		assert.True(t, p.IsNil())
+		assert.False(t, p.HasValue())
 	})
 
 	t.Run("should return the inner monad and a boolean indicating if it has been set", func(t *testing.T) {
@@ -50,8 +50,8 @@ func Test_Patch(t *testing.T) {
 			t.Run(test.name, func(t *testing.T) {
 				m, isSet := test.value.TryGet()
 
-				testutil.Equals(t, test.isSet, isSet)
-				testutil.Equals(t, test.hasValue, m.HasValue())
+				assert.Equal(t, test.isSet, isSet)
+				assert.Equal(t, test.hasValue, m.HasValue())
 			})
 		}
 	})
@@ -72,10 +72,10 @@ func Test_Patch(t *testing.T) {
 			t.Run(test.json, func(t *testing.T) {
 				var value someStruct
 
-				testutil.IsNil(t, json.Unmarshal([]byte(test.json), &value))
-				testutil.Equals(t, test.isSet, value.Number.IsSet())
-				testutil.Equals(t, test.isNil, value.Number.IsNil())
-				testutil.Equals(t, test.hasValue, value.Number.HasValue())
+				assert.Nil(t, json.Unmarshal([]byte(test.json), &value))
+				assert.Equal(t, test.isSet, value.Number.IsSet())
+				assert.Equal(t, test.isNil, value.Number.IsNil())
+				assert.Equal(t, test.hasValue, value.Number.HasValue())
 			})
 		}
 	})

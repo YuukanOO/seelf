@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Url(t *testing.T) {
@@ -26,37 +26,37 @@ func Test_Url(t *testing.T) {
 				u, err := domain.UrlFrom(test.value)
 
 				if test.valid {
-					testutil.IsNil(t, err)
-					testutil.Equals(t, test.value, u.String())
+					assert.Nil(t, err)
+					assert.Equal(t, test.value, u.String())
 				} else {
-					testutil.ErrorIs(t, domain.ErrInvalidUrl, err)
+					assert.ErrorIs(t, domain.ErrInvalidUrl, err)
 				}
 			})
 		}
 	})
 
 	t.Run("should get wether its a secure url or not", func(t *testing.T) {
-		httpUrl, _ := domain.UrlFrom("http://something.com")
-		httpsUrl, _ := domain.UrlFrom("https://something.com")
+		httpUrl := must.Panic(domain.UrlFrom("http://something.com"))
+		httpsUrl := must.Panic(domain.UrlFrom("https://something.com"))
 
-		testutil.IsFalse(t, httpUrl.UseSSL())
-		testutil.IsTrue(t, httpsUrl.UseSSL())
+		assert.False(t, httpUrl.UseSSL())
+		assert.True(t, httpsUrl.UseSSL())
 	})
 
 	t.Run("should be able to prepend a subdomain", func(t *testing.T) {
-		url, _ := domain.UrlFrom("http://something.com")
+		url := must.Panic(domain.UrlFrom("http://something.com"))
 		subdomained := url.SubDomain("an-app")
 
-		testutil.Equals(t, "http://something.com", url.String())
-		testutil.Equals(t, "http://an-app.something.com", subdomained.String())
+		assert.Equal(t, "http://something.com", url.String())
+		assert.Equal(t, "http://an-app.something.com", subdomained.String())
 	})
 
 	t.Run("should implement the valuer interface", func(t *testing.T) {
-		url, _ := domain.UrlFrom("http://something.com")
+		url := must.Panic(domain.UrlFrom("http://something.com"))
 		value, err := url.Value()
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, "http://something.com", value.(string))
+		assert.Nil(t, err)
+		assert.Equal(t, "http://something.com", value.(string))
 	})
 
 	t.Run("should implement the scanner interface", func(t *testing.T) {
@@ -66,16 +66,16 @@ func Test_Url(t *testing.T) {
 		)
 		err := url.Scan(value)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, "http://something.com", url.String())
+		assert.Nil(t, err)
+		assert.Equal(t, "http://something.com", url.String())
 	})
 
 	t.Run("should marshal to json", func(t *testing.T) {
-		url, _ := domain.UrlFrom("http://something.com")
+		url := must.Panic(domain.UrlFrom("http://something.com"))
 		json, err := url.MarshalJSON()
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, `"http://something.com"`, string(json))
+		assert.Nil(t, err)
+		assert.Equal(t, `"http://something.com"`, string(json))
 	})
 
 	t.Run("should unmarshal from json", func(t *testing.T) {
@@ -85,36 +85,36 @@ func Test_Url(t *testing.T) {
 		)
 		err := url.UnmarshalJSON([]byte(value))
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, "http://something.com", url.String())
+		assert.Nil(t, err)
+		assert.Equal(t, "http://something.com", url.String())
 	})
 
 	t.Run("should retrieve the user part of an url if any", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://seelf@docker.localhost"))
 
-		testutil.IsTrue(t, url.User().HasValue())
-		testutil.Equals(t, "seelf", url.User().MustGet())
+		assert.True(t, url.User().HasValue())
+		assert.Equal(t, "seelf", url.User().MustGet())
 
 		url = must.Panic(domain.UrlFrom("http://docker.localhost"))
 
-		testutil.IsFalse(t, url.User().HasValue())
+		assert.False(t, url.User().HasValue())
 	})
 
 	t.Run("should be able to remove the user part of an url", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://seelf@docker.localhost"))
 
-		testutil.Equals(t, "http://docker.localhost", url.WithoutUser().String())
-		testutil.Equals(t, "http://seelf@docker.localhost", url.String())
+		assert.Equal(t, "http://docker.localhost", url.WithoutUser().String())
+		assert.Equal(t, "http://seelf@docker.localhost", url.String())
 
 		url = must.Panic(domain.UrlFrom("http://docker.localhost"))
 
-		testutil.Equals(t, "http://docker.localhost", url.WithoutUser().String())
+		assert.Equal(t, "http://docker.localhost", url.WithoutUser().String())
 	})
 
 	t.Run("should be able to remove path and query from an url", func(t *testing.T) {
 		url := must.Panic(domain.UrlFrom("http://docker.localhost/some/path?query=value"))
 
-		testutil.Equals(t, "http://docker.localhost", url.Root().String())
-		testutil.Equals(t, "http://docker.localhost/some/path?query=value", url.String())
+		assert.Equal(t, "http://docker.localhost", url.Root().String())
+		assert.Equal(t, "http://docker.localhost/some/path?query=value", url.String())
 	})
 }

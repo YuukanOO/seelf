@@ -25,7 +25,7 @@ func init() {
 	})
 
 	// Here the registered discriminated type is the same since there are no unexposed fields and
-	// it also handle the retrocompatibility with the old payload format.
+	// it also handle the retro-compatibility with the old payload format.
 	get_deployment.SourceDataTypes.Register(Data{}, func(s string) (get_deployment.SourceData, error) {
 		return tryParseGitData(s)
 	})

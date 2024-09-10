@@ -38,7 +38,7 @@ func (s *appsStore) CheckAppNamingAvailability(
 		SELECT
 			NOT EXISTS(SELECT 1 FROM apps WHERE name = ? AND production_target = ?) AS production_available
 			,EXISTS(SELECT 1 FROM targets WHERE id = ? AND cleanup_requested_at IS NULL) AS production_target_exists
-			,NOT EXISTS(SELECT 1 FROM apps WHERE name = ? AND production_target = ?) AS staging_available
+			,NOT EXISTS(SELECT 1 FROM apps WHERE name = ? AND staging_target = ?) AS staging_available
 			,EXISTS(SELECT 1 FROM targets WHERE id = ? AND cleanup_requested_at IS NULL) AS staging_target_exists
 		`, name, production.Target(), production.Target(), name, staging.Target(), staging.Target()).
 		One(s.db, ctx, appNameUniquenessResultMapper)

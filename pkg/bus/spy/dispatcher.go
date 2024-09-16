@@ -26,10 +26,7 @@ type (
 // Builds a new dispatcher used for testing only. It will not send anything but
 // append the requests and signals to the internal slices so they can be checked.
 func NewDispatcher() Dispatcher {
-	return &dispatcher{
-		requests: make([]bus.Request, 0),
-		signals:  make([]bus.Signal, 0),
-	}
+	return &dispatcher{}
 }
 
 func (d *dispatcher) Send(ctx context.Context, msg bus.Request) (any, error) {
@@ -43,8 +40,8 @@ func (d *dispatcher) Notify(ctx context.Context, msgs ...bus.Signal) error {
 }
 
 func (d *dispatcher) Reset() {
-	d.requests = make([]bus.Request, 0)
-	d.signals = make([]bus.Signal, 0)
+	d.requests = nil
+	d.signals = nil
 }
 
 func (d *dispatcher) Requests() []bus.Request { return d.requests }

@@ -161,7 +161,7 @@ func (q *queryBuilder[T]) All(
 
 	defer rows.Close()
 
-	results := make([]T, 0)
+	var results []T
 
 	// Instantiates needed stuff for data loaders
 	mappings := make([]keysMapping, len(loaders))

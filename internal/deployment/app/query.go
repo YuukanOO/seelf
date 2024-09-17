@@ -9,9 +9,9 @@ type (
 	}
 
 	TargetSummary struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-		Url  string `json:"url"`
+		ID   string              `json:"id"`
+		Name string              `json:"name"`
+		Url  monad.Maybe[string] `json:"url"`
 	}
 
 	LatestDeployments[T any] struct {

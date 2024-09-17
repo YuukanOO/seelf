@@ -78,12 +78,15 @@ func Handler(
 		}
 
 		target, err = domain.NewTarget("local",
-			urlRequirement,
 			configRequirement,
 			auth.CurrentUser(ctx).MustGet(),
 		)
 
 		if err != nil {
+			return bus.Unit, err
+		}
+
+		if err = target.ExposeServicesAutomatically(urlRequirement); err != nil {
 			return bus.Unit, err
 		}
 

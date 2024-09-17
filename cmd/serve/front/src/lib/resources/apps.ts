@@ -25,7 +25,7 @@ export type VersionControl = { url: string; token?: string };
 export type TargetSummary = {
 	id: string;
 	name: string;
-	url: string;
+	url?: string;
 };
 
 export type AppDetail = {

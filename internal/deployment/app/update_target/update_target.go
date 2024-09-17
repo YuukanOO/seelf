@@ -15,7 +15,7 @@ type Command struct {
 
 	ID       string              `json:"-"`
 	Name     monad.Maybe[string] `json:"name"`
-	Url      monad.Maybe[string] `json:"url"`
+	Url      monad.Patch[string] `json:"url"`
 	Provider any                 `json:"-"`
 }
 
@@ -31,7 +31,7 @@ func Handler(
 
 		if err := validate.Struct(validate.Of{
 			"name": validate.Maybe(cmd.Name, strings.Required),
-			"url": validate.Maybe(cmd.Url, func(s string) error {
+			"url": validate.Patch(cmd.Url, func(s string) error {
 				return validate.Value(s, &targetUrl, domain.UrlFrom)
 			}),
 		}); err != nil {
@@ -87,8 +87,14 @@ func Handler(
 			}
 		}
 
-		if cmd.Url.HasValue() {
-			if err = target.HasUrl(urlRequirement); err != nil {
+		if cmd.Url.IsSet() {
+			if cmd.Url.HasValue() {
+				err = target.ExposeServicesAutomatically(urlRequirement)
+			} else {
+				err = target.ExposeServicesManually()
+			}
+
+			if err != nil {
 				return "", err
 			}
 		}

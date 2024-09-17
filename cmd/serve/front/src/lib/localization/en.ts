@@ -7,8 +7,7 @@ const translations = {
 	'auth.signin.description': 'Please fill the form below to access your dashboard.',
 	// App
 	'app.no_targets': 'No targets found',
-	'app.no_targets.description':
-		'You need at least one target to deploy your application. Head to the <a href="/targets">create target</a> page to create one.',
+	'app.no_targets.description': `You need at least one target to deploy your application. Head to the <a href="${routes.createTarget}">create target</a> page to create one.`,
 	'app.not_found': "Looks like the application you're looking for does not exist. Head back to the",
 	'app.not_found.cta': 'homepage',
 	'app.blankslate': `Looks like you have no application yet. <br />Applications represents <strong>services you want to deploy</strong> on your infrastructure. Start by <a href="${routes.createApp}">creating one!</a>`,
@@ -43,8 +42,8 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'app.environment.staging': 'Staging settings',
 	'app.environment.target': 'Deploy target',
 	'app.environment.target.changed': 'Target changed',
-	'app.environment.target.changed.description': (url: string) =>
-		`If you change the target, resources related to this application deployed by seelf on <strong>${url}</strong> will be <strong>REMOVED</strong> and a new deployment on the new target will be queued if possible. If you want to backup something, do it before updating the target.`,
+	'app.environment.target.changed.description': (name: string) =>
+		`If you change the target, resources related to this application deployed by seelf on <strong>${name}</strong> will be <strong>REMOVED</strong> and a new deployment on the new target will be queued if possible. If you want to backup something, do it before updating the target.`,
 	'app.environment.vars': 'Environment variables',
 	'app.environment.vars.service.add': 'Add service variables',
 	'app.environment.vars.service.delete': 'Remove service variables',
@@ -77,6 +76,9 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'target.blankslate': `Looks like you have no target yet. <br />Targets determine on which host your <strong>applications will be deployed</strong> and which <strong>provider</strong> should be used. Start by <a href="${routes.createTarget}">creating one!</a>`,
 	'target.general': 'General settings',
 	'target.name.help': 'The name is being used only for display, it can be anything you want.',
+	'target.manual_proxy': 'Manual proxy',
+	'target.automatic_proxy_configuration': 'Expose services automatically',
+	'target.automatic_proxy_configuration.help': `If enabled, a proxy will be deployed on the target and your services will be <a target="_blank" href="https://yuukanoo.github.io/seelf/reference/providers/docker.html#exposing-services">automatically exposed</a>. If disabled, you will <strong>have to manually expose your services</strong> with your preferred solution. Updating this setting <strong>may</strong> require you to redeploy your applications.`,
 	'target.url.help':
 		'All applications deployed on this target will be available as a <strong>subdomain</strong> on this root URL (without path). It should be <strong>unique</strong> among targets. You <strong>MUST</strong> configure a <strong>wildcard DNS</strong> for subdomains such as <code>*.&lt;url above&gt;</code> redirects to this target IP.',
 	'target.provider': 'Provider',

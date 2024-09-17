@@ -12,10 +12,10 @@ import (
 	"github.com/docker/cli/cli/flags"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/compose/v2/pkg/compose"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	dclient "github.com/docker/docker/client"
 )
@@ -142,7 +142,7 @@ func (c *client) RemoveResources(ctx context.Context, criteria filters.Args) err
 	}
 
 	// List and remove all networks
-	networks, err := c.api.NetworkList(ctx, types.NetworkListOptions{
+	networks, err := c.api.NetworkList(ctx, network.ListOptions{
 		Filters: criteria,
 	})
 

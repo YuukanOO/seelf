@@ -172,6 +172,14 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) (domain.Target
 
 	defer client.Close()
 
+	if target.IsManual() {
+		return nil, client.compose.Down(ctx, targetProjectName(target.ID()), api.DownOptions{
+			RemoveOrphans: true,
+			Images:        "all",
+			Volumes:       true,
+		})
+	}
+
 	project, assigned, err := newProxyProjectBuilder(client, target).Build(ctx)
 
 	if err != nil {
@@ -224,7 +232,7 @@ func (d *docker) Expose(ctx context.Context, target domain.Target, container str
 func (d *docker) Deploy(
 	ctx context.Context,
 	deploymentCtx domain.DeploymentContext,
-	depl domain.Deployment,
+	deployment domain.Deployment,
 	target domain.Target,
 	registries []domain.Registry,
 ) (domain.Services, error) {
@@ -244,7 +252,7 @@ func (d *docker) Deploy(
 		logger.Infof("using custom registries: %s", strings.Join(client.registries, ", "))
 	}
 
-	project, services, err := newDeploymentProjectBuilder(deploymentCtx, depl).Build(ctx)
+	project, services, err := newDeploymentProjectBuilder(deploymentCtx, deployment, target.IsManual()).Build(ctx)
 
 	if err != nil {
 		return nil, err
@@ -267,19 +275,21 @@ func (d *docker) Deploy(
 		return nil, ErrComposeFailed
 	}
 
-	if target.Url().UseSSL() {
-		logger.Infof("you may have to wait for certificates to be generated before your app is available")
-	}
+	if url, isManagedBySeelf := target.Url().TryGet(); isManagedBySeelf {
+		if url.UseSSL() {
+			logger.Infof("you may have to wait for certificates to be generated before your app is available")
+		}
 
-	if len(services.CustomEntrypoints()) > 0 {
-		logger.Infof("this deployment uses custom entrypoints. If this is the first time, you may have to wait a few seconds for the target to find available ports and expose them appropriately")
+		if len(services.CustomEntrypoints()) > 0 {
+			logger.Infof("this deployment uses custom entrypoints. If this is the first time, you may have to wait a few seconds for the target to find available ports and expose them appropriately")
+		}
 	}
 
 	prunedCount, err := client.PruneImages(ctx, filters.NewArgs(
 		filters.Arg("dangling", "true"),
-		filters.Arg("label", AppLabel+"="+string(depl.ID().AppID())),
+		filters.Arg("label", AppLabel+"="+string(deployment.ID().AppID())),
 		filters.Arg("label", TargetLabel+"="+string(target.ID())),
-		filters.Arg("label", EnvironmentLabel+"="+string(depl.Config().Environment())),
+		filters.Arg("label", EnvironmentLabel+"="+string(deployment.Config().Environment())),
 	))
 
 	if err != nil {

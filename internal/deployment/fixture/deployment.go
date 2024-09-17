@@ -44,6 +44,12 @@ func FromApp(app domain.App) DeploymentOptionBuilder {
 	}
 }
 
+func WithSourceData(source domain.SourceData) DeploymentOptionBuilder {
+	return func(o *deploymentOption) {
+		o.source = source
+	}
+}
+
 func WithDeploymentRequestedBy(uid auth.UserID) DeploymentOptionBuilder {
 	return func(o *deploymentOption) {
 		o.uid = uid

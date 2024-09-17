@@ -47,19 +47,20 @@ type (
 func newProxyProjectBuilder(client *client, target domain.Target) *proxyProjectBuilder {
 	id := target.ID()
 	idLower := strings.ToLower(string(id))
+	url := target.Url().MustGet()
 
 	b := &proxyProjectBuilder{
 		client:      client,
 		target:      string(id),
-		host:        target.Url().Host(),
+		host:        url.Host(),
 		entrypoints: target.CustomEntrypoints(),
 		assigned:    make(domain.TargetEntrypointsAssigned),
-		networkName: targetPublicNetworkName(target.ID()),
-		projectName: "seelf-internal-" + idLower,
+		networkName: targetPublicNetworkName(id),
+		projectName: targetProjectName(id),
 		labels:      types.Labels{TargetLabel: string(id)},
 	}
 
-	if target.Url().UseSSL() {
+	if url.UseSSL() {
 		b.certResolverName = "seelf-resolver-" + idLower
 	}
 
@@ -290,4 +291,9 @@ func ServicePortSortFunc(a, b types.ServicePortConfig) int {
 // Retrieve the network name of a specific target
 func targetPublicNetworkName(id domain.TargetID) string {
 	return "seelf-gateway-" + strings.ToLower(string(id))
+}
+
+// Retrieve the project name of a specific target
+func targetProjectName(id domain.TargetID) string {
+	return "seelf-internal-" + strings.ToLower(string(id))
 }

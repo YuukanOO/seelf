@@ -78,13 +78,14 @@ func New(logger log.Logger, configuration ...DockerOptions) Docker {
 }
 
 // Use the given compose service and cli instead of creating new ones. Used for testing.
-func WithDockerAndCompose(cli command.Cli, composeService api.Service) DockerOptions {
+func WithTestConfig(cli command.Cli, composeService api.Service, sshConfigPath string) DockerOptions {
 	return func(d *docker) {
 		d.client = &client{
 			cli:     cli,
 			api:     cli.Client(),
 			compose: composeService,
 		}
+		d.sshConfig = ssh.NewFileConfigurator(sshConfigPath)
 	}
 }
 
@@ -252,7 +253,7 @@ func (d *docker) Deploy(
 		logger.Infof("using custom registries: %s", strings.Join(client.registries, ", "))
 	}
 
-	project, services, err := newDeploymentProjectBuilder(deploymentCtx, deployment, target.IsManual()).Build(ctx)
+	project, services, err := newDeploymentProjectBuilder(deploymentCtx, deployment, target).Build(ctx)
 
 	if err != nil {
 		return nil, err

@@ -66,17 +66,3 @@ func Test_Facade(t *testing.T) {
 		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 }
-
-type (
-	dummyProviderConfig struct {
-		domain.ProviderConfig
-	}
-
-	dummySourceData struct {
-		domain.SourceData
-	}
-)
-
-func (d dummyProviderConfig) Kind() string         { return "dummy" }
-func (d dummySourceData) Kind() string             { return "dummy" }
-func (d dummySourceData) NeedVersionControl() bool { return false }

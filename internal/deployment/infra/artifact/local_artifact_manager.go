@@ -55,16 +55,16 @@ func NewLocal(options LocalOptions, logger log.Logger) domain.ArtifactManager {
 
 func (a *localArtifactManager) PrepareBuild(
 	ctx context.Context,
-	depl domain.Deployment,
+	deployment domain.Deployment,
 ) (domain.DeploymentContext, error) {
-	logfile, err := ostools.OpenAppend(a.LogPath(ctx, depl))
+	logFile, err := ostools.OpenAppend(a.LogPath(ctx, deployment))
 
 	if err != nil {
 		a.logger.Error(err)
 		return domain.DeploymentContext{}, ErrArtifactOpenLoggerFailed
 	}
 
-	logger := newLogger(logfile)
+	logger := newLogger(logFile)
 
 	defer func() {
 		if err == nil {
@@ -76,7 +76,7 @@ func (a *localArtifactManager) PrepareBuild(
 		logger.Close()                               // And close the logger right now
 	}()
 
-	buildDirectory, err := a.deploymentPath(depl)
+	buildDirectory, err := a.deploymentPath(deployment)
 
 	if err != nil {
 		return domain.DeploymentContext{}, err

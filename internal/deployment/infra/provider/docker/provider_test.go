@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,7 +46,7 @@ func Test_Provider(t *testing.T) {
 			os.RemoveAll(opts.DataDir())
 		})
 
-		return docker.New(logger, docker.WithDockerAndCompose(mock, mock)), mock
+		return docker.New(logger, docker.WithTestConfig(mock, mock, filepath.Join(opts.DataDir(), "config"))), mock
 	}
 
 	t.Run("should be able to prepare a docker provider config from a raw payload", func(t *testing.T) {
@@ -558,7 +559,7 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 			)
 			deployment := fixture.Deployment(
 				fixture.FromApp(app),
-				fixture.ForEnvironment("production"),
+				fixture.ForEnvironment(domain.Production),
 				fixture.WithSourceData(raw.Data(`services:
   sidecar:
     image: traefik/whoami
@@ -732,6 +733,210 @@ volumes:
 				expectedGatewayNetworkName: {
 					Name:     expectedGatewayNetworkName,
 					External: true,
+				},
+			}, project.Networks)
+			assert.DeepEqual(t, types.Volumes{
+				"dbdata": {
+					Name: expectedProjectName + "_dbdata",
+					Labels: types.Labels{
+						docker.TargetLabel:      string(target.ID()),
+						docker.AppLabel:         string(deployment.Config().AppID()),
+						docker.EnvironmentLabel: string(deployment.Config().Environment()),
+					},
+				},
+			}, project.Volumes)
+
+			assert.DeepEqual(t, filters.NewArgs(
+				filters.Arg("dangling", "true"),
+				filters.Arg("label", fmt.Sprintf("%s=%s", docker.AppLabel, deployment.ID().AppID())),
+				filters.Arg("label", fmt.Sprintf("%s=%s", docker.TargetLabel, target.ID())),
+				filters.Arg("label", fmt.Sprintf("%s=%s", docker.EnvironmentLabel, deployment.Config().Environment())),
+			), mock.pruneFilters)
+		})
+
+		t.Run("should correctly transform the compose file if the target is configured with a manual proxy", func(t *testing.T) {
+			target := fixture.Target(fixture.WithProviderConfig(docker.Data{}))
+			productionConfig := domain.NewEnvironmentConfig(target.ID())
+			productionConfig.HasEnvironmentVariables(domain.ServicesEnv{
+				"app": domain.EnvVars{
+					"DSN": "postgres://prodapp:passprod@db/app?sslmode=disable",
+				},
+				"db": domain.EnvVars{
+					"POSTGRES_USER":     "prodapp",
+					"POSTGRES_PASSWORD": "passprod",
+				},
+			})
+			app := fixture.App(
+				fixture.WithAppName("my-app"),
+				fixture.WithEnvironmentConfig(
+					productionConfig,
+					domain.NewEnvironmentConfig(target.ID()),
+				),
+			)
+			deployment := fixture.Deployment(
+				fixture.FromApp(app),
+				fixture.ForEnvironment(domain.Production),
+				fixture.WithSourceData(raw.Data(`services:
+  sidecar:
+    image: traefik/whoami
+    profiles:
+      - production
+  app:
+    restart: unless-stopped
+    build: .
+    environment:
+      - DSN=postgres://app:apppa55word@db/app?sslmode=disable
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+      - "8081:8081/udp"
+      - "8082:8082"
+  stagingonly:
+    image: traefik/whoami
+    ports:
+      - "8888:80"
+    profiles:
+      - staging
+  db:
+    restart: unless-stopped
+    image: postgres:14-alpine
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=apppa55word
+    ports:
+      - "5432:5432/tcp"
+volumes:
+  dbdata:`)),
+			)
+			appIdLower := strings.ToLower(string(app.ID()))
+
+			// Prepare the build
+			opts := config.Default(config.WithTestDefaults())
+			artifactManager := artifact.NewLocal(opts, logger)
+			deploymentContext, err := artifactManager.PrepareBuild(context.Background(), deployment)
+			assert.Nil(t, err)
+			assert.Nil(t, raw.New().Fetch(context.Background(), deploymentContext, deployment))
+			defer deploymentContext.Logger().Close()
+			provider, mock := arrange(opts)
+
+			services, err := provider.Deploy(context.Background(), deploymentContext, deployment, target, nil)
+
+			assert.Nil(t, err)
+			assert.HasLength(t, 1, mock.ups)
+			assert.HasLength(t, 3, services)
+
+			assert.Equal(t, "app", services[0].Name())
+			assert.Equal(t, "db", services[1].Name())
+			assert.Equal(t, "sidecar", services[2].Name())
+
+			assert.HasLength(t, 0, services.Entrypoints())
+
+			project := mock.ups[0].project
+			expectedProjectName := fmt.Sprintf("%s-%s-%s", deployment.Config().AppName(), deployment.Config().Environment(), appIdLower)
+			assert.Equal(t, expectedProjectName, project.Name)
+			assert.Equal(t, 3, len(project.Services))
+
+			for _, service := range project.Services {
+				switch service.Name {
+				case "sidecar":
+					assert.Equal(t, "traefik/whoami", service.Image)
+					assert.HasLength(t, 0, service.Ports)
+					assert.DeepEqual(t, types.MappingWithEquals{}, service.Environment)
+					assert.DeepEqual(t, types.Labels{
+						docker.AppLabel:         string(deployment.ID().AppID()),
+						docker.TargetLabel:      string(target.ID()),
+						docker.EnvironmentLabel: string(deployment.Config().Environment()),
+					}, service.Labels)
+					assert.DeepEqual(t, map[string]*types.ServiceNetworkConfig{
+						"default": nil,
+					}, service.Networks)
+				case "app":
+					dsn := deployment.Config().EnvironmentVariablesFor("app").MustGet()["DSN"]
+
+					assert.Equal(t, fmt.Sprintf("%s-%s/app:%s", deployment.Config().AppName(), appIdLower, deployment.Config().Environment()), service.Image)
+					assert.Equal(t, types.RestartPolicyUnlessStopped, service.Restart)
+					assert.DeepEqual(t, types.Labels{
+						docker.AppLabel:         string(deployment.ID().AppID()),
+						docker.TargetLabel:      string(target.ID()),
+						docker.EnvironmentLabel: string(deployment.Config().Environment()),
+					}, service.Labels)
+
+					assert.DeepEqual(t, []types.ServicePortConfig{
+						{
+							Protocol:  "tcp",
+							Mode:      "ingress",
+							Target:    8080,
+							Published: "8080",
+						},
+						{
+							Protocol:  "udp",
+							Mode:      "ingress",
+							Target:    8081,
+							Published: "8081",
+						},
+						{
+							Protocol:  "tcp",
+							Mode:      "ingress",
+							Target:    8082,
+							Published: "8082",
+						},
+					}, service.Ports)
+					assert.DeepEqual(t, types.MappingWithEquals{
+						"DSN": &dsn,
+					}, service.Environment)
+					assert.DeepEqual(t, map[string]*types.ServiceNetworkConfig{
+						"default": nil,
+					}, service.Networks)
+				case "db":
+					postgresUser := deployment.Config().EnvironmentVariablesFor("db").MustGet()["POSTGRES_USER"]
+					postgresPassword := deployment.Config().EnvironmentVariablesFor("db").MustGet()["POSTGRES_PASSWORD"]
+
+					assert.Equal(t, "postgres:14-alpine", service.Image)
+					assert.Equal(t, types.RestartPolicyUnlessStopped, service.Restart)
+					assert.DeepEqual(t, types.Labels{
+						docker.AppLabel:         string(deployment.ID().AppID()),
+						docker.TargetLabel:      string(target.ID()),
+						docker.EnvironmentLabel: string(deployment.Config().Environment()),
+					}, service.Labels)
+					assert.DeepEqual(t, []types.ServicePortConfig{
+						{
+							Protocol:  "tcp",
+							Mode:      "ingress",
+							Target:    5432,
+							Published: "5432",
+						},
+					}, service.Ports)
+					assert.DeepEqual(t, types.MappingWithEquals{
+						"POSTGRES_USER":     &postgresUser,
+						"POSTGRES_PASSWORD": &postgresPassword,
+					}, service.Environment)
+					assert.DeepEqual(t, map[string]*types.ServiceNetworkConfig{
+						"default": nil,
+					}, service.Networks)
+					assert.DeepEqual(t, []types.ServiceVolumeConfig{
+						{
+							Type:   types.VolumeTypeVolume,
+							Source: "dbdata",
+							Target: "/var/lib/postgresql/data",
+							Volume: &types.ServiceVolumeVolume{},
+						},
+					}, service.Volumes)
+				default:
+					t.Fatalf("unexpected service %s", service.Name)
+				}
+			}
+
+			assert.DeepEqual(t, types.Networks{
+				"default": {
+					Name: expectedProjectName + "_default",
+					Labels: types.Labels{
+						docker.TargetLabel:      string(target.ID()),
+						docker.AppLabel:         string(deployment.Config().AppID()),
+						docker.EnvironmentLabel: string(deployment.Config().Environment()),
+					},
 				},
 			}, project.Networks)
 			assert.DeepEqual(t, types.Volumes{

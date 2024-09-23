@@ -18,29 +18,35 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type deploymentProjectBuilder struct {
-	exposedManually             bool
-	sourceDir                   string
-	composePath                 string
-	networkName                 string
-	services                    domain.Services
-	project                     *types.Project
-	config                      domain.DeploymentConfig
-	logger                      domain.DeploymentLogger
-	labels                      types.Labels
-	isDefaultSubdomainAvailable bool
-	routersByPort               map[string]domain.Router
-}
+type (
+	DeploymentProjectBuilder interface {
+		Build(context.Context) (*types.Project, domain.Services, error)
+	}
+
+	deploymentProjectBuilder struct {
+		exposedManually             bool
+		sourceDir                   string
+		composePath                 string
+		networkName                 string
+		services                    domain.Services
+		project                     *types.Project
+		config                      domain.DeploymentConfig
+		logger                      domain.DeploymentLogger
+		labels                      types.Labels
+		isDefaultSubdomainAvailable bool
+		routersByPort               map[string]domain.Router
+	}
+)
 
 func newDeploymentProjectBuilder(
 	ctx domain.DeploymentContext,
 	deployment domain.Deployment,
-	exposedManually bool,
-) *deploymentProjectBuilder {
+	target domain.Target,
+) DeploymentProjectBuilder {
 	config := deployment.Config()
 
 	return &deploymentProjectBuilder{
-		exposedManually:             exposedManually,
+		exposedManually:             target.IsManual(),
 		isDefaultSubdomainAvailable: true,
 		sourceDir:                   ctx.BuildDirectory(),
 		config:                      config,

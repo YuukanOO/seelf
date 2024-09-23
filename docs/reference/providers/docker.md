@@ -35,7 +35,7 @@ Where `ENVIRONMENT` will be one of `production`, `staging`.
 
 ## Exposing services
 
-Once a valid compose file has been found, **seelf** will apply some **heuristics** to determine which services should be exposed and where.
+Once a valid compose file has been found and **only if** the target [manages the proxy itself](/reference/targets#proxy), **seelf** will apply some **heuristics** to determine which services should be exposed and where.
 
 It will consider any service with **port mappings** to be exposed.
 

@@ -40,13 +40,13 @@ func Test_UpdateTarget(t *testing.T) {
 		config := fixture.ProviderConfig()
 		targetOne := fixture.Target(
 			fixture.WithTargetCreatedBy(user.ID()),
-			fixture.WithTargetUrl(must.Panic(domain.UrlFrom("http://localhost"))),
 			fixture.WithProviderConfig(config),
 		)
+		assert.Nil(t, targetOne.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true)))
 		targetTwo := fixture.Target(
 			fixture.WithTargetCreatedBy(user.ID()),
-			fixture.WithTargetUrl(must.Panic(domain.UrlFrom("http://docker.localhost"))),
 		)
+		assert.Nil(t, targetTwo.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true)))
 		handler, _ := arrange(t,
 			fixture.WithUsers(&user),
 			fixture.WithTargets(&targetOne, &targetTwo),
@@ -55,7 +55,7 @@ func Test_UpdateTarget(t *testing.T) {
 		_, err := handler(context.Background(), update_target.Command{
 			ID:       string(targetTwo.ID()),
 			Provider: config,
-			Url:      monad.Value("http://localhost"),
+			Url:      monad.PatchValue("http://localhost"),
 		})
 
 		assert.ValidationError(t, validate.FieldErrors{
@@ -64,23 +64,48 @@ func Test_UpdateTarget(t *testing.T) {
 		}, err)
 	})
 
-	t.Run("should update the target if everything is good", func(t *testing.T) {
+	t.Run("should be able to remove the url", func(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(
 			fixture.WithTargetCreatedBy(user.ID()),
 			fixture.WithProviderConfig(fixture.ProviderConfig(fixture.WithFingerprint("test"))),
 		)
+		assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true)))
 		handler, dispatcher := arrange(t,
 			fixture.WithUsers(&user),
 			fixture.WithTargets(&target),
 		)
-		newConfig := fixture.ProviderConfig(fixture.WithFingerprint("test"))
+
+		_, err := handler(context.Background(), update_target.Command{
+			ID:  string(target.ID()),
+			Url: monad.Nil[string](),
+		})
+
+		assert.Nil(t, err)
+		assert.HasLength(t, 2, dispatcher.Signals())
+		urlRemoved := assert.Is[domain.TargetUrlRemoved](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.TargetUrlRemoved{
+			ID: target.ID(),
+		}, urlRemoved)
+	})
+
+	t.Run("should update the target if everything is good", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(
+			fixture.WithTargetCreatedBy(user.ID()),
+			fixture.WithProviderConfig(fixture.ProviderConfig(fixture.WithFingerprint("test"), fixture.WithKind("test"))),
+		)
+		handler, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
+		newConfig := fixture.ProviderConfig(fixture.WithFingerprint("test"), fixture.WithKind("test"))
 
 		id, err := handler(context.Background(), update_target.Command{
 			ID:       string(target.ID()),
 			Name:     monad.Value("new name"),
 			Provider: newConfig,
-			Url:      monad.Value("http://docker.localhost"),
+			Url:      monad.PatchValue("http://docker.localhost"),
 		})
 
 		assert.Nil(t, err)

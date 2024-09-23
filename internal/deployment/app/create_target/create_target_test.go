@@ -12,6 +12,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/spy"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/validate"
 	"github.com/YuukanOO/seelf/pkg/validate/strings"
@@ -35,7 +36,6 @@ func Test_CreateTarget(t *testing.T) {
 
 		assert.ValidationError(t, validate.FieldErrors{
 			"name": strings.ErrRequired,
-			"url":  domain.ErrInvalidUrl,
 		}, err)
 	})
 
@@ -45,14 +45,14 @@ func Test_CreateTarget(t *testing.T) {
 		target := fixture.Target(
 			fixture.WithTargetCreatedBy(user.ID()),
 			fixture.WithProviderConfig(config),
-			fixture.WithTargetUrl(must.Panic(domain.UrlFrom("http://example.com"))),
 		)
+		assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true)))
 
 		handler, ctx, _ := arrange(t, fixture.WithUsers(&user), fixture.WithTargets(&target))
 
 		_, err := handler(ctx, create_target.Command{
 			Name:     "target",
-			Url:      "http://example.com",
+			Url:      monad.Value("http://example.com"),
 			Provider: config,
 		})
 
@@ -67,10 +67,33 @@ func Test_CreateTarget(t *testing.T) {
 
 		_, err := handler(ctx, create_target.Command{
 			Name: "target",
-			Url:  "http://example.com",
 		})
 
 		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+	})
+
+	t.Run("should allow multiple manual targets to co-exists", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		handler, ctx, dispatcher := arrange(t, fixture.WithUsers(&user), fixture.WithTargets(&target))
+
+		id, err := handler(ctx, create_target.Command{
+			Name:     "target-one",
+			Provider: fixture.ProviderConfig(),
+		})
+
+		assert.Nil(t, err)
+		assert.NotZero(t, id)
+
+		id, err = handler(ctx, create_target.Command{
+			Name:     "target-two",
+			Provider: fixture.ProviderConfig(),
+		})
+
+		assert.Nil(t, err)
+		assert.NotZero(t, id)
+
+		assert.HasLength(t, 2, dispatcher.Signals())
 	})
 
 	t.Run("should create a new target", func(t *testing.T) {
@@ -80,24 +103,31 @@ func Test_CreateTarget(t *testing.T) {
 
 		id, err := handler(ctx, create_target.Command{
 			Name:     "target",
-			Url:      "http://example.com",
+			Url:      monad.Value("http://example.com"),
 			Provider: config,
 		})
 
 		assert.Nil(t, err)
 		assert.NotZero(t, id)
-		assert.HasLength(t, 1, dispatcher.Signals())
+		assert.HasLength(t, 3, dispatcher.Signals())
 
 		created := assert.Is[domain.TargetCreated](t, dispatcher.Signals()[0])
 		assert.DeepEqual(t, domain.TargetCreated{
 			ID:          domain.TargetID(id),
 			Name:        "target",
-			Url:         must.Panic(domain.UrlFrom("http://example.com")),
 			State:       created.State,
 			Entrypoints: make(domain.TargetEntrypoints),
 			Provider:    config, // Since the mock returns the config "as is"
 			Created:     shared.ActionFrom(user.ID(), assert.NotZero(t, created.Created.At())),
 		}, created)
+
+		urlChanged := assert.Is[domain.TargetUrlChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.TargetUrlChanged{
+			ID:  domain.TargetID(id),
+			Url: must.Panic(domain.UrlFrom("http://example.com")),
+		}, urlChanged)
+
+		assert.Is[domain.TargetStateChanged](t, dispatcher.Signals()[2])
 	})
 }
 

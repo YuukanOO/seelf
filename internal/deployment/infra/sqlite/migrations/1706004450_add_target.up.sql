@@ -73,6 +73,7 @@ SELECT
 FROM targets;
 
 -- Rename the old apps table since it will be recreated with proper NOT NULL columns
+-- I should have used a temporary table
 ALTER TABLE apps RENAME TO tmp_apps;
 
 -- Create the new apps table with proper columns
@@ -146,6 +147,7 @@ SELECT
 FROM tmp_apps;
 
 -- Do the same for deployments
+-- I should have used a temporary table
 ALTER TABLE deployments RENAME TO tmp_deployments;
 
 CREATE TABLE deployments (

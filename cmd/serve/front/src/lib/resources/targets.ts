@@ -29,7 +29,7 @@ export type ProviderTypes = ProviderConfigData['kind'];
 export type Target = {
 	id: string;
 	name: string;
-	url: string;
+	url?: string;
 	provider: ProviderConfigData;
 	state: TargetState;
 	cleanup_requested_at?: string;
@@ -39,7 +39,7 @@ export type Target = {
 
 export type CreateTarget = {
 	name: string;
-	url: string;
+	url?: string;
 	docker?: {
 		host?: string;
 		user?: string;
@@ -50,7 +50,7 @@ export type CreateTarget = {
 
 export type UpdateTarget = {
 	name?: string;
-	url?: string;
+	url: Patch<string>;
 	docker?: {
 		host?: string;
 		user?: string;

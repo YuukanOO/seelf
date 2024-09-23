@@ -18,23 +18,35 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type deploymentProjectBuilder struct {
-	sourceDir                   string
-	composePath                 string
-	networkName                 string
-	services                    domain.Services
-	project                     *types.Project
-	config                      domain.DeploymentConfig
-	logger                      domain.DeploymentLogger
-	labels                      types.Labels
-	isDefaultSubdomainAvailable bool
-	routersByPort               map[string]domain.Router
-}
+type (
+	DeploymentProjectBuilder interface {
+		Build(context.Context) (*types.Project, domain.Services, error)
+	}
 
-func newDeploymentProjectBuilder(ctx domain.DeploymentContext, depl domain.Deployment) *deploymentProjectBuilder {
-	config := depl.Config()
+	deploymentProjectBuilder struct {
+		exposedManually             bool
+		sourceDir                   string
+		composePath                 string
+		networkName                 string
+		services                    domain.Services
+		project                     *types.Project
+		config                      domain.DeploymentConfig
+		logger                      domain.DeploymentLogger
+		labels                      types.Labels
+		isDefaultSubdomainAvailable bool
+		routersByPort               map[string]domain.Router
+	}
+)
+
+func newDeploymentProjectBuilder(
+	ctx domain.DeploymentContext,
+	deployment domain.Deployment,
+	target domain.Target,
+) DeploymentProjectBuilder {
+	config := deployment.Config()
 
 	return &deploymentProjectBuilder{
+		exposedManually:             target.IsManual(),
 		isDefaultSubdomainAvailable: true,
 		sourceDir:                   ctx.BuildDirectory(),
 		config:                      config,
@@ -42,7 +54,7 @@ func newDeploymentProjectBuilder(ctx domain.DeploymentContext, depl domain.Deplo
 		logger:                      ctx.Logger(),
 		routersByPort:               make(map[string]domain.Router),
 		labels: types.Labels{
-			AppLabel:         string(depl.ID().AppID()),
+			AppLabel:         string(deployment.ID().AppID()),
 			TargetLabel:      string(config.Target()),
 			EnvironmentLabel: string(config.Environment()),
 		},
@@ -111,11 +123,14 @@ func (b *deploymentProjectBuilder) findComposeFile() error {
 func (b *deploymentProjectBuilder) loadProject(ctx context.Context) error {
 	b.logger.Stepf("reading project from %s", b.composePath)
 
-	opts, err := cli.NewProjectOptions([]string{b.composePath},
+	loaders := []cli.ProjectOptionsFn{
 		cli.WithName(b.config.ProjectName()),
 		cli.WithNormalization(true),
 		cli.WithProfiles([]string{string(b.config.Environment())}),
-		cli.WithLoadOptions(func(o *loader.Options) {
+	}
+
+	if !b.exposedManually {
+		loaders = append(loaders, cli.WithLoadOptions(func(o *loader.Options) {
 			o.Interpolate = &interpolation.Options{
 				TypeCastMapping: map[tree.Path]interpolation.Cast{
 					"services.*.ports.[]": func(value string) (any, error) {
@@ -123,8 +138,10 @@ func (b *deploymentProjectBuilder) loadProject(ctx context.Context) error {
 					},
 				},
 			}
-		}),
-	)
+		}))
+	}
+
+	opts, err := cli.NewProjectOptions([]string{b.composePath}, loaders...)
 
 	if err != nil {
 		b.logger.Error(err)
@@ -155,7 +172,7 @@ func (b *deploymentProjectBuilder) transform() {
 	}
 
 	// Let's transform the project to expose needed services
-	// Here ServiceNames sort the services by alphabetical order
+	// Here ServiceNames sort the services by alphabetical order so we don't have to
 	for _, name := range b.project.ServiceNames() {
 		serviceDefinition := b.project.Services[name]
 		service := b.config.NewService(serviceDefinition.Name, serviceDefinition.Image)
@@ -195,8 +212,8 @@ func (b *deploymentProjectBuilder) transform() {
 			}
 		}
 
-		// No ports mapped, nothing to do
-		if len(serviceDefinition.Ports) == 0 {
+		// No ports mapped or manual target, nothing to do
+		if b.exposedManually || len(serviceDefinition.Ports) == 0 {
 			b.project.Services[serviceName] = serviceDefinition
 			b.services = append(b.services, service)
 			continue
@@ -276,6 +293,9 @@ func (b *deploymentProjectBuilder) transform() {
 	}
 
 	// Append the public seelf network to the project
+	if b.exposedManually {
+		return
+	}
 
 	if b.project.Networks == nil {
 		b.project.Networks = types.Networks{}

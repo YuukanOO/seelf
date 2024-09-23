@@ -6,6 +6,7 @@ import (
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/validate"
 	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
@@ -13,9 +14,9 @@ import (
 type Command struct {
 	bus.Command[string]
 
-	Name     string `json:"name"`
-	Url      string `json:"url"`
-	Provider any    `json:"-"`
+	Name     string              `json:"name"`
+	Url      monad.Maybe[string] `json:"url"`
+	Provider any                 `json:"-"`
 }
 
 func (Command) Name_() string { return "deployment.command.create_target" }
@@ -30,7 +31,9 @@ func Handler(
 
 		if err := validate.Struct(validate.Of{
 			"name": validate.Field(cmd.Name, strings.Required),
-			"url":  validate.Value(cmd.Url, &targetUrl, domain.UrlFrom),
+			"url": validate.Maybe(cmd.Url, func(url string) error {
+				return validate.Value(url, &targetUrl, domain.UrlFrom)
+			}),
 		}); err != nil {
 			return "", err
 		}
@@ -42,10 +45,14 @@ func Handler(
 		}
 
 		// Validate availability of both the target domain and the config
-		urlRequirement, err := reader.CheckUrlAvailability(ctx, targetUrl)
+		var urlRequirement domain.TargetUrlRequirement
 
-		if err != nil {
-			return "", err
+		if cmd.Url.HasValue() {
+			urlRequirement, err = reader.CheckUrlAvailability(ctx, targetUrl)
+
+			if err != nil {
+				return "", err
+			}
 		}
 
 		configRequirement, err := reader.CheckConfigAvailability(ctx, config)
@@ -55,7 +62,7 @@ func Handler(
 		}
 
 		if err = validate.Struct(validate.Of{
-			"url":         urlRequirement.Error(),
+			"url":         validate.If(cmd.Url.HasValue(), urlRequirement.Error),
 			config.Kind(): configRequirement.Error(),
 		}); err != nil {
 			return "", err
@@ -63,13 +70,18 @@ func Handler(
 
 		target, err := domain.NewTarget(
 			cmd.Name,
-			urlRequirement,
 			configRequirement,
 			auth.CurrentUser(ctx).MustGet(),
 		)
 
 		if err != nil {
 			return "", err
+		}
+
+		if cmd.Url.HasValue() {
+			if err = target.ExposeServicesAutomatically(urlRequirement); err != nil {
+				return "", err
+			}
 		}
 
 		if err = writer.Write(ctx, &target); err != nil {

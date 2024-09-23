@@ -5,19 +5,12 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/provider"
 	"github.com/YuukanOO/seelf/pkg/assert"
-	"github.com/YuukanOO/seelf/pkg/must"
 )
 
 func Test_Facade(t *testing.T) {
-	env := domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true)
-	app := must.Panic(domain.NewApp("app", env, env, "uid"))
-	depl := must.Panic(app.NewDeployment(1, dummySourceData{}, domain.Production, "uid"))
-	url := domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true)
-	providerConfig := domain.NewProviderConfigRequirement(dummyProviderConfig{}, true)
-	target := must.Panic(domain.NewTarget("target", url, providerConfig, "uid"))
-
 	t.Run("should return an error if no provider can handle the payload", func(t *testing.T) {
 		sut := provider.NewFacade()
 
@@ -28,6 +21,8 @@ func Test_Facade(t *testing.T) {
 
 	t.Run("should return an error if no provider can handle the deployment", func(t *testing.T) {
 		sut := provider.NewFacade()
+		target := fixture.Target()
+		depl := fixture.Deployment()
 
 		_, err := sut.Deploy(context.Background(), domain.DeploymentContext{}, depl, target, nil)
 
@@ -36,6 +31,7 @@ func Test_Facade(t *testing.T) {
 
 	t.Run("should return an error if no provider can configure the target", func(t *testing.T) {
 		sut := provider.NewFacade()
+		target := fixture.Target()
 
 		_, err := sut.Setup(context.Background(), target)
 
@@ -44,6 +40,7 @@ func Test_Facade(t *testing.T) {
 
 	t.Run("should return an error if no provider can unconfigure the target", func(t *testing.T) {
 		sut := provider.NewFacade()
+		target := fixture.Target()
 
 		err := sut.RemoveConfiguration(context.Background(), target)
 
@@ -52,6 +49,7 @@ func Test_Facade(t *testing.T) {
 
 	t.Run("should return an error if no provider can cleanup the target", func(t *testing.T) {
 		sut := provider.NewFacade()
+		target := fixture.Target()
 
 		err := sut.CleanupTarget(context.Background(), target, domain.CleanupStrategyDefault)
 
@@ -60,23 +58,11 @@ func Test_Facade(t *testing.T) {
 
 	t.Run("should return an error if no provider can cleanup the app", func(t *testing.T) {
 		sut := provider.NewFacade()
+		app := fixture.App()
+		target := fixture.Target()
 
 		err := sut.Cleanup(context.Background(), app.ID(), target, domain.Production, domain.CleanupStrategyDefault)
 
 		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 }
-
-type (
-	dummyProviderConfig struct {
-		domain.ProviderConfig
-	}
-
-	dummySourceData struct {
-		domain.SourceData
-	}
-)
-
-func (d dummyProviderConfig) Kind() string         { return "dummy" }
-func (d dummySourceData) Kind() string             { return "dummy" }
-func (d dummySourceData) NeedVersionControl() bool { return false }

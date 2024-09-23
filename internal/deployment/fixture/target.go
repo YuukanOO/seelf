@@ -15,7 +15,6 @@ import (
 type (
 	targetOption struct {
 		name     string
-		url      domain.Url
 		provider domain.ProviderConfig
 		uid      auth.UserID
 	}
@@ -26,7 +25,6 @@ type (
 func Target(options ...TargetOptionBuilder) domain.Target {
 	opts := targetOption{
 		name:     id.New[string](),
-		url:      must.Panic(domain.UrlFrom("http://" + id.New[string]() + ".com")),
 		provider: ProviderConfig(),
 		uid:      id.New[auth.UserID](),
 	}
@@ -36,7 +34,6 @@ func Target(options ...TargetOptionBuilder) domain.Target {
 	}
 
 	return must.Panic(domain.NewTarget(opts.name,
-		domain.NewTargetUrlRequirement(opts.url, true),
 		domain.NewProviderConfigRequirement(opts.provider, true),
 		opts.uid))
 }
@@ -53,12 +50,6 @@ func WithTargetCreatedBy(uid auth.UserID) TargetOptionBuilder {
 	}
 }
 
-func WithTargetUrl(url domain.Url) TargetOptionBuilder {
-	return func(opts *targetOption) {
-		opts.url = url
-	}
-}
-
 func WithProviderConfig(config domain.ProviderConfig) TargetOptionBuilder {
 	return func(opts *targetOption) {
 		opts.provider = config
@@ -67,6 +58,7 @@ func WithProviderConfig(config domain.ProviderConfig) TargetOptionBuilder {
 
 type (
 	providerConfig struct {
+		Kind_        string
 		Data         string
 		Fingerprint_ string
 	}
@@ -74,9 +66,10 @@ type (
 	ProviderConfigBuilder func(*providerConfig)
 )
 
-func ProviderConfig(options ...ProviderConfigBuilder) domain.ProviderConfig {
+func ProviderConfig(options ...ProviderConfigBuilder) (result domain.ProviderConfig) {
 	config := providerConfig{
 		Data:         id.New[string](),
+		Kind_:        id.New[string](),
 		Fingerprint_: id.New[string](),
 	}
 
@@ -84,7 +77,18 @@ func ProviderConfig(options ...ProviderConfigBuilder) domain.ProviderConfig {
 		o(&config)
 	}
 
-	return config
+	result = config
+
+	// Just ignore the panic due to the multiple registration of same kind
+	defer func() {
+		_ = recover()
+	}()
+
+	domain.ProviderConfigTypes.Register(config, func(s string) (domain.ProviderConfig, error) {
+		return storage.UnmarshalJSON[providerConfig](s)
+	})
+
+	return
 }
 
 func WithFingerprint(fingerprint string) ProviderConfigBuilder {
@@ -93,17 +97,23 @@ func WithFingerprint(fingerprint string) ProviderConfigBuilder {
 	}
 }
 
-func (d providerConfig) Kind() string                 { return "test" }
+func WithKind(kind string) ProviderConfigBuilder {
+	return func(config *providerConfig) {
+		config.Kind_ = kind
+	}
+}
+
+func WithData(data string) ProviderConfigBuilder {
+	return func(config *providerConfig) {
+		config.Data = data
+	}
+}
+
+func (d providerConfig) Kind() string                 { return d.Kind_ }
 func (d providerConfig) Fingerprint() string          { return d.Fingerprint_ }
 func (d providerConfig) String() string               { return d.Fingerprint_ }
 func (d providerConfig) Value() (driver.Value, error) { return storage.ValueJSON(d) }
 
 func (d providerConfig) Equals(other domain.ProviderConfig) bool {
 	return d == other
-}
-
-func init() {
-	domain.ProviderConfigTypes.Register(providerConfig{}, func(s string) (domain.ProviderConfig, error) {
-		return storage.UnmarshalJSON[providerConfig](s)
-	})
 }

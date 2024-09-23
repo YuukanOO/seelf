@@ -99,7 +99,6 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 				Insert("targets", builder.Values{
 					"id":                       evt.ID,
 					"name":                     evt.Name,
-					"url":                      evt.Url,
 					"provider_kind":            evt.Provider.Kind(),
 					"provider_fingerprint":     evt.Provider.Fingerprint(),
 					"provider":                 evt.Provider,
@@ -133,6 +132,13 @@ func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error
 			return builder.
 				Update("targets", builder.Values{
 					"url": evt.Url,
+				}).
+				F("WHERE id = ?", evt.ID).
+				Exec(s.db, ctx)
+		case domain.TargetUrlRemoved:
+			return builder.
+				Update("targets", builder.Values{
+					"url": nil,
 				}).
 				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)

@@ -155,7 +155,7 @@ func (e EntrypointName) Protocol() string {
 	return string(p)
 }
 
-// Retrieve entrypoints for this service.
+// Retrieve all entrypoints for every services.
 func (s Services) Entrypoints() []Entrypoint {
 	var result []Entrypoint
 
@@ -166,7 +166,7 @@ func (s Services) Entrypoints() []Entrypoint {
 	return result
 }
 
-// Retrieve custom entrypoints for this service. Ones that are not natively
+// Retrieve all custom entrypoints. Ones that are not natively
 // managed by the target and requires a manual configuration.
 func (s Services) CustomEntrypoints() []Entrypoint {
 	return slices.DeleteFunc(s.Entrypoints(), isNotCustom)

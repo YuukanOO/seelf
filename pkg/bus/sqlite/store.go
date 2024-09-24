@@ -2,9 +2,7 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"embed"
-	"errors"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -99,18 +97,16 @@ func (s *store) Create(
 
 	// Could not use the ON CONFLICT here :'(
 	if flag.IsSet(options.Policy, bus.JobPolicyMerge) {
-		var existingJobId string
+		result, err := s.db.ExecContext(ctx, `
+			UPDATE scheduled_jobs
+			SET message_data = ?
+			WHERE id = (
+				SELECT id
+				FROM scheduled_jobs
+				WHERE resource_id = ? AND message_name = ? AND retrieved = false
+			)`, msgValue, resourceId, msgName)
 
-		if err = s.db.QueryRowContext(ctx, `
-		SELECT id
-		FROM scheduled_jobs
-		WHERE resource_id = ? AND message_name = ? AND retrieved = false`, resourceId, msgName).
-			Scan(&existingJobId); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-
-		if existingJobId != "" {
-			_, err = s.db.ExecContext(ctx, `UPDATE scheduled_jobs SET message_data = ? WHERE id = ?`, msgValue, existingJobId)
+		if affected, _ := result.RowsAffected(); affected > 0 {
 			return err
 		}
 	}

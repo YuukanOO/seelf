@@ -39,7 +39,7 @@ func OnAppEnvChangedHandler(
 			return err
 		}
 
-		depl, err := app.Redeploy(source, number, auth.CurrentUser(ctx).MustGet())
+		deployment, err := app.Redeploy(source, number, auth.CurrentUser(ctx).MustGet())
 
 		// Could not redeploy the latest deployment, maybe because of a configuration change,
 		// just skip it (for example, trying to redeploy a git deployment but the vcs is now missing)
@@ -47,6 +47,6 @@ func OnAppEnvChangedHandler(
 			return nil
 		}
 
-		return writer.Write(ctx, &depl)
+		return writer.Write(ctx, &deployment)
 	}
 }

@@ -31,6 +31,12 @@ const (
 	CleanupStrategySkip                           // Skip the cleanup because no resource has been deployed or we can't remove them anymore
 )
 
+const (
+	TargetStatusConfiguring TargetStatus = iota
+	TargetStatusFailed
+	TargetStatusReady
+)
+
 type (
 	TargetID                  string
 	CleanupStrategy           uint8                                                          // Strategy to use when deleting a target (on the provider side) based on wether it has been successfully configured or not
@@ -344,7 +350,7 @@ func (t *Target) Reconfigure() error {
 // Mark the target (in the given version) has configured (by an external system).
 // If the given version does not match the current one, nothing will be done.
 func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigned, err error) {
-	if !t.state.Configured(version, err) {
+	if !t.state.configured(version, err) {
 		return
 	}
 
@@ -489,11 +495,11 @@ func (t *Target) CurrentVersion() time.Time            { return t.state.version 
 
 // Returns true if the given configuration version is different from the current one.
 func (t *Target) IsOutdated(version time.Time) bool {
-	return t.state.IsOutdated(version)
+	return t.state.isOutdated(version)
 }
 
 func (t *Target) reconfigure() {
-	t.state.Reconfigure()
+	t.state.reconfigure()
 
 	t.apply(TargetStateChanged{
 		ID:    t.id,
@@ -541,6 +547,66 @@ func (t *Target) apply(e event.Event) {
 
 	event.Store(t, e)
 }
+
+type (
+	TargetStatus uint8
+
+	TargetState struct {
+		status           TargetStatus
+		version          time.Time
+		errcode          monad.Maybe[string]
+		lastReadyVersion monad.Maybe[time.Time] // Hold down the last time the target was marked as ready
+	}
+)
+
+func newTargetState() (t TargetState) {
+	t.reconfigure()
+	return t
+}
+
+// Mark the state as configuring and update the version.
+func (t *TargetState) reconfigure() {
+	t.status = TargetStatusConfiguring
+	t.version = time.Now().UTC()
+	t.errcode.Unset()
+}
+
+// Update the state based on wether or not an error is given and returns a boolean indicating
+// if the state has changed.
+//
+// If there is no error, the target will be considered ready.
+// If an error is given, the target will be marked as failed.
+//
+// In either case, if the state has changed since it has been processed (the version param),
+// it will return without doing anything because the result is outdated.
+func (t *TargetState) configured(version time.Time, err error) bool {
+	if t.isOutdated(version) {
+		return false
+	}
+
+	if err != nil {
+		t.status = TargetStatusFailed
+		t.errcode.Set(err.Error())
+		return true
+	}
+
+	t.status = TargetStatusReady
+	t.lastReadyVersion.Set(version)
+	t.errcode.Unset()
+
+	return true
+}
+
+// Returns true if the given version is different from the current one or if the one
+// provided is already configured.
+func (t TargetState) isOutdated(version time.Time) bool {
+	return version != t.version || t.status != TargetStatusConfiguring
+}
+
+func (t TargetState) Status() TargetStatus                     { return t.status }
+func (t TargetState) ErrCode() monad.Maybe[string]             { return t.errcode }
+func (t TargetState) Version() time.Time                       { return t.version }
+func (t TargetState) LastReadyVersion() monad.Maybe[time.Time] { return t.lastReadyVersion }
 
 func (e TargetEntrypoints) Value() (driver.Value, error) { return storage.ValueJSON(e) }
 func (e *TargetEntrypoints) Scan(value any) error        { return storage.ScanJSON(value, e) }

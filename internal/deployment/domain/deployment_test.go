@@ -70,80 +70,101 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("could be marked has started", func(t *testing.T) {
-		dpl := fixture.Deployment()
+		t.Run("should fail if the deployment is already started", func(t *testing.T) {
+			deployment := fixture.Deployment()
+			assert.Nil(t, deployment.HasStarted())
 
-		err := dpl.HasStarted()
+			err := deployment.HasStarted()
 
-		assert.Nil(t, err)
-		assert.HasNEvents(t, 2, &dpl)
-		evt := assert.EventIs[domain.DeploymentStateChanged](t, &dpl, 1)
+			assert.ErrorIs(t, domain.ErrNotInPendingState, err)
+		})
 
-		assert.Equal(t, dpl.ID(), evt.ID)
-		assert.Equal(t, domain.DeploymentStatusRunning, evt.State.Status())
-		assert.False(t, evt.State.ErrCode().HasValue())
-		assert.False(t, evt.State.Services().HasValue())
-		assert.NotZero(t, evt.State.StartedAt())
+		t.Run("should succeed if the deployment is not started yet", func(t *testing.T) {
+			deployment := fixture.Deployment()
+
+			err := deployment.HasStarted()
+
+			assert.Nil(t, err)
+			assert.HasNEvents(t, 2, &deployment)
+			evt := assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 1)
+
+			assert.Equal(t, deployment.ID(), evt.ID)
+			assert.Equal(t, domain.DeploymentStatusRunning, evt.State.Status())
+			assert.NotZero(t, evt.State.StartedAt())
+			assert.Zero(t, evt.State.ErrCode())
+			assert.False(t, evt.State.Services().HasValue())
+			assert.Zero(t, evt.State.FinishedAt())
+		})
 	})
 
-	t.Run("could be marked has ended with services", func(t *testing.T) {
-		deployment := fixture.Deployment()
-		builder := deployment.Config().ServicesBuilder()
-		builder.AddService("aservice", "an/image")
-		services := builder.Services()
-		assert.Nil(t, deployment.HasStarted())
+	t.Run("could be marked has ended", func(t *testing.T) {
+		t.Run("should fail if the deployment is not in running state", func(t *testing.T) {
+			deployment := fixture.Deployment()
 
-		err := deployment.HasEnded(services, nil)
+			err := deployment.HasEnded(nil, nil)
 
-		assert.Nil(t, err)
-		assert.HasNEvents(t, 3, &deployment, "should have events related to deployment started and ended")
+			assert.ErrorIs(t, domain.ErrNotInRunningState, err)
+		})
 
-		evt := assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 1)
-		assert.Equal(t, deployment.ID(), evt.ID)
-		assert.Equal(t, domain.DeploymentStatusRunning, evt.State.Status())
+		t.Run("should succeed if services is set and no error happened", func(t *testing.T) {
+			deployment := fixture.Deployment()
+			builder := deployment.Config().ServicesBuilder()
+			builder.AddService("service", "an/image")
+			services := builder.Services()
+			assert.Nil(t, deployment.HasStarted())
 
-		evt = assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 2)
+			err := deployment.HasEnded(services, nil)
 
-		assert.Equal(t, deployment.ID(), evt.ID)
-		assert.Equal(t, domain.DeploymentStatusSucceeded, evt.State.Status())
-		assert.DeepEqual(t, services, evt.State.Services().MustGet())
-	})
+			assert.Nil(t, err)
+			assert.HasNEvents(t, 3, &deployment, "should have events related to deployment started and ended")
 
-	t.Run("should default to a deployment without services if has ended without services nor error", func(t *testing.T) {
-		dpl := fixture.Deployment()
-		assert.Nil(t, dpl.HasStarted())
+			evt := assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 2)
 
-		err := dpl.HasEnded(nil, nil)
+			assert.Equal(t, deployment.ID(), evt.ID)
+			assert.Equal(t, domain.DeploymentStatusSucceeded, evt.State.Status())
+			assert.DeepEqual(t, services, evt.State.Services().MustGet())
+			assert.NotZero(t, evt.State.StartedAt())
+			assert.NotZero(t, evt.State.FinishedAt())
+			assert.Zero(t, evt.State.ErrCode())
+		})
 
-		assert.Nil(t, err)
-		assert.HasNEvents(t, 3, &dpl, "should have events related to deployment started and ended")
+		t.Run("should default to an empty services array if nil given and no error", func(t *testing.T) {
+			deployment := fixture.Deployment()
+			assert.Nil(t, deployment.HasStarted())
 
-		evt := assert.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
+			err := deployment.HasEnded(nil, nil)
 
-		assert.Equal(t, dpl.ID(), evt.ID)
-		assert.Equal(t, domain.DeploymentStatusSucceeded, evt.State.Status())
-		assert.True(t, evt.State.Services().HasValue())
-	})
+			assert.Nil(t, err)
+			assert.HasNEvents(t, 3, &deployment, "should have events related to deployment started and ended")
 
-	t.Run("could be marked has ended with an error", func(t *testing.T) {
-		var (
-			err    error
-			reason = errors.New("failed reason")
-		)
+			evt := assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 2)
 
-		dpl := fixture.Deployment()
-		assert.Nil(t, dpl.HasStarted())
+			assert.Equal(t, deployment.ID(), evt.ID)
+			assert.Equal(t, domain.DeploymentStatusSucceeded, evt.State.Status())
+			assert.DeepEqual(t, domain.Services{}, evt.State.Services().MustGet())
+			assert.NotZero(t, evt.State.StartedAt())
+			assert.NotZero(t, evt.State.FinishedAt())
+			assert.Zero(t, evt.State.ErrCode())
+		})
 
-		err = dpl.HasEnded(nil, reason)
+		t.Run("should be marked has failed if an error is given", func(t *testing.T) {
+			reason := errors.New("failed reason")
+			deployment := fixture.Deployment()
+			assert.Nil(t, deployment.HasStarted())
 
-		assert.Nil(t, err)
-		assert.HasNEvents(t, 3, &dpl, "should have events related to deployment started and ended")
+			err := deployment.HasEnded(nil, reason)
 
-		evt := assert.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
+			assert.Nil(t, err)
+			assert.HasNEvents(t, 3, &deployment, "should have events related to deployment started and ended")
 
-		assert.Equal(t, dpl.ID(), evt.ID)
-		assert.Equal(t, domain.DeploymentStatusFailed, evt.State.Status())
-		assert.Equal(t, reason.Error(), evt.State.ErrCode().MustGet())
-		assert.False(t, evt.State.Services().HasValue())
+			evt := assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 2)
+
+			assert.Equal(t, deployment.ID(), evt.ID)
+			assert.Equal(t, domain.DeploymentStatusFailed, evt.State.Status())
+			assert.Equal(t, reason.Error(), evt.State.ErrCode().MustGet())
+			assert.NotZero(t, evt.State.FinishedAt())
+			assert.False(t, evt.State.Services().HasValue())
+		})
 	})
 
 	t.Run("could be redeployed", func(t *testing.T) {

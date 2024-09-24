@@ -17,6 +17,15 @@ var (
 	ErrCouldNotPromoteProductionDeployment = apperr.New("could_not_promote_production_deployment")
 	ErrRunningOrPendingDeployments         = apperr.New("running_or_pending_deployments")
 	ErrInvalidSourceDeployment             = apperr.New("invalid_source_deployment")
+	ErrNotInPendingState                   = apperr.New("not_in_pending_state")
+	ErrNotInRunningState                   = apperr.New("not_in_running_state")
+)
+
+const (
+	DeploymentStatusPending DeploymentStatus = iota
+	DeploymentStatusRunning
+	DeploymentStatusFailed
+	DeploymentStatusSucceeded
 )
 
 type (
@@ -188,9 +197,7 @@ func (d *Deployment) Requested() shared.Action[domain.UserID] { return d.request
 
 // Mark a deployment has started.
 func (d *Deployment) HasStarted() error {
-	err := d.state.Started()
-
-	if err != nil {
+	if err := d.state.started(); err != nil {
 		return err
 	}
 
@@ -199,23 +206,10 @@ func (d *Deployment) HasStarted() error {
 	return nil
 }
 
-// Mark the deployment has ended with availables services or with an error if any.
+// Mark the deployment has ended with available services or with an error if any.
 // The internal status of the deployment will be updated accordingly.
 func (d *Deployment) HasEnded(services Services, deploymentErr error) error {
-	// No services and no errors, that strange but assume a deployment without services.
-	if services == nil && deploymentErr == nil {
-		services = Services{}
-	}
-
-	var err error
-
-	if deploymentErr != nil {
-		err = d.state.Failed(deploymentErr)
-	} else {
-		err = d.state.Succeeded(services)
-	}
-
-	if err != nil {
+	if err := d.state.ended(services, deploymentErr); err != nil {
 		return err
 	}
 
@@ -246,3 +240,59 @@ func (d *Deployment) apply(e event.Event) {
 
 	event.Store(d, e)
 }
+
+type (
+	DeploymentStatus uint8
+
+	// Holds together information related to the current deployment state. With a value
+	// object, it is easier to validate consistency between all those related properties.
+	// The default value represents a pending state.
+	DeploymentState struct {
+		status     DeploymentStatus
+		errcode    monad.Maybe[string]
+		services   monad.Maybe[Services]
+		startedAt  monad.Maybe[time.Time]
+		finishedAt monad.Maybe[time.Time]
+	}
+)
+
+func (s *DeploymentState) started() error {
+	if s.status != DeploymentStatusPending {
+		return ErrNotInPendingState
+	}
+
+	s.status = DeploymentStatusRunning
+	s.startedAt.Set(time.Now().UTC())
+
+	return nil
+}
+
+func (s *DeploymentState) ended(services Services, err error) error {
+	if s.status != DeploymentStatusRunning {
+		return ErrNotInRunningState
+	}
+
+	s.finishedAt.Set(time.Now().UTC())
+
+	if err != nil {
+		s.status = DeploymentStatusFailed
+		s.errcode.Set(err.Error())
+		return nil
+	}
+
+	s.status = DeploymentStatusSucceeded
+
+	if services == nil {
+		services = make(Services, 0)
+	}
+
+	s.services.Set(services)
+
+	return nil
+}
+
+func (s DeploymentState) Status() DeploymentStatus           { return s.status }
+func (s DeploymentState) ErrCode() monad.Maybe[string]       { return s.errcode }
+func (s DeploymentState) Services() monad.Maybe[Services]    { return s.services }
+func (s DeploymentState) StartedAt() monad.Maybe[time.Time]  { return s.startedAt }
+func (s DeploymentState) FinishedAt() monad.Maybe[time.Time] { return s.finishedAt }

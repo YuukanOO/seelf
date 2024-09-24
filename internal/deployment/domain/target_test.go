@@ -55,7 +55,9 @@ func Test_Target(t *testing.T) {
 			}, created)
 
 			assert.Equal(t, domain.TargetStatusConfiguring, created.State.Status())
-			assert.NotZero(t, created.State.Version())
+			assert.Equal(t, target.CurrentVersion(), created.State.Version())
+			assert.Zero(t, created.State.ErrCode())
+			assert.Zero(t, created.State.LastReadyVersion())
 		})
 	})
 
@@ -64,6 +66,13 @@ func Test_Target(t *testing.T) {
 			target := fixture.Target()
 
 			assert.True(t, target.IsOutdated(target.CurrentVersion().Add(-1*time.Second)))
+		})
+
+		t.Run("should return true if the target is not in a configuring state", func(t *testing.T) {
+			target := fixture.Target()
+			target.Configured(target.CurrentVersion(), nil, nil)
+
+			assert.True(t, target.IsOutdated(target.CurrentVersion()))
 		})
 
 		t.Run("should return false if the version is not outdated", func(t *testing.T) {
@@ -372,7 +381,7 @@ func Test_Target(t *testing.T) {
 	})
 
 	t.Run("could be marked as configured", func(t *testing.T) {
-		t.Run("should do nothing if the version do not match", func(t *testing.T) {
+		t.Run("should do nothing if the version does not match", func(t *testing.T) {
 			target := fixture.Target()
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
@@ -417,6 +426,7 @@ func Test_Target(t *testing.T) {
 			stateChanged := assert.EventIs[domain.TargetStateChanged](t, &target, 2)
 			assert.Equal(t, domain.TargetStatusFailed, stateChanged.State.Status())
 			assert.Equal(t, err.Error(), stateChanged.State.ErrCode().Get(""))
+			assert.Zero(t, stateChanged.State.LastReadyVersion())
 		})
 
 		t.Run("should be marked as ready and update entrypoints with given assigned ports ignoring non-existing entrypoints", func(t *testing.T) {
@@ -457,6 +467,8 @@ func Test_Target(t *testing.T) {
 			}, entrypointsChanged)
 			stateChanged := assert.EventIs[domain.TargetStateChanged](t, &target, 4)
 			assert.Equal(t, domain.TargetStatusReady, stateChanged.State.Status())
+			assert.Zero(t, stateChanged.State.ErrCode())
+			assert.Equal(t, target.CurrentVersion(), stateChanged.State.LastReadyVersion().Get(time.Time{}))
 		})
 	})
 

@@ -34,6 +34,7 @@ type (
 	ServerOptions interface {
 		Secret() []byte
 		IsSecure() bool
+		IsDebug() bool
 		ListenAddress() string
 	}
 
@@ -59,7 +60,7 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 		logger:             root.Logger(),
 	}
 
-	s.router.SetTrustedProxies(nil)
+	_ = s.router.SetTrustedProxies(nil)
 
 	// Configure the session store
 	store := cookie.NewStore(s.options.Secret())
@@ -69,7 +70,11 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	s.router.Use(s.requestLogger, s.recoverer, sessions.Sessions(sessionName, store))
+	if s.options.IsDebug() {
+		s.router.Use(s.requestLogger)
+	}
+
+	s.router.Use(s.recoverer, sessions.Sessions(sessionName, store))
 
 	// Let's register every routes now!
 	v1 := s.router.Group("/api/v1")

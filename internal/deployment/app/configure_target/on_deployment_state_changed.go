@@ -22,7 +22,7 @@ func OnDeploymentStateChangedHandler(
 			return err
 		}
 
-		target.ExposeEntrypoints(evt.ID.AppID(), evt.Config.Environment(), evt.State.Services().Get(domain.Services{}))
+		target.ExposeEntrypoints(evt.ID.AppID(), evt.Config.Environment(), evt.State.Services().Get(nil))
 
 		return writer.Write(ctx, &target)
 	}

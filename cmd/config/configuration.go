@@ -179,6 +179,7 @@ func (c *configuration) Secret() []byte                            { return []by
 func (c *configuration) RunnersPollInterval() time.Duration        { return c.pollInterval }
 func (c *configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 func (c *configuration) RunnersCleanupCount() int                  { return c.Runners.Cleanup }
+func (c *configuration) IsDebug() bool                             { return c.logLevel == log.DebugLevel }
 
 func (c *configuration) IsSecure() bool {
 	// If secure has been explicitly isSet, returns it

@@ -10,76 +10,125 @@ import (
 	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
-func Test_Service(t *testing.T) {
+func Test_ServicesBuilder(t *testing.T) {
 
 	t.Run("could be created from a deployment configuration", func(t *testing.T) {
-		app := fixture.App(fixture.WithAppName("my-app"))
-		appidLower := strings.ToLower(string(app.ID()))
-		deployment := fixture.Deployment(fixture.FromApp(app))
+		t.Run("should use the given image if any", func(t *testing.T) {
+			app := fixture.App(fixture.WithAppName("my-app"))
+			deployment := fixture.Deployment(fixture.FromApp(app))
 
-		s := deployment.Config().NewService("db", "postgres:14-alpine")
+			builder := deployment.Config().ServicesBuilder()
+			service := builder.AddService("db", "postgres:14-alpine")
 
-		assert.Equal(t, "db", s.Name())
-		assert.Equal(t, "postgres:14-alpine", s.Image())
+			assert.Equal(t, "db", service.Name())
+			assert.Equal(t, "postgres:14-alpine", service.Image())
+		})
 
-		s = deployment.Config().NewService("app", "")
+		t.Run("should generate a unique image name if not set", func(t *testing.T) {
+			app := fixture.App(fixture.WithAppName("my-app"))
+			appidLower := strings.ToLower(string(app.ID()))
+			deployment := fixture.Deployment(fixture.FromApp(app))
+			builder := deployment.Config().ServicesBuilder()
 
-		assert.Equal(t, "app", s.Name())
-		assert.Equal(t, fmt.Sprintf("my-app-%s/app:production", appidLower), s.Image())
+			service := builder.AddService("app", "")
+
+			assert.Equal(t, "app", service.Name())
+			assert.Equal(t, fmt.Sprintf("my-app-%s/app:production", appidLower), service.Image())
+		})
 	})
 
-	t.Run("should populate the subdomain when adding HTTP entrypoints", func(t *testing.T) {
+	t.Run("should returns an existing service if trying to add one with the same name", func(t *testing.T) {
+		app := fixture.App(fixture.WithAppName("my-app"))
+		deployment := fixture.Deployment(fixture.FromApp(app))
+
+		builder := deployment.Config().ServicesBuilder()
+
+		one := builder.AddService("app", "")
+		two := builder.AddService("app", "")
+
+		assert.HasLength(t, 1, builder.Services())
+		assert.Equal(t, one, two)
+	})
+
+	t.Run("should returns the existing entrypoint if trying to add one for the same router and port", func(t *testing.T) {
+		app := fixture.App(fixture.WithAppName("my-app"))
+		deployment := fixture.Deployment(fixture.FromApp(app))
+
+		builder := deployment.Config().ServicesBuilder()
+		service := builder.AddService("app", "image")
+		entrypointOne := service.AddHttpEntrypoint(80, true)
+		entrypointTwo := service.AddHttpEntrypoint(80, false)
+
+		assert.HasLength(t, 1, builder.Services())
+		assert.Equal(t, 1, len(builder.Services().Entrypoints()))
+		assert.True(t, builder.Services().Entrypoints()[0].IsCustom())
+		assert.Equal(t, entrypointOne, entrypointTwo)
+	})
+
+	t.Run("could have http entrypoints added", func(t *testing.T) {
 		app := fixture.App(fixture.WithAppName("my-app"))
 		appidLower := strings.ToLower(string(app.ID()))
 		deployment := fixture.Deployment(fixture.FromApp(app))
 
-		s := deployment.Config().NewService("app", "")
-		e := s.AddHttpEntrypoint(deployment.Config(), 80, domain.HttpEntrypointOptions{
-			Managed:             true,
-			UseDefaultSubdomain: true,
-		})
-		assert.Equal(t, fmt.Sprintf("my-app-production-%s-app-80-http", appidLower), string(e.Name()))
-		assert.Equal(t, domain.RouterHttp, e.Router())
-		assert.False(t, e.IsCustom())
-		assert.Equal(t, "my-app", e.Subdomain().Get(""))
-		assert.Equal(t, 80, e.Port())
+		builder := deployment.Config().ServicesBuilder()
+		service := builder.AddService("app", "")
+		service.AddHttpEntrypoint(80, true)
+		service.AddHttpEntrypoint(8080, false)
+		service = builder.AddService("other", "")
+		service.AddHttpEntrypoint(3000, false)
 
-		e = s.AddHttpEntrypoint(deployment.Config(), 8080, domain.HttpEntrypointOptions{})
-		assert.Equal(t, fmt.Sprintf("my-app-production-%s-app-8080-http", appidLower), string(e.Name()))
-		assert.Equal(t, domain.RouterHttp, e.Router())
-		assert.True(t, e.IsCustom())
-		assert.Equal(t, "my-app", e.Subdomain().Get(""))
-		assert.Equal(t, 8080, e.Port())
+		services := builder.Services()
+		assert.HasLength(t, 2, services)
+		assert.Equal(t, "app", services[0].Name())
+		assert.Equal(t, fmt.Sprintf("my-app-%s/app:production", appidLower), services[0].Image())
 
-		same := s.AddHttpEntrypoint(deployment.Config(), 8080, domain.HttpEntrypointOptions{})
-		assert.Equal(t, e, same)
+		assert.Equal(t, "other", services[1].Name())
+		assert.Equal(t, fmt.Sprintf("my-app-%s/other:production", appidLower), services[1].Image())
+
+		entrypoints := services.Entrypoints()
+		assert.HasLength(t, 3, entrypoints)
+
+		assert.Equal(t, fmt.Sprintf("my-app-production-%s-app-80-http", appidLower), string(entrypoints[0].Name()))
+		assert.Equal(t, domain.RouterHttp, entrypoints[0].Router())
+		assert.True(t, entrypoints[0].IsCustom())
+		assert.Equal(t, 80, entrypoints[0].Port())
+		assert.Equal(t, "my-app", entrypoints[0].Subdomain().Get(""))
+
+		assert.Equal(t, fmt.Sprintf("my-app-production-%s-app-8080-http", appidLower), string(entrypoints[1].Name()))
+		assert.Equal(t, domain.RouterHttp, entrypoints[1].Router())
+		assert.False(t, entrypoints[1].IsCustom())
+		assert.Equal(t, 8080, entrypoints[1].Port())
+		assert.Equal(t, "my-app", entrypoints[1].Subdomain().Get(""))
+
+		assert.Equal(t, fmt.Sprintf("my-app-production-%s-other-3000-http", appidLower), string(entrypoints[2].Name()))
+		assert.Equal(t, domain.RouterHttp, entrypoints[2].Router())
+		assert.False(t, entrypoints[2].IsCustom())
+		assert.Equal(t, 3000, entrypoints[2].Port())
+		assert.Equal(t, "other.my-app", entrypoints[2].Subdomain().Get(""))
 	})
 
 	t.Run("could have one or more TCP/UDP entrypoints attached", func(t *testing.T) {
 		app := fixture.App(fixture.WithAppName("my-app"))
 		appidLower := strings.ToLower(string(app.ID()))
 		deployment := fixture.Deployment(fixture.FromApp(app))
-		s := deployment.Config().NewService("app", "")
 
-		tcp := s.AddTCPEntrypoint(8080)
+		builder := deployment.Config().ServicesBuilder()
+
+		service := builder.AddService("app", "")
+
+		tcp := service.AddTCPEntrypoint(8080, true)
 		assert.Equal(t, fmt.Sprintf("my-app-production-%s-app-8080-tcp", appidLower), string(tcp.Name()))
 		assert.Equal(t, domain.RouterTcp, tcp.Router())
 		assert.True(t, tcp.IsCustom())
 		assert.False(t, tcp.Subdomain().HasValue())
 		assert.Equal(t, 8080, tcp.Port())
 
-		udp := s.AddUDPEntrypoint(8080)
+		udp := service.AddUDPEntrypoint(8080, true)
 		assert.Equal(t, fmt.Sprintf("my-app-production-%s-app-8080-udp", appidLower), string(udp.Name()))
 		assert.Equal(t, domain.RouterUdp, udp.Router())
 		assert.True(t, udp.IsCustom())
 		assert.False(t, udp.Subdomain().HasValue())
 		assert.Equal(t, 8080, udp.Port())
-
-		same := s.AddTCPEntrypoint(8080)
-		assert.Equal(t, tcp, same)
-
-		same = s.AddUDPEntrypoint(8080)
-		assert.Equal(t, udp, same)
 	})
 }
 
@@ -87,23 +136,15 @@ func Test_Services(t *testing.T) {
 
 	t.Run("should be able to return all entrypoints", func(t *testing.T) {
 		deployment := fixture.Deployment()
-		var services domain.Services
+		builder := deployment.Config().ServicesBuilder()
 
-		s := deployment.Config().NewService("app", "")
-		http := s.AddHttpEntrypoint(deployment.Config(), 80, domain.HttpEntrypointOptions{
-			Managed: true,
-		})
-		udp := s.AddUDPEntrypoint(8080)
-
-		services = append(services, s)
-
-		s = deployment.Config().NewService("db", "postgres:14-alpine")
-		tcp := s.AddTCPEntrypoint(5432)
-
-		services = append(services, s)
-
-		s = deployment.Config().NewService("cache", "redis:6-alpine")
-		services = append(services, s)
+		service := builder.AddService("app", "")
+		http := service.AddHttpEntrypoint(80, false)
+		udp := service.AddUDPEntrypoint(8080, true)
+		service = builder.AddService("db", "postgres:14-alpine")
+		tcp := service.AddTCPEntrypoint(5432, true)
+		builder.AddService("cache", "redis:6-alpine")
+		services := builder.Services()
 
 		entrypoints := services.Entrypoints()
 
@@ -111,8 +152,21 @@ func Test_Services(t *testing.T) {
 		assert.Equal(t, http, entrypoints[0])
 		assert.Equal(t, udp, entrypoints[1])
 		assert.Equal(t, tcp, entrypoints[2])
+	})
 
-		entrypoints = services.CustomEntrypoints()
+	t.Run("should be able to return all custom entrypoints", func(t *testing.T) {
+		deployment := fixture.Deployment()
+		builder := deployment.Config().ServicesBuilder()
+
+		service := builder.AddService("app", "")
+		service.AddHttpEntrypoint(80, false)
+		udp := service.AddUDPEntrypoint(8080, true)
+		service = builder.AddService("db", "postgres:14-alpine")
+		tcp := service.AddTCPEntrypoint(5432, true)
+		builder.AddService("cache", "redis:6-alpine")
+		services := builder.Services()
+
+		entrypoints := services.CustomEntrypoints()
 
 		assert.HasLength(t, 2, entrypoints)
 		assert.Equal(t, udp, entrypoints[0])
@@ -120,33 +174,23 @@ func Test_Services(t *testing.T) {
 	})
 
 	t.Run("should implement the valuer interface", func(t *testing.T) {
-		var services domain.Services
 		app := fixture.App(fixture.WithAppName("my-app"))
 		deployment := fixture.Deployment(fixture.FromApp(app))
 		appidLower := strings.ToLower(string(deployment.ID().AppID()))
+		builder := deployment.Config().ServicesBuilder()
 
-		s := deployment.Config().NewService("app", "")
-		s.AddHttpEntrypoint(deployment.Config(), 80, domain.HttpEntrypointOptions{
-			UseDefaultSubdomain: true,
-			Managed:             true,
-		})
-		s.AddTCPEntrypoint(8080)
+		service := builder.AddService("app", "")
+		service.AddHttpEntrypoint(80, false)
+		service.AddTCPEntrypoint(8080, true)
+		service = builder.AddService("db", "postgres:14-alpine")
+		service.AddTCPEntrypoint(5432, true)
+		builder.AddService("cache", "redis:6-alpine")
 
-		services = append(services, s)
-
-		s = deployment.Config().NewService("db", "postgres:14-alpine")
-		s.AddTCPEntrypoint(5432)
-
-		services = append(services, s)
-
-		s = deployment.Config().NewService("cache", "redis:6-alpine")
-		services = append(services, s)
-
-		value, err := services.Value()
+		value, err := builder.Services().Value()
 
 		assert.Nil(t, err)
-		assert.Equal(t, fmt.Sprintf(`[{"name":"app","qualified_name":"my-app-production-%s-app","image":"my-app-%s/app:production","entrypoints":[{"name":"my-app-production-%s-app-80-http","is_custom":false,"router":"http","subdomain":"my-app","port":80},{"name":"my-app-production-%s-app-8080-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":8080}]},{"name":"db","qualified_name":"my-app-production-%s-db","image":"postgres:14-alpine","entrypoints":[{"name":"my-app-production-%s-db-5432-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":5432}]},{"name":"cache","qualified_name":"my-app-production-%s-cache","image":"redis:6-alpine","entrypoints":[]}]`,
-			appidLower, appidLower, appidLower, appidLower, appidLower, appidLower, appidLower), value.(string))
+		assert.Equal(t, fmt.Sprintf(`[{"name":"app","image":"my-app-%s/app:production","entrypoints":[{"name":"my-app-production-%s-app-80-http","is_custom":false,"router":"http","subdomain":"my-app","port":80},{"name":"my-app-production-%s-app-8080-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":8080}]},{"name":"db","image":"postgres:14-alpine","entrypoints":[{"name":"my-app-production-%s-db-5432-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":5432}]},{"name":"cache","image":"redis:6-alpine","entrypoints":[]}]`,
+			appidLower, appidLower, appidLower, appidLower), value.(string))
 	})
 
 	t.Run("should implement the scanner interface", func(t *testing.T) {
@@ -202,7 +246,7 @@ func Test_Services(t *testing.T) {
 		v, err := services.Value()
 
 		assert.Nil(t, err)
-		assert.Equal(t, `[{"name":"app","qualified_name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-app","image":"my-app-2fa8domd2sh7ehyqlxf7jvj57xs/app:production","entrypoints":[{"name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-app-80-http","is_custom":false,"router":"http","subdomain":"my-app","port":80},{"name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-app-8080-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":8080}]},{"name":"db","qualified_name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-db","image":"postgres:14-alpine","entrypoints":[{"name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-db-5432-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":5432}]},{"name":"cache","qualified_name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-cache","image":"redis:6-alpine","entrypoints":[]}]`, v.(string))
+		assert.Equal(t, `[{"name":"app","image":"my-app-2fa8domd2sh7ehyqlxf7jvj57xs/app:production","entrypoints":[{"name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-app-80-http","is_custom":false,"router":"http","subdomain":"my-app","port":80},{"name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-app-8080-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":8080}]},{"name":"db","image":"postgres:14-alpine","entrypoints":[{"name":"my-app-production-2fa8domd2sh7ehyqlxf7jvj57xs-db-5432-tcp","is_custom":true,"router":"tcp","subdomain":null,"port":5432}]},{"name":"cache","image":"redis:6-alpine","entrypoints":[]}]`, v.(string))
 	})
 }
 

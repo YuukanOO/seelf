@@ -351,10 +351,11 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 				domain.NewEnvironmentConfig(target.ID()),
 			))
 			deployment := fixture.Deployment(fixture.FromApp(app))
-			service := deployment.Config().NewService("app", "")
-			tcp := service.AddTCPEntrypoint(5432)
-			udp := service.AddUDPEntrypoint(5433)
-			target.ExposeEntrypoints(deployment.Config().AppID(), deployment.Config().Environment(), domain.Services{service})
+			builder := deployment.Config().ServicesBuilder()
+			service := builder.AddService("app", "")
+			tcp := service.AddTCPEntrypoint(5432, true)
+			udp := service.AddUDPEntrypoint(5433, true)
+			target.ExposeEntrypoints(deployment.Config().AppID(), deployment.Config().Environment(), builder.Services())
 			provider, mock := arrange(config.Default(config.WithTestDefaults()))
 
 			assigned, err := provider.Setup(context.Background(), target)
@@ -425,10 +426,11 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 				domain.NewEnvironmentConfig(target.ID()),
 			))
 			deployment := fixture.Deployment(fixture.FromApp(app))
-			service := deployment.Config().NewService("app", "")
-			tcp := service.AddTCPEntrypoint(5432)
-			udp := service.AddUDPEntrypoint(5433)
-			target.ExposeEntrypoints(deployment.ID().AppID(), deployment.Config().Environment(), domain.Services{service})
+			builder := deployment.Config().ServicesBuilder()
+			service := builder.AddService("app", "")
+			tcp := service.AddTCPEntrypoint(5432, true)
+			udp := service.AddUDPEntrypoint(5433, true)
+			target.ExposeEntrypoints(deployment.ID().AppID(), deployment.Config().Environment(), builder.Services())
 			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.ID().AppID(): {
 					deployment.Config().Environment(): {
@@ -437,9 +439,9 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 					},
 				},
 			}, nil)
-			newTcp := service.AddTCPEntrypoint(5434)
-			newUdp := service.AddUDPEntrypoint(5435)
-			target.ExposeEntrypoints(deployment.ID().AppID(), deployment.Config().Environment(), domain.Services{service})
+			newTcp := service.AddTCPEntrypoint(5434, true)
+			newUdp := service.AddUDPEntrypoint(5435, true)
+			target.ExposeEntrypoints(deployment.ID().AppID(), deployment.Config().Environment(), builder.Services())
 			provider, mock := arrange(config.Default(config.WithTestDefaults()))
 
 			assigned, err := provider.Setup(context.Background(), target)

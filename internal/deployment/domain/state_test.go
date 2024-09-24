@@ -63,9 +63,9 @@ func Test_DeploymentState(t *testing.T) {
 		)
 
 		deployment := fixture.Deployment()
-		services := domain.Services{
-			deployment.Config().NewService("app", ""),
-		}
+		builder := deployment.Config().ServicesBuilder()
+		builder.AddService("app", "")
+		services := builder.Services()
 		assert.Nil(t, state.Started())
 
 		err = state.Succeeded(services)

@@ -28,7 +28,7 @@ type (
 		event.Emitter
 
 		id        DeploymentID
-		config    DeploymentConfig
+		config    ConfigSnapshot
 		state     DeploymentState
 		source    SourceData
 		requested shared.Action[domain.UserID]
@@ -60,7 +60,7 @@ type (
 		bus.Notification
 
 		ID        DeploymentID
-		Config    DeploymentConfig
+		Config    ConfigSnapshot
 		State     DeploymentState
 		Source    SourceData
 		Requested shared.Action[domain.UserID]
@@ -70,7 +70,7 @@ type (
 		bus.Notification
 
 		ID     DeploymentID
-		Config DeploymentConfig
+		Config ConfigSnapshot
 		State  DeploymentState
 	}
 )
@@ -98,7 +98,7 @@ func (a *App) NewDeployment(
 		return d, ErrVersionControlNotConfigured
 	}
 
-	conf, err := a.ConfigSnapshotFor(env)
+	conf, err := a.configSnapshotFor(env)
 
 	if err != nil {
 		return d, err
@@ -182,7 +182,7 @@ func (a *App) Promote(
 }
 
 func (d *Deployment) ID() DeploymentID                        { return d.id }
-func (d *Deployment) Config() DeploymentConfig                { return d.config }
+func (d *Deployment) Config() ConfigSnapshot                  { return d.config }
 func (d *Deployment) Source() SourceData                      { return d.source }
 func (d *Deployment) Requested() shared.Action[domain.UserID] { return d.requested }
 

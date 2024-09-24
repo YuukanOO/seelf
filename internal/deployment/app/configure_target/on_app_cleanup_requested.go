@@ -13,19 +13,15 @@ func OnAppCleanupRequestedHandler(
 	writer domain.TargetsWriter,
 ) bus.SignalHandler[domain.AppCleanupRequested] {
 	return func(ctx context.Context, evt domain.AppCleanupRequested) error {
-		if evt.ProductionConfig.Target() == evt.StagingConfig.Target() {
-			return unExpose(ctx, reader, writer, evt.ProductionConfig.Target(), evt.ID)
-		}
-
 		if err := unExpose(ctx, reader, writer, evt.ProductionConfig.Target(), evt.ID); err != nil {
 			return err
 		}
 
-		if err := unExpose(ctx, reader, writer, evt.StagingConfig.Target(), evt.ID); err != nil {
-			return err
+		if evt.ProductionConfig.Target() == evt.StagingConfig.Target() {
+			return nil
 		}
 
-		return nil
+		return unExpose(ctx, reader, writer, evt.StagingConfig.Target(), evt.ID)
 	}
 }
 

@@ -24,17 +24,16 @@ type (
 	}
 
 	deploymentProjectBuilder struct {
-		exposedManually             bool
-		sourceDir                   string
-		composePath                 string
-		networkName                 string
-		services                    domain.Services
-		project                     *types.Project
-		config                      domain.DeploymentConfig
-		logger                      domain.DeploymentLogger
-		labels                      types.Labels
-		isDefaultSubdomainAvailable bool
-		routersByPort               map[string]domain.Router
+		exposedManually bool
+		sourceDir       string
+		composePath     string
+		networkName     string
+		config          domain.ConfigSnapshot
+		logger          domain.DeploymentLogger
+		labels          types.Labels
+		routersByPort   map[string]domain.Router
+		services        domain.Services
+		project         *types.Project
 	}
 )
 
@@ -46,13 +45,12 @@ func newDeploymentProjectBuilder(
 	config := deployment.Config()
 
 	return &deploymentProjectBuilder{
-		exposedManually:             target.IsManual(),
-		isDefaultSubdomainAvailable: true,
-		sourceDir:                   ctx.BuildDirectory(),
-		config:                      config,
-		networkName:                 targetPublicNetworkName(config.Target()),
-		logger:                      ctx.Logger(),
-		routersByPort:               make(map[string]domain.Router),
+		exposedManually: target.IsManual(),
+		sourceDir:       ctx.BuildDirectory(),
+		config:          config,
+		networkName:     targetPublicNetworkName(config.Target()),
+		logger:          ctx.Logger(),
+		routersByPort:   make(map[string]domain.Router),
 		labels: types.Labels{
 			AppLabel:         string(deployment.ID().AppID()),
 			TargetLabel:      string(config.Target()),
@@ -171,11 +169,13 @@ func (b *deploymentProjectBuilder) transform() {
 		b.project.DisabledServices = nil // Reset the list of disabled services or orphans created for an old profile will not be deleted
 	}
 
+	builder := b.config.ServicesBuilder()
+
 	// Let's transform the project to expose needed services
 	// Here ServiceNames sort the services by alphabetical order so we don't have to
 	for _, name := range b.project.ServiceNames() {
 		serviceDefinition := b.project.Services[name]
-		service := b.config.NewService(serviceDefinition.Name, serviceDefinition.Image)
+		service := builder.AddService(serviceDefinition.Name, serviceDefinition.Image)
 		serviceName := service.Name()
 
 		if serviceDefinition.Restart == "" {
@@ -215,7 +215,6 @@ func (b *deploymentProjectBuilder) transform() {
 		// No ports mapped or manual target, nothing to do
 		if b.exposedManually || len(serviceDefinition.Ports) == 0 {
 			b.project.Services[serviceName] = serviceDefinition
-			b.services = append(b.services, service)
 			continue
 		}
 
@@ -232,19 +231,18 @@ func (b *deploymentProjectBuilder) transform() {
 				continue
 			}
 
+			port := domain.Port(portConfig.Target)
+
 			switch router {
 			case domain.RouterHttp:
-				entrypoint = service.AddHttpEntrypoint(b.config, domain.Port(portConfig.Target), domain.HttpEntrypointOptions{
-					Managed:             httpMainEntryPointAvailable,
-					UseDefaultSubdomain: b.isDefaultSubdomainAvailable,
-				})
+				entrypoint = service.AddHttpEntrypoint(port, !httpMainEntryPointAvailable)
 				httpMainEntryPointAvailable = false
-				serviceDefinition.Labels[SubdomainLabel] = entrypoint.Subdomain().MustGet()
+				serviceDefinition.Labels[SubdomainLabel] = entrypoint.Subdomain().Get("")
 			case domain.RouterTcp:
-				entrypoint = service.AddTCPEntrypoint(domain.Port(portConfig.Target))
+				entrypoint = service.AddTCPEntrypoint(port, true)
 				serviceDefinition.Labels["traefik.tcp.routers."+string(entrypoint.Name())+".rule"] = "HostSNI(`*`)"
 			case domain.RouterUdp:
-				entrypoint = service.AddUDPEntrypoint(domain.Port(portConfig.Target))
+				entrypoint = service.AddUDPEntrypoint(port, true)
 			default:
 				b.logger.Warnf("unsupported router type for service %s, the service will not be exposed", serviceName)
 				continue
@@ -257,7 +255,6 @@ func (b *deploymentProjectBuilder) transform() {
 
 			if !entrypoint.IsCustom() {
 				serviceDefinition.Labels["traefik."+routerName+".routers."+entrypointName+".entrypoints"] = httpMainEntryPoint
-				b.isDefaultSubdomainAvailable = false
 			} else {
 				serviceDefinition.Labels[CustomEntrypointsLabel] = "true"
 				serviceDefinition.Labels["traefik."+routerName+".routers."+entrypointName+".entrypoints"] = entrypointName
@@ -278,8 +275,9 @@ func (b *deploymentProjectBuilder) transform() {
 
 		// Update the project definition and state
 		b.project.Services[serviceName] = serviceDefinition
-		b.services = append(b.services, service)
 	}
+
+	b.services = builder.Services()
 
 	// Add labels to network and volumes to make it easy to find them
 	for name, network := range b.project.Networks {

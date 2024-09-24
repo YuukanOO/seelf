@@ -17,13 +17,12 @@ import (
 func Test_Target(t *testing.T) {
 	// Common data used for custom entrypoints exposure
 	deployment := fixture.Deployment()
-	app := deployment.Config().NewService("app", "app-image")
-	app.AddHttpEntrypoint(deployment.Config(), 80, domain.HttpEntrypointOptions{
-		Managed: true,
-	})
-	http := app.AddHttpEntrypoint(deployment.Config(), 3000, domain.HttpEntrypointOptions{})
-	db := deployment.Config().NewService("db", "db-image")
-	tcp := db.AddTCPEntrypoint(5432)
+	builder := deployment.Config().ServicesBuilder()
+	app := builder.AddService("app", "app-image")
+	app.AddHttpEntrypoint(80, false)
+	http := app.AddHttpEntrypoint(3000, true)
+	db := builder.AddService("db", "db-image")
+	tcp := db.AddTCPEntrypoint(5432, true)
 
 	t.Run("could be created", func(t *testing.T) {
 		t.Run("should require a unique provider config", func(t *testing.T) {
@@ -267,7 +266,7 @@ func Test_Target(t *testing.T) {
 			t.Run("on manual target", func(t *testing.T) {
 				target := fixture.Target()
 
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
 				assert.HasNEvents(t, 2, &target)
 				changed := assert.EventIs[domain.TargetEntrypointsChanged](t, &target, 1)
@@ -288,7 +287,7 @@ func Test_Target(t *testing.T) {
 				target := fixture.Target()
 				assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true)))
 
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
 				assert.HasNEvents(t, 5, &target)
 				changed := assert.EventIs[domain.TargetEntrypointsChanged](t, &target, 3)
@@ -311,9 +310,9 @@ func Test_Target(t *testing.T) {
 		t.Run("should update existing entrypoints", func(t *testing.T) {
 			t.Run("on manual target", func(t *testing.T) {
 				target := fixture.Target()
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service})
 
 				assert.HasNEvents(t, 3, &target)
 				changed := assert.EventIs[domain.TargetEntrypointsChanged](t, &target, 2)
@@ -332,9 +331,9 @@ func Test_Target(t *testing.T) {
 			t.Run("on automatic target", func(t *testing.T) {
 				target := fixture.Target()
 				assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true)))
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service})
 
 				assert.HasNEvents(t, 7, &target)
 				changed := assert.EventIs[domain.TargetEntrypointsChanged](t, &target, 5)
@@ -355,9 +354,9 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should not raise additional events if all entrypoints already exists", func(t *testing.T) {
 			target := fixture.Target()
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 			assert.HasNEvents(t, 2, &target)
 		})
 
@@ -366,7 +365,7 @@ func Test_Target(t *testing.T) {
 			target.Configured(target.CurrentVersion(), nil, nil)
 			assert.Nil(t, target.RequestCleanup(false, "uid"))
 
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
 			assert.HasNEvents(t, 3, &target)
 		})
@@ -375,7 +374,7 @@ func Test_Target(t *testing.T) {
 	t.Run("could be marked as configured", func(t *testing.T) {
 		t.Run("should do nothing if the version do not match", func(t *testing.T) {
 			target := fixture.Target()
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
 			target.Configured(target.CurrentVersion().Add(-1*time.Second), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
@@ -402,7 +401,7 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should be marked as failed if an error is given", func(t *testing.T) {
 			target := fixture.Target()
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 			err := errors.New("an error")
 
 			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
@@ -422,8 +421,8 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should be marked as ready and update entrypoints with given assigned ports ignoring non-existing entrypoints", func(t *testing.T) {
 			target := fixture.Target()
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
 
 			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				"another-app": {
@@ -472,9 +471,9 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should un-expose all entrypoints of a given application", func(t *testing.T) {
 			target := fixture.Target()
-			target.ExposeEntrypoints("app", domain.Production, domain.Services{app, db})
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app, db})
+			target.ExposeEntrypoints("app", domain.Production, domain.Services{app.Service, db.Service})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
 			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
 					domain.Production: {
@@ -508,8 +507,8 @@ func Test_Target(t *testing.T) {
 		t.Run("should un-expose all entrypoints of an application for a specific environment", func(t *testing.T) {
 			t.Run("on manual target", func(t *testing.T) {
 				target := fixture.Target()
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app, db})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
 				target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 					deployment.Config().AppID(): {
 						domain.Production: {
@@ -543,8 +542,8 @@ func Test_Target(t *testing.T) {
 			t.Run("on automatic target", func(t *testing.T) {
 				target := fixture.Target()
 				assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("https://example.com")), true)))
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
-				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app, db})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
+				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
 				target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 					deployment.Config().AppID(): {
 						domain.Production: {
@@ -580,7 +579,7 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should be ignored if the target cleanup has been requested", func(t *testing.T) {
 			target := fixture.Target()
-			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app, db})
+			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
 					domain.Production: {

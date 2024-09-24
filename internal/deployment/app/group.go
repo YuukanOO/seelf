@@ -6,7 +6,7 @@ import (
 
 // Group for deployment to prevent multiple deployment at the same time on the same
 // environment.
-func DeploymentGroup(config domain.DeploymentConfig) string {
+func DeploymentGroup(config domain.ConfigSnapshot) string {
 	return "deployment.deployment.deploy." + config.ProjectName()
 }
 

@@ -86,24 +86,24 @@ func Test_Deployment(t *testing.T) {
 	})
 
 	t.Run("could be marked has ended with services", func(t *testing.T) {
-		dpl := fixture.Deployment()
-		services := domain.Services{
-			dpl.Config().NewService("aservice", "an/image"),
-		}
-		assert.Nil(t, dpl.HasStarted())
+		deployment := fixture.Deployment()
+		builder := deployment.Config().ServicesBuilder()
+		builder.AddService("aservice", "an/image")
+		services := builder.Services()
+		assert.Nil(t, deployment.HasStarted())
 
-		err := dpl.HasEnded(services, nil)
+		err := deployment.HasEnded(services, nil)
 
 		assert.Nil(t, err)
-		assert.HasNEvents(t, 3, &dpl, "should have events related to deployment started and ended")
+		assert.HasNEvents(t, 3, &deployment, "should have events related to deployment started and ended")
 
-		evt := assert.EventIs[domain.DeploymentStateChanged](t, &dpl, 1)
-		assert.Equal(t, dpl.ID(), evt.ID)
+		evt := assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 1)
+		assert.Equal(t, deployment.ID(), evt.ID)
 		assert.Equal(t, domain.DeploymentStatusRunning, evt.State.Status())
 
-		evt = assert.EventIs[domain.DeploymentStateChanged](t, &dpl, 2)
+		evt = assert.EventIs[domain.DeploymentStateChanged](t, &deployment, 2)
 
-		assert.Equal(t, dpl.ID(), evt.ID)
+		assert.Equal(t, deployment.ID(), evt.ID)
 		assert.Equal(t, domain.DeploymentStatusSucceeded, evt.State.Status())
 		assert.DeepEqual(t, services, evt.State.Services().MustGet())
 	})

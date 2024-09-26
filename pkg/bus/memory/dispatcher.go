@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/types"
 )
 
 type (
@@ -28,12 +29,12 @@ func (b *dispatcher) Register(msg bus.Message, handler bus.NextFunc) {
 	name := msg.Name_()
 	_, exists := b.handlers[name]
 
-	// Apply middlewares to avoid doing it at runtime
+	// Apply middlewares here to avoid doing it at runtime
 	for i := len(b.middlewares) - 1; i >= 0; i-- {
 		handler = b.middlewares[i](handler)
 	}
 
-	if msg.Kind_() == bus.MessageKindNotification {
+	if types.Is[bus.Signal](msg) {
 		if !exists {
 			b.handlers[name] = []bus.NextFunc{handler}
 		} else {
@@ -61,15 +62,15 @@ func (b *dispatcher) Send(ctx context.Context, msg bus.Request) (any, error) {
 
 func (b *dispatcher) Notify(ctx context.Context, msgs ...bus.Signal) error {
 	for _, msg := range msgs {
-		handlers := b.handlers[msg.Name_()]
+		value := b.handlers[msg.Name_()]
 
-		if handlers == nil {
+		if value == nil {
 			continue
 		}
 
-		hdls := handlers.([]bus.NextFunc)
+		handlers := value.([]bus.NextFunc)
 
-		for _, h := range hdls {
+		for _, h := range handlers {
 			_, err := h(ctx, msg)
 
 			if err != nil {

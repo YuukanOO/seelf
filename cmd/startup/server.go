@@ -47,7 +47,6 @@ type (
 	}
 
 	serverRoot struct {
-		options        ServerOptions
 		bus            bus.Bus
 		logger         log.Logger
 		db             *sqlite.Database
@@ -61,13 +60,15 @@ type (
 // needed by the server.
 func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	s := &serverRoot{
-		options: options,
-		logger:  logger,
+		logger: logger,
 	}
+
+	// embedded.NewBus()
+	// embedded.NewScheduler()
 
 	s.bus = memory.NewBus()
 
-	db, err := sqlite.Open(s.options.ConnectionString(), s.logger, s.bus)
+	db, err := sqlite.Open(options.ConnectionString(), s.logger, s.bus)
 
 	if err != nil {
 		return nil, err
@@ -81,13 +82,13 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		return nil, err
 	}
 
-	s.scheduler = bus.NewScheduler(s.schedulerStore, s.logger, s.bus, s.options.RunnersPollInterval(),
+	s.scheduler = bus.NewScheduler(s.schedulerStore, s.logger, s.bus, options.RunnersPollInterval(),
 		bus.WorkerGroup{
-			Size:     s.options.RunnersDeploymentCount(),
+			Size:     options.RunnersDeploymentCount(),
 			Messages: []string{deploy.Command{}.Name_()},
 		},
 		bus.WorkerGroup{
-			Size: s.options.RunnersCleanupCount(),
+			Size: options.RunnersCleanupCount(),
 			Messages: []string{
 				cleanup_app.Command{}.Name_(),
 				delete_app.Command{}.Name_(),
@@ -105,7 +106,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 
 	// Setups deployment infrastructure
 	if err = deploymentinfra.Setup(
-		s.options,
+		options,
 		s.logger,
 		s.db,
 		s.bus,
@@ -125,7 +126,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	}
 
 	// Create the target needed to expose seelf itself and manage certificates if needed
-	if exposedUrl, isSet := s.options.AppExposedUrl().TryGet(); isSet {
+	if exposedUrl, isSet := options.AppExposedUrl().TryGet(); isSet {
 		container := exposedUrl.User().Get("")
 
 		s.logger.Infow("exposing seelf container using the local target, creating it if needed, the container may restart once done",

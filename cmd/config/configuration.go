@@ -44,7 +44,7 @@ const (
 type (
 	// Configuration used to configure seelf commands.
 	Configuration interface {
-		serve.Options // The configuration should provide every settings needed by the seelf server
+		serve.Options
 
 		Initialize(log.ConfigurableLogger, string) error // Initialize the configuration by loading it (from config file, env vars, etc.)
 	}

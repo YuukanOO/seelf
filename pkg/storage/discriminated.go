@@ -29,6 +29,8 @@ func NewDiscriminatedMapper[T any](
 }
 
 // Register a new concrete type available to the mapper.
+// It will panic if a type is already registered with the same discriminator since it
+// should never happen.
 func (m *DiscriminatedMapper[T]) Register(concreteType T, mapper DiscriminatedMapperFunc[T]) {
 	discriminator := m.extractor(concreteType)
 

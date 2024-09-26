@@ -63,14 +63,14 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	_ = s.router.SetTrustedProxies(nil)
 
 	// Configure the session store
-	store := cookie.NewStore(s.options.Secret())
+	store := cookie.NewStore(options.Secret())
 	store.Options(sessions.Options{
-		Secure:   s.options.IsSecure(),
+		Secure:   options.IsSecure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	if s.options.IsDebug() {
+	if options.IsDebug() {
 		s.router.Use(s.requestLogger)
 	}
 

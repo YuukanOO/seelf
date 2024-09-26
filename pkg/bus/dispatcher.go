@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/YuukanOO/seelf/pkg/storage"
+	"github.com/YuukanOO/seelf/pkg/types"
 )
 
 var ErrNoHandlerRegistered = errors.New("no_handler_registered")
@@ -30,7 +31,10 @@ type (
 	}
 )
 
-// Register an handler for a specific request on the provided bus.
+// Register an handler for a specific request on the provided bus. You should always
+// prefer this registration method.
+// If the provided message is an async one, it will be automatically registered on
+// the Marshallable mapper to make things easier.
 func Register[TResult any, TMsg TypedRequest[TResult]](bus Bus, handler RequestHandler[TResult, TMsg]) {
 	var (
 		msg TMsg
@@ -42,8 +46,12 @@ func Register[TResult any, TMsg TypedRequest[TResult]](bus Bus, handler RequestH
 	bus.Register(msg, h)
 
 	// If the message is schedulable, register the unmarshaller automatically.
-	if _, isSchedulable := any(msg).(Schedulable); isSchedulable {
-		Marshallable.Register(msg, func(s string) (Request, error) { return storage.UnmarshalJSON[TMsg](s) })
+	// This is done here because of the known type TMsg but maybe I should try to
+	// move it to bus/memory in the future.
+	if types.Is[Schedulable](msg) {
+		Marshallable.Register(msg, func(s string) (Request, error) {
+			return storage.UnmarshalJSON[TMsg](s)
+		})
 	}
 }
 

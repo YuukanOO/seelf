@@ -10,8 +10,6 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
-var _ Scheduler = (*defaultScheduler)(nil) // Validate interface implementation
-
 const (
 	JobPolicyRetryPreserveOrder      JobPolicy = 1 << iota // Retry the job but preserve the order among the group
 	JobPolicyWaitForOthersResourceID                       // Wait for other jobs on the same resource id to finish before processing

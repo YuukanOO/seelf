@@ -17,11 +17,11 @@ import (
 func Test_CleanupApp(t *testing.T) {
 
 	arrange := func(tb testing.TB, provider domain.Provider, seed ...fixture.SeedBuilder) (
-		bus.RequestHandler[bus.UnitType, cleanup_app.Command],
+		bus.RequestHandler[bus.AsyncResult, cleanup_app.Command],
 		context.Context,
 	) {
 		context := fixture.PrepareDatabase(tb, seed...)
-		return cleanup_app.Handler(context.TargetsStore, context.DeploymentsStore, provider), context.Context
+		return cleanup_app.Handler(context.TargetsStore, context.DeploymentsStore, context.AppsStore, context.AppsStore, provider), context.Context
 	}
 
 	t.Run("should fail silently if the target does not exist anymore", func(t *testing.T) {
@@ -31,11 +31,11 @@ func Test_CleanupApp(t *testing.T) {
 		r, err := handler(ctx, cleanup_app.Command{})
 
 		assert.Nil(t, err)
-		assert.Equal(t, bus.Unit, r)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 		assert.False(t, provider.called)
 	})
 
-	t.Run("should fail if at least one deployment is running", func(t *testing.T) {
+	t.Run("should delay if at least one deployment is running", func(t *testing.T) {
 		var provider mockProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
@@ -56,7 +56,7 @@ func Test_CleanupApp(t *testing.T) {
 			fixture.WithDeployments(&deployment),
 		)
 
-		_, err := handler(ctx, cleanup_app.Command{
+		result, err := handler(ctx, cleanup_app.Command{
 			TargetID:    string(target.ID()),
 			AppID:       string(app.ID()),
 			Environment: string(domain.Production),
@@ -64,11 +64,12 @@ func Test_CleanupApp(t *testing.T) {
 			To:          deployment.Requested().At().Add(1 * time.Hour),
 		})
 
-		assert.ErrorIs(t, domain.ErrRunningOrPendingDeployments, err)
+		assert.Equal(t, bus.AsyncResultDelay, result)
+		assert.Nil(t, err)
 		assert.False(t, provider.called)
 	})
 
-	t.Run("should fail if the target is configuring and at least one successful deployment has been made", func(t *testing.T) {
+	t.Run("should delay if the target is configuring and at least one successful deployment has been made", func(t *testing.T) {
 		var provider mockProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
@@ -90,7 +91,7 @@ func Test_CleanupApp(t *testing.T) {
 			fixture.WithDeployments(&deployment),
 		)
 
-		_, err := handler(ctx, cleanup_app.Command{
+		result, err := handler(ctx, cleanup_app.Command{
 			TargetID:    string(target.ID()),
 			AppID:       string(app.ID()),
 			Environment: string(domain.Production),
@@ -98,7 +99,8 @@ func Test_CleanupApp(t *testing.T) {
 			To:          deployment.Requested().At().Add(1 * time.Hour),
 		})
 
-		assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
+		assert.Equal(t, bus.AsyncResultDelay, result)
+		assert.Nil(t, err)
 		assert.False(t, provider.called)
 	})
 
@@ -107,7 +109,7 @@ func Test_CleanupApp(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
-		assert.Nil(t, target.RequestCleanup(false, "uid"))
+		assert.Nil(t, target.RequestDelete(false, "uid"))
 
 		handler, ctx := arrange(t, &provider,
 			fixture.WithUsers(&user),

@@ -10,9 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_registry"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_target"
-	"github.com/YuukanOO/seelf/internal/deployment/app/delete_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/delete_registry"
-	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/expose_seelf_container"
 	"github.com/YuukanOO/seelf/internal/deployment/app/fail_pending_deployments"
@@ -58,7 +56,7 @@ func Setup(
 	deploymentsStore := deploymentsqlite.NewDeploymentsStore(db)
 	targetsStore := deploymentsqlite.NewTargetsStore(db)
 	registriesStore := deploymentsqlite.NewRegistriesStore(db)
-	deploymentQueryHandler := deploymentsqlite.NewGateway(db)
+	gateway := deploymentsqlite.NewGateway(db)
 
 	artifactManager := artifact.NewLocal(opts, logger)
 
@@ -79,8 +77,7 @@ func Setup(
 	bus.Register(b, queue_deployment.Handler(appsStore, deploymentsStore, deploymentsStore, sourceFacade))
 	bus.Register(b, deploy.Handler(deploymentsStore, deploymentsStore, artifactManager, sourceFacade, providerFacade, targetsStore, registriesStore))
 	bus.Register(b, request_app_cleanup.Handler(appsStore, appsStore))
-	bus.Register(b, delete_app.Handler(appsStore, appsStore, artifactManager))
-	bus.Register(b, cleanup_app.Handler(targetsStore, deploymentsStore, providerFacade))
+	bus.Register(b, cleanup_app.Handler(targetsStore, deploymentsStore, appsStore, appsStore, providerFacade))
 	bus.Register(b, get_deployment_log.Handler(deploymentsStore, artifactManager))
 	bus.Register(b, redeploy.Handler(appsStore, deploymentsStore, deploymentsStore))
 	bus.Register(b, promote.Handler(appsStore, deploymentsStore, deploymentsStore))
@@ -89,35 +86,36 @@ func Setup(
 	bus.Register(b, reconfigure_target.Handler(targetsStore, targetsStore))
 	bus.Register(b, update_target.Handler(targetsStore, targetsStore, providerFacade))
 	bus.Register(b, request_target_cleanup.Handler(targetsStore, targetsStore, appsStore))
-	bus.Register(b, cleanup_target.Handler(targetsStore, deploymentsStore, providerFacade))
-	bus.Register(b, delete_target.Handler(targetsStore, targetsStore, providerFacade))
+	bus.Register(b, cleanup_target.Handler(targetsStore, targetsStore, deploymentsStore, providerFacade))
 	bus.Register(b, create_registry.Handler(registriesStore, registriesStore))
 	bus.Register(b, update_registry.Handler(registriesStore, registriesStore))
 	bus.Register(b, delete_registry.Handler(registriesStore, registriesStore))
-	bus.Register(b, deploymentQueryHandler.GetAllApps)
-	bus.Register(b, deploymentQueryHandler.GetAppByID)
-	bus.Register(b, deploymentQueryHandler.GetAllDeploymentsByApp)
-	bus.Register(b, deploymentQueryHandler.GetDeploymentByID)
-	bus.Register(b, deploymentQueryHandler.GetAllTargets)
-	bus.Register(b, deploymentQueryHandler.GetTargetByID)
-	bus.Register(b, deploymentQueryHandler.GetRegistries)
-	bus.Register(b, deploymentQueryHandler.GetRegistryByID)
+	bus.Register(b, gateway.GetAllApps)
+	bus.Register(b, gateway.GetAppByID)
+	bus.Register(b, gateway.GetAllDeploymentsByApp)
+	bus.Register(b, gateway.GetDeploymentByID)
+	bus.Register(b, gateway.GetAllTargets)
+	bus.Register(b, gateway.GetTargetByID)
+	bus.Register(b, gateway.GetRegistries)
+	bus.Register(b, gateway.GetRegistryByID)
 
 	bus.On(b, deploy.OnDeploymentCreatedHandler(scheduler))
 	bus.On(b, redeploy.OnAppEnvChangedHandler(appsStore, deploymentsStore, deploymentsStore))
-	bus.On(b, delete_app.OnAppCleanupRequestedHandler(scheduler))
+	bus.On(b, cleanup_app.OnAppDeletedHandler(artifactManager))
 	bus.On(b, cleanup_app.OnAppEnvChangedHandler(scheduler))
 	bus.On(b, cleanup_app.OnAppCleanupRequestedHandler(scheduler))
-	bus.On(b, fail_pending_deployments.OnTargetDeleteRequestedHandler(deploymentsStore))
+	bus.On(b, cleanup_app.OnJobDismissedHandler(appsStore, appsStore))
+	bus.On(b, fail_pending_deployments.OnTargetCleanupRequestedHandler(deploymentsStore))
 	bus.On(b, fail_pending_deployments.OnAppCleanupRequestedHandler(deploymentsStore))
 	bus.On(b, fail_pending_deployments.OnAppEnvChangedHandler(deploymentsStore))
 	bus.On(b, cleanup_target.OnTargetCleanupRequestedHandler(scheduler))
+	bus.On(b, cleanup_target.OnTargetDeletedHandler((providerFacade)))
+	bus.On(b, cleanup_target.OnJobDismissedHandler(targetsStore, targetsStore))
 	bus.On(b, configure_target.OnTargetCreatedHandler(scheduler))
 	bus.On(b, configure_target.OnTargetStateChangedHandler(scheduler))
 	bus.On(b, configure_target.OnDeploymentStateChangedHandler(targetsStore, targetsStore))
 	bus.On(b, configure_target.OnAppEnvChangedHandler(targetsStore, targetsStore))
 	bus.On(b, configure_target.OnAppCleanupRequestedHandler(targetsStore, targetsStore))
-	bus.On(b, delete_target.OnTargetCleanupRequestedHandler(scheduler))
 
 	if err := db.Migrate(deploymentsqlite.Migrations); err != nil {
 		return err

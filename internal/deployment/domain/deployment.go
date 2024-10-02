@@ -17,15 +17,6 @@ var (
 	ErrCouldNotPromoteProductionDeployment = apperr.New("could_not_promote_production_deployment")
 	ErrRunningOrPendingDeployments         = apperr.New("running_or_pending_deployments")
 	ErrInvalidSourceDeployment             = apperr.New("invalid_source_deployment")
-	ErrNotInPendingState                   = apperr.New("not_in_pending_state")
-	ErrNotInRunningState                   = apperr.New("not_in_running_state")
-)
-
-const (
-	DeploymentStatusPending DeploymentStatus = iota
-	DeploymentStatusRunning
-	DeploymentStatusFailed
-	DeploymentStatusSucceeded
 )
 
 type (
@@ -240,6 +231,18 @@ func (d *Deployment) apply(e event.Event) {
 
 	event.Store(d, e)
 }
+
+var (
+	ErrNotInPendingState = apperr.New("not_in_pending_state")
+	ErrNotInRunningState = apperr.New("not_in_running_state")
+)
+
+const (
+	DeploymentStatusPending DeploymentStatus = iota
+	DeploymentStatusRunning
+	DeploymentStatusFailed
+	DeploymentStatusSucceeded
+)
 
 type (
 	DeploymentStatus uint8

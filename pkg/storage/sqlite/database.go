@@ -8,6 +8,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
@@ -21,7 +22,10 @@ const (
 	transactionContextKey contextKey = "sqlitetx"
 )
 
-var _ builder.Executor = (*Database)(nil) // Ensure Database implements the Executor interface
+var (
+	_ builder.Executor          = (*Database)(nil) // Ensure Database implements the Executor interface
+	_ storage.UnitOfWorkFactory = (*Database)(nil)
+)
 
 type (
 	// Represents a single module for database migrations.
@@ -59,6 +63,38 @@ func Open(dsn string, logger log.Logger, bus bus.Dispatcher) (*Database, error) 
 // Close the underlying database.
 func (db *Database) Close() error {
 	return db.conn.Close()
+}
+
+// Execute the given function in a transaction managing the commit and rollback
+// based on the returned error if any.
+func (db *Database) Create(ctx context.Context, fn func(context.Context) error) (finalErr error) {
+	var (
+		tx      *sql.Tx
+		created bool
+	)
+
+	ctx, tx, created = db.WithTransaction(ctx)
+
+	defer func() {
+		if !created {
+			return
+		}
+
+		var err error
+
+		if finalErr != nil {
+			err = tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+
+		if err != nil {
+			finalErr = err
+		}
+	}()
+
+	finalErr = fn(ctx)
+	return
 }
 
 // Migrates the opened database to the latest version.
@@ -171,53 +207,34 @@ func (db *Database) tryGetTransaction(ctx context.Context) builder.Executor {
 // There's no way to add this method to the DB without type conversion so this is the easiest way
 // for now. Without the generics, I will always have to convert an array of entities to []event.Source
 // which is not very convenient.
-func WriteAndDispatch[T event.Source](
+func WriteEvents[T event.Source](
 	db *Database,
 	ctx context.Context,
 	entities []T,
 	switcher func(context.Context, event.Event) error,
-) (finalErr error) {
-	var (
-		tx      *sql.Tx
-		created bool
-	)
+) error {
+	return db.Create(ctx, func(ctx context.Context) error {
+		for _, ent := range entities {
+			events := event.Unwrap(ent)
+			notifications := make([]bus.Signal, len(events)) // It's a shame Go could not accept an array of events as a slice of signals since Event are effectively Signal
 
-	ctx, tx, created = db.WithTransaction(ctx)
+			for i, evt := range events {
+				if err := switcher(ctx, evt); err != nil {
+					return err
+				}
 
-	defer func() {
-		if !created {
-			return
-		}
-
-		if finalErr != nil {
-			if err := tx.Rollback(); err != nil {
-				finalErr = err
-			}
-		} else {
-			finalErr = tx.Commit()
-		}
-	}()
-
-	for _, ent := range entities {
-		events := event.Unwrap(ent)
-		notifs := make([]bus.Signal, len(events)) // It's a shame Go could not accept an array of events as a slice of signals since Event are effectively Signal
-
-		for i, evt := range events {
-			if finalErr = switcher(ctx, evt); finalErr != nil {
-				return
+				notifications[i] = evt
 			}
 
-			notifs[i] = evt
+			if err := db.bus.Notify(ctx, notifications...); err != nil {
+				return err
+			}
+
+			// TODO: clear entities events (see #71)
 		}
 
-		if finalErr = db.bus.Notify(ctx, notifs...); finalErr != nil {
-			return
-		}
-
-		// TODO: clear entities events (see #71)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // Builds a new migrations module with the given module name (used as a migrations history table name prefix)

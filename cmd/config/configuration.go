@@ -30,7 +30,7 @@ var (
 )
 
 const (
-	databaseConnectionString      = "seelf.db?_journal=WAL&_timeout=5000&_foreign_keys=yes&_txlock=immediate"
+	databaseConnectionString      = "seelf.db?_journal=WAL&_timeout=5000&_foreign_keys=yes&_txlock=immediate&_synchronous=NORMAL"
 	defaultConfigFilename         = "conf.yml"
 	defaultPort                   = 8080
 	defaultHost                   = ""

@@ -5,40 +5,14 @@
 	import Display from '$components/display.svelte';
 	import Pagination from '$components/pagination.svelte';
 	import Stack from '$components/stack.svelte';
-	import CancelButton from './cancel-button.svelte';
-	import service, { JobPolicy } from '$lib/resources/jobs';
+	import service from '$lib/resources/jobs';
 	import l, { type AppTranslationsString } from '$lib/localization';
+	import JobActionButton from './job-action-button.svelte';
 
 	let page = 1;
 
 	function translateMessageName(messageName: string) {
 		return l.translate(messageName as AppTranslationsString);
-	}
-
-	function translatePolicy(policy: number) {
-		if (!policy) {
-			return '-';
-		}
-
-		const policies: string[] = [];
-
-		if ((policy & JobPolicy.PreserveOrder) !== 0) {
-			policies.push(l.translate('jobs.policy.preserve_group_order'));
-		}
-
-		if ((policy & JobPolicy.WaitForOthersResourceID) !== 0) {
-			policies.push(l.translate('jobs.policy.wait_others_resource_id'));
-		}
-
-		if ((policy & JobPolicy.Cancellable) !== 0) {
-			policies.push(l.translate('jobs.policy.cancellable'));
-		}
-
-		if ((policy & JobPolicy.Mergeable) !== 0) {
-			policies.push(l.translate('jobs.policy.mergeable'));
-		}
-
-		return policies.join(', ');
 	}
 
 	$: ({ data } = service.queryAll(page));
@@ -87,15 +61,15 @@
 				<Display label="jobs.payload">
 					<code>{item.message_data}</code>
 				</Display>
-				<Display label="jobs.policy">
-					{translatePolicy(item.policy)}
-				</Display>
 				<Display label="jobs.error">
 					{item.error_code ?? '-'}
 				</Display>
 			</dl>
-			{#if (item.policy & JobPolicy.Cancellable) !== 0}
-				<CancelButton id={item.id} {page} />
+			{#if item.error_code}
+				<Stack justify="flex-end">
+					<JobActionButton id={item.id} mode="dismiss" {page} />
+					<JobActionButton id={item.id} mode="retry" {page} />
+				</Stack>
 			{/if}
 		</Stack>
 	</svelte:fragment>

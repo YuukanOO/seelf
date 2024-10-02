@@ -48,7 +48,7 @@ func Test_ReconfigureTarget(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
-		assert.Nil(t, target.RequestCleanup(false, user.ID()))
+		assert.Nil(t, target.RequestDelete(false, user.ID()))
 		handler, _ := arrange(t, fixture.WithUsers(&user), fixture.WithTargets(&target))
 
 		_, err := handler(context.Background(), reconfigure_target.Command{

@@ -1,4 +1,4 @@
-package memory
+package embedded
 
 import (
 	"context"

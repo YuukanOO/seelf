@@ -1,4 +1,4 @@
-ALTER TABLE scheduled_jobs RENAME TO tmp_scheduled_jobs;
+ALTER TABLE scheduled_jobs RENAME TO tmp_scheduled_jobs; -- should've used a temporary table
 DROP INDEX IF EXISTS idx_scheduled_jobs_dedupe_name;
 
 CREATE TABLE scheduled_jobs

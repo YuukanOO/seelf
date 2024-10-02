@@ -431,14 +431,14 @@ wSD0v0RcmkITP1ZR0AAAAYcHF1ZXJuYUBMdWNreUh5ZHJvLmxvY2FsAQID
 			tcp := service.AddTCPEntrypoint(5432, true)
 			udp := service.AddUDPEntrypoint(5433, true)
 			target.ExposeEntrypoints(deployment.ID().AppID(), deployment.Config().Environment(), builder.Services())
-			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			assert.Nil(t, target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.ID().AppID(): {
 					deployment.Config().Environment(): {
 						tcp.Name(): 5432,
 						udp.Name(): 5433,
 					},
 				},
-			}, nil)
+			}, nil))
 			newTcp := service.AddTCPEntrypoint(5434, true)
 			newUdp := service.AddUDPEntrypoint(5435, true)
 			target.ExposeEntrypoints(deployment.ID().AppID(), deployment.Config().Environment(), builder.Services())

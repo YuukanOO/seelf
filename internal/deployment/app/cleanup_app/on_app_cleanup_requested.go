@@ -19,7 +19,7 @@ func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[dom
 			TargetID:    string(evt.ProductionConfig.Target()),
 			From:        evt.ProductionConfig.Version(),
 			To:          now,
-		}, bus.WithPolicy(bus.JobPolicyCancellable)); err != nil {
+		}); err != nil {
 			return err
 		}
 
@@ -29,6 +29,6 @@ func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[dom
 			TargetID:    string(evt.StagingConfig.Target()),
 			From:        evt.StagingConfig.Version(),
 			To:          now,
-		}, bus.WithPolicy(bus.JobPolicyCancellable))
+		})
 	}
 }

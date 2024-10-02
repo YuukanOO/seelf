@@ -92,7 +92,7 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 }
 
 func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error {
-	return sqlite.WriteAndDispatch(s.db, c, targets, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteEvents(s.db, c, targets, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.TargetCreated:
 			return builder.

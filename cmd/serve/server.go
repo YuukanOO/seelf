@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/YuukanOO/seelf/cmd/startup"
-	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/gin-contrib/sessions"
@@ -39,12 +38,10 @@ type (
 	}
 
 	server struct {
-		options            ServerOptions
-		router             *gin.Engine
-		bus                bus.Dispatcher
-		logger             log.Logger
-		usersReader        domain.UsersReader
-		scheduledJobsStore bus.ScheduledJobsStore
+		options ServerOptions
+		router  *gin.Engine
+		bus     bus.Dispatcher
+		logger  log.Logger
 	}
 )
 
@@ -52,12 +49,10 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	gin.SetMode(gin.ReleaseMode)
 
 	s := &server{
-		options:            options,
-		router:             gin.New(),
-		usersReader:        root.UsersReader(),
-		scheduledJobsStore: root.ScheduledJobsStore(),
-		bus:                root.Bus(),
-		logger:             root.Logger(),
+		options: options,
+		router:  gin.New(),
+		bus:     root.Bus(),
+		logger:  root.Logger(),
 	}
 
 	_ = s.router.SetTrustedProxies(nil)
@@ -87,7 +82,8 @@ func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
 	v1secured := v1.Group("", s.authenticate(false))
 	v1secured.DELETE("/session", s.deleteSessionHandler())
 	v1secured.GET("/jobs", s.listJobsHandler())
-	v1secured.DELETE("/jobs/:id", s.deleteJobsHandler())
+	v1secured.DELETE("/jobs/:id", s.dismissJobHandler())
+	v1secured.PUT("/jobs/:id", s.retryJobHandler())
 	v1secured.GET("/profile", s.getProfileHandler())
 	v1secured.PATCH("/profile", s.updateProfileHandler())
 	v1secured.PUT("/profile/key", s.refreshProfileKeyHandler())

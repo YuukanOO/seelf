@@ -8,7 +8,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
-func OnTargetDeleteRequestedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.TargetCleanupRequested] {
+func OnTargetCleanupRequestedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.TargetCleanupRequested] {
 	return func(ctx context.Context, evt domain.TargetCleanupRequested) error {
 		return writer.FailDeployments(ctx, domain.ErrTargetCleanupRequested, domain.FailCriteria{
 			Status: monad.Value(domain.DeploymentStatusPending),

@@ -143,6 +143,7 @@ func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, e
 			,staging_vars
 			,cleanup_requested_at
 			,cleanup_requested_by
+			,history
 			,created_at
 			,created_by
 		FROM apps
@@ -151,7 +152,7 @@ func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, e
 }
 
 func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
-	return sqlite.WriteAndDispatch(s.db, c, apps, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteEvents(s.db, c, apps, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.AppCreated:
 			return builder.
@@ -164,9 +165,17 @@ func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
 					"staging_target":     evt.Staging.Target(),
 					"staging_version":    evt.Staging.Version(),
 					"staging_vars":       evt.Staging.Vars(),
+					"history":            evt.History,
 					"created_at":         evt.Created.At(),
 					"created_by":         evt.Created.By(),
 				}).
+				Exec(s.db, ctx)
+		case domain.AppHistoryChanged:
+			return builder.
+				Update("apps", builder.Values{
+					"history": evt.History,
+				}).
+				F("WHERE id = ?", evt.ID).
 				Exec(s.db, ctx)
 		case domain.AppEnvChanged:
 			// This is safe to interpolate the column name here since events are raised by our

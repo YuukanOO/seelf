@@ -42,7 +42,6 @@ type (
 
 	UsersReader interface {
 		GetAdminUser(context.Context) (User, error)
-		GetIDFromAPIKey(context.Context, APIKey) (UserID, error)
 		CheckEmailAvailability(context.Context, Email, ...UserID) (EmailRequirement, error)
 		GetByEmail(context.Context, Email) (User, error)
 		GetByID(context.Context, UserID) (User, error)

@@ -10,9 +10,8 @@ services:
       - HTTP_SECURE= # Force fallback to the default handling of http secure (based on EXPOSED_ON if set)
       # - DEPLOYMENT_DIR_TEMPLATE={{ .Number }}-{{ .Environment }} # You can configure the deployment build directory path if you want to keep every deployment source files for example.
     labels:
-      - app.seelf.exposed=true # Mandatory, DO NOT change if using EXPOSED_ON
+      - app.seelf.exposed=true # Mandatory if using EXPOSED_ON
       - app.seelf.subdomain=seelf # Subdomain where seelf will be exposed on the default target represented by EXPOSED_ON
-      #- traefik.http.routers.seelf.rule=Host(`seelf.docker.localhost`) # <- Change this to where you want seelf to be exposed (use the same domain as above)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ssh:/root/.ssh # If you deploy on remote servers, keep ssh related configurations

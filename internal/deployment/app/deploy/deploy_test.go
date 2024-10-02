@@ -25,7 +25,7 @@ func Test_Deploy(t *testing.T) {
 		provider domain.Provider,
 		seed ...fixture.SeedBuilder,
 	) (
-		bus.RequestHandler[bus.UnitType, deploy.Command],
+		bus.RequestHandler[bus.AsyncResult, deploy.Command],
 		context.Context,
 		spy.Dispatcher,
 	) {
@@ -41,10 +41,10 @@ func Test_Deploy(t *testing.T) {
 		r, err := handler(ctx, deploy.Command{})
 
 		assert.Nil(t, err)
-		assert.Equal(t, bus.Unit, r)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 	})
 
-	t.Run("should mark the deployment has failed if the target is configuring", func(t *testing.T) {
+	t.Run("should delay the deployment if the target is configuring", func(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		app := fixture.App(
@@ -65,19 +65,20 @@ func Test_Deploy(t *testing.T) {
 			fixture.WithDeployments(&deployment),
 		)
 
-		_, err := handler(ctx, deploy.Command{
+		r, err := handler(ctx, deploy.Command{
 			AppID:            string(deployment.ID().AppID()),
 			DeploymentNumber: int(deployment.ID().DeploymentNumber()),
 		})
 
-		assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.AsyncResultDelay, r)
 		assert.HasLength(t, 0, dispatcher.Signals())
 	})
 
 	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 		app := fixture.App(
 			fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
@@ -103,7 +104,7 @@ func Test_Deploy(t *testing.T) {
 		})
 
 		assert.Nil(t, err)
-		assert.Equal(t, bus.Unit, r)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 
 		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
@@ -113,10 +114,10 @@ func Test_Deploy(t *testing.T) {
 		assert.Equal(t, sourceErr.Error(), changed.State.ErrCode().MustGet())
 	})
 
-	t.Run("should mark the deployment has failed in the target is not correctly configured", func(t *testing.T) {
+	t.Run("should mark the deployment has failed if the target is not correctly configured", func(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, errors.New("target_failed"))
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, errors.New("target_failed")))
 		app := fixture.App(
 			fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
@@ -141,7 +142,7 @@ func Test_Deploy(t *testing.T) {
 		})
 
 		assert.Nil(t, err)
-		assert.Equal(t, bus.Unit, r)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 
 		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
@@ -154,7 +155,7 @@ func Test_Deploy(t *testing.T) {
 	t.Run("should mark the deployment has failed if provider does not run the deployment successfully", func(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 		app := fixture.App(
 			fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
@@ -180,7 +181,7 @@ func Test_Deploy(t *testing.T) {
 		})
 
 		assert.Nil(t, err)
-		assert.Equal(t, bus.Unit, r)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 
 		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
@@ -193,7 +194,7 @@ func Test_Deploy(t *testing.T) {
 	t.Run("should mark the deployment has succeeded if all is good", func(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 		app := fixture.App(
 			fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
@@ -218,7 +219,7 @@ func Test_Deploy(t *testing.T) {
 		})
 
 		assert.Nil(t, err)
-		assert.Equal(t, bus.Unit, r)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 
 		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())

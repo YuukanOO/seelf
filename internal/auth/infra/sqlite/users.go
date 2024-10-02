@@ -77,14 +77,8 @@ func (s *usersStore) GetByEmail(ctx context.Context, email domain.Email) (u doma
 		One(s.db, ctx, domain.UserFrom)
 }
 
-func (s *usersStore) GetIDFromAPIKey(ctx context.Context, key domain.APIKey) (domain.UserID, error) {
-	return builder.
-		Query[domain.UserID]("SELECT id FROM users WHERE api_key = ?", key).
-		Extract(s.db, ctx)
-}
-
 func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
-	return sqlite.WriteAndDispatch(s.db, c, users, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteEvents(s.db, c, users, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.UserRegistered:
 			return builder.

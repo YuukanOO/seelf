@@ -66,7 +66,7 @@ func (s *registriesStore) GetAll(ctx context.Context) ([]domain.Registry, error)
 }
 
 func (s *registriesStore) Write(ctx context.Context, registries ...*domain.Registry) error {
-	return sqlite.WriteAndDispatch(s.db, ctx, registries, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteEvents(s.db, ctx, registries, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.RegistryCreated:
 			return builder.

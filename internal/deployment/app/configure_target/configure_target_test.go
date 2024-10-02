@@ -18,7 +18,7 @@ import (
 func Test_ConfigureTarget(t *testing.T) {
 
 	arrange := func(tb testing.TB, provider domain.Provider, seed ...fixture.SeedBuilder) (
-		bus.RequestHandler[bus.UnitType, configure_target.Command],
+		bus.RequestHandler[bus.AsyncResult, configure_target.Command],
 		spy.Dispatcher,
 	) {
 		context := fixture.PrepareDatabase(tb, seed...)

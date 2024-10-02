@@ -131,7 +131,7 @@ func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app
 		domain.HasSuccessfulDeploymentsOnAppTargetEnv(c.successful), err
 }
 
-func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criterias domain.FailCriteria) error {
+func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criteria domain.FailCriteria) error {
 	now := time.Now().UTC()
 
 	return builder.Update("deployments", builder.Values{
@@ -142,16 +142,16 @@ func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, cr
 	}).
 		F("WHERE TRUE").
 		S(
-			builder.MaybeValue(criterias.App, "AND app_id = ?"),
-			builder.MaybeValue(criterias.Target, "AND config_target = ?"),
-			builder.MaybeValue(criterias.Status, "AND state_status = ?"),
-			builder.MaybeValue(criterias.Environment, "AND config_environment = ?"),
+			builder.MaybeValue(criteria.App, "AND app_id = ?"),
+			builder.MaybeValue(criteria.Target, "AND config_target = ?"),
+			builder.MaybeValue(criteria.Status, "AND state_status = ?"),
+			builder.MaybeValue(criteria.Environment, "AND config_environment = ?"),
 		).
 		Exec(s.db, ctx)
 }
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {
-	return sqlite.WriteAndDispatch(s.db, c, deployments, func(ctx context.Context, e event.Event) error {
+	return sqlite.WriteEvents(s.db, c, deployments, func(ctx context.Context, e event.Event) error {
 		switch evt := e.(type) {
 		case domain.DeploymentCreated:
 			return builder.

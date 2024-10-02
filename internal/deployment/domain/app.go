@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"database/sql/driver"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
@@ -32,6 +33,7 @@ type (
 		id               AppID
 		name             AppName
 		versionControl   monad.Maybe[VersionControl]
+		history          AppTargetHistory
 		production       EnvironmentConfig
 		staging          EnvironmentConfig
 		cleanupRequested monad.Maybe[shared.Action[domain.UserID]]
@@ -69,6 +71,7 @@ type (
 		Name       AppName
 		Production EnvironmentConfig
 		Staging    EnvironmentConfig
+		History    AppTargetHistory
 		Created    shared.Action[domain.UserID]
 	}
 
@@ -103,6 +106,13 @@ type (
 		Requested        shared.Action[domain.UserID]
 	}
 
+	AppHistoryChanged struct {
+		bus.Notification
+
+		ID      AppID
+		History AppTargetHistory
+	}
+
 	AppDeleted struct {
 		bus.Notification
 
@@ -117,6 +127,7 @@ func (AppVersionControlConfigured) Name_() string {
 }
 func (AppVersionControlRemoved) Name_() string { return "deployment.event.app_version_control_removed" }
 func (AppCleanupRequested) Name_() string      { return "deployment.event.app_cleanup_requested" }
+func (AppHistoryChanged) Name_() string        { return "deployment.event.app_history_changed" }
 func (AppDeleted) Name_() string               { return "deployment.event.app_deleted" }
 
 func (e AppEnvChanged) TargetHasChanged() bool { return e.Config.target != e.OldConfig.target }
@@ -145,7 +156,11 @@ func NewApp(
 		Name:       name,
 		Production: production,
 		Staging:    staging,
-		Created:    shared.NewAction(createdBy),
+		History: AppTargetHistory{
+			Production: []TargetID{production.target},
+			Staging:    []TargetID{staging.target},
+		},
+		Created: shared.NewAction(createdBy),
 	})
 
 	return app, nil
@@ -175,6 +190,7 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		&a.staging.vars,
 		&cleanupRequestedAt,
 		&cleanupRequestedBy,
+		&a.history,
 		&createdAt,
 		&createdBy,
 	)
@@ -246,10 +262,11 @@ func (a *App) HasStagingConfig(configRequirement EnvironmentConfigRequirement) e
 	return a.tryUpdateEnvironmentConfig(Staging, a.staging, configRequirement)
 }
 
-// Request cleaning for this application. This marks the application for deletion.
-func (a *App) RequestCleanup(requestedBy domain.UserID) {
+// Request application deletion meaning the application resources should be removed
+// and the application deleted when every resources are freed.
+func (a *App) RequestDelete(requestedBy domain.UserID) error {
 	if a.cleanupRequested.HasValue() {
-		return
+		return ErrAppCleanupRequested
 	}
 
 	a.apply(AppCleanupRequested{
@@ -258,19 +275,23 @@ func (a *App) RequestCleanup(requestedBy domain.UserID) {
 		StagingConfig:    a.staging,
 		Requested:        shared.NewAction(requestedBy),
 	})
-}
-
-// Delete the application.
-func (a *App) Delete(cleanedUp bool) error {
-	if !a.cleanupRequested.HasValue() || !cleanedUp {
-		return ErrAppCleanupNeeded
-	}
-
-	a.apply(AppDeleted{
-		ID: a.id,
-	})
 
 	return nil
+}
+
+// Marks the application has being cleaned for a specific environment and a specific target.
+func (a *App) CleanedUp(environment Environment, target TargetID) {
+	if a.history.remove(environment, target) && a.cleanupRequested.HasValue() {
+		a.apply(AppDeleted{
+			ID: a.id,
+		})
+		return
+	}
+
+	a.apply(AppHistoryChanged{
+		ID:      a.id,
+		History: a.history,
+	})
 }
 
 func (a *App) ID() AppID                                   { return a.id }
@@ -296,7 +317,7 @@ func (a *App) tryUpdateEnvironmentConfig(
 		return nil
 	}
 
-	updatedConfig.consolidate(existingConfig)
+	targetChanged := updatedConfig.consolidate(existingConfig)
 
 	a.apply(AppEnvChanged{
 		ID:          a.id,
@@ -304,6 +325,15 @@ func (a *App) tryUpdateEnvironmentConfig(
 		Config:      updatedConfig,
 		OldConfig:   existingConfig,
 	})
+
+	if targetChanged {
+		a.history.push(env, updatedConfig.target)
+
+		a.apply(AppHistoryChanged{
+			ID:      a.id,
+			History: a.history,
+		})
+	}
 
 	return nil
 }
@@ -316,6 +346,7 @@ func (a *App) apply(e event.Event) {
 		a.production = evt.Production
 		a.staging = evt.Staging
 		a.created = evt.Created
+		a.history = evt.History
 	case AppEnvChanged:
 		switch evt.Environment {
 		case Production:
@@ -329,7 +360,51 @@ func (a *App) apply(e event.Event) {
 		a.versionControl.Unset()
 	case AppCleanupRequested:
 		a.cleanupRequested.Set(evt.Requested)
+	case AppHistoryChanged:
+		a.history = evt.History
 	}
 
 	event.Store(a, e)
 }
+
+// Represents the list of targets per env where the application could have been deployed
+// and where resources should be cleaned up.
+// You should never update it directly and maybe I should embed the map in a struct
+// to make it more explicit.
+type AppTargetHistory map[Environment][]TargetID
+
+func (a AppTargetHistory) push(environment Environment, target TargetID) {
+	targets, exists := a[environment]
+
+	if !exists {
+		a[environment] = []TargetID{target}
+		return
+	}
+
+	a[environment] = append(targets, target)
+}
+
+// Remove the given target and environment history and returns true if the history is empty.
+func (a AppTargetHistory) remove(environment Environment, target TargetID) bool {
+	targets, exists := a[environment]
+
+	if !exists {
+		return a.isEmpty()
+	}
+
+	for i, existingTarget := range targets {
+		if existingTarget == target {
+			a[environment] = append(targets[:i], targets[i+1:]...)
+			if len(a[environment]) == 0 {
+				delete(a, environment)
+			}
+			break
+		}
+	}
+
+	return a.isEmpty()
+}
+func (a AppTargetHistory) isEmpty() bool { return len(a) == 0 }
+
+func (a AppTargetHistory) Value() (driver.Value, error) { return storage.ValueJSON(a) }
+func (a *AppTargetHistory) Scan(value any) error        { return storage.ScanJSON(value, a) }

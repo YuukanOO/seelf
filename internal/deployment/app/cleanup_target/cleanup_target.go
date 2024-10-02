@@ -11,43 +11,71 @@ import (
 
 // Cleanup a target and all its associated resources.
 type Command struct {
-	bus.Command[bus.UnitType]
+	bus.AsyncCommand
 
 	ID string `json:"id"`
 }
 
 func (Command) Name_() string        { return "deployment.command.cleanup_target" }
 func (c Command) ResourceID() string { return c.ID }
+func (c Command) Group() string      { return c.ID }
 
 func Handler(
 	reader domain.TargetsReader,
+	writer domain.TargetsWriter,
 	deploymentsReader domain.DeploymentsReader,
 	provider domain.Provider,
-) bus.RequestHandler[bus.UnitType, Command] {
-	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
+) bus.RequestHandler[bus.AsyncResult, Command] {
+	return func(ctx context.Context, cmd Command) (result bus.AsyncResult, finalErr error) {
 		target, err := reader.GetByID(ctx, domain.TargetID(cmd.ID))
 
 		if err != nil {
 			// If the target doesn't exist anymore, may be it has been processed by another job in rare case, so just returns
 			if errors.Is(err, apperr.ErrNotFound) {
-				return bus.Unit, nil
+				return result, nil
 			}
 
-			return bus.Unit, err
+			return result, err
 		}
 
 		ongoing, err := deploymentsReader.HasRunningOrPendingDeploymentsOnTarget(ctx, target.ID())
 
 		if err != nil {
-			return bus.Unit, err
+			return result, err
 		}
 
-		strategy, err := target.CleanupStrategy(ongoing)
+		strategy, err := target.CanBeCleaned(ongoing)
 
 		if err != nil {
-			return bus.Unit, err
+			if errors.Is(err, domain.ErrRunningOrPendingDeployments) {
+				return bus.AsyncResultDelay, nil
+			}
+
+			return result, err
 		}
 
-		return bus.Unit, provider.CleanupTarget(ctx, target, strategy)
+		defer func() {
+			if finalErr != nil {
+				return
+			}
+
+			if target, err = reader.GetByID(ctx, target.ID()); err != nil {
+				if errors.Is(err, apperr.ErrNotFound) {
+					return
+				}
+
+				finalErr = err
+				return
+			}
+
+			if finalErr = target.CleanedUp(); finalErr != nil {
+				return
+			}
+
+			finalErr = writer.Write(ctx, &target)
+		}()
+
+		finalErr = provider.CleanupTarget(ctx, target, strategy)
+		return
 	}
 }

@@ -70,7 +70,7 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should return true if the target is not in a configuring state", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 
 			assert.True(t, target.IsOutdated(target.CurrentVersion()))
 		})
@@ -102,10 +102,10 @@ func Test_Target(t *testing.T) {
 			}, renamed)
 		})
 
-		t.Run("should returns an error if the target cleanup has been requested", func(t *testing.T) {
+		t.Run("should returns an error if the target is being deleted", func(t *testing.T) {
 			target := fixture.Target(fixture.WithTargetName("old-name"))
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.Rename("new-name"))
 		})
@@ -145,10 +145,10 @@ func Test_Target(t *testing.T) {
 			assert.HasNEvents(t, 3, &target)
 		})
 
-		t.Run("should returns an error if the target cleanup has been requested", func(t *testing.T) {
+		t.Run("should returns an error if the target is being deleted", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.ExposeServicesAutomatically(
 				domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true),
@@ -156,7 +156,7 @@ func Test_Target(t *testing.T) {
 		})
 	})
 
-	t.Run("could be configured as exposing services manually without url", func(t *testing.T) {
+	t.Run("could be configured as exposing services manually without an url", func(t *testing.T) {
 		t.Run("should raise the event if the target had previously an url", func(t *testing.T) {
 			target := fixture.Target()
 			assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true)))
@@ -179,10 +179,10 @@ func Test_Target(t *testing.T) {
 			assert.HasNEvents(t, 1, &target)
 		})
 
-		t.Run("should returns an error if the target cleanup has been requested", func(t *testing.T) {
+		t.Run("should returns an error if the target is being deleted", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.ExposeServicesManually())
 		})
@@ -245,10 +245,10 @@ func Test_Target(t *testing.T) {
 			assert.HasNEvents(t, 1, &target)
 		})
 
-		t.Run("should returns an error if the target cleanup has been requested", func(t *testing.T) {
+		t.Run("should returns an error if the target is being deleted", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.HasProvider(domain.NewProviderConfigRequirement(fixture.ProviderConfig(), true)))
 		})
@@ -369,10 +369,10 @@ func Test_Target(t *testing.T) {
 			assert.HasNEvents(t, 2, &target)
 		})
 
-		t.Run("should be ignored if the target is being configured", func(t *testing.T) {
+		t.Run("should be ignored if the target is being deleted", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
@@ -381,11 +381,11 @@ func Test_Target(t *testing.T) {
 	})
 
 	t.Run("could be marked as configured", func(t *testing.T) {
-		t.Run("should do nothing if the version does not match", func(t *testing.T) {
+		t.Run("should returns an error if the version does not match", func(t *testing.T) {
 			target := fixture.Target()
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 
-			target.Configured(target.CurrentVersion().Add(-1*time.Second), domain.TargetEntrypointsAssigned{
+			err := target.Configured(target.CurrentVersion().Add(-1*time.Second), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
 					domain.Production: {
 						http.Name(): 3000,
@@ -394,15 +394,17 @@ func Test_Target(t *testing.T) {
 				},
 			}, nil)
 
+			assert.ErrorIs(t, domain.ErrTargetConfigurationOutdated, err)
 			assert.HasNEvents(t, 2, &target)
 		})
 
-		t.Run("should do nothing if the version has already been configured", func(t *testing.T) {
+		t.Run("should returns an error if the version has already been configured", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 
-			target.Configured(target.CurrentVersion(), nil, nil)
+			err := target.Configured(target.CurrentVersion(), nil, nil)
 
+			assert.ErrorIs(t, domain.ErrTargetConfigurationOutdated, err)
 			assert.HasNEvents(t, 2, &target)
 			stateChanged := assert.EventIs[domain.TargetStateChanged](t, &target, 1)
 			assert.Equal(t, domain.TargetStatusReady, stateChanged.State.Status())
@@ -411,21 +413,22 @@ func Test_Target(t *testing.T) {
 		t.Run("should be marked as failed if an error is given", func(t *testing.T) {
 			target := fixture.Target()
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
-			err := errors.New("an error")
+			expectedErr := errors.New("an error")
 
-			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			err := target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
 					domain.Production: {
 						http.Name(): 3000,
 						tcp.Name():  3001,
 					},
 				},
-			}, err)
+			}, expectedErr)
 
+			assert.Nil(t, err)
 			assert.HasNEvents(t, 3, &target)
 			stateChanged := assert.EventIs[domain.TargetStateChanged](t, &target, 2)
 			assert.Equal(t, domain.TargetStatusFailed, stateChanged.State.Status())
-			assert.Equal(t, err.Error(), stateChanged.State.ErrCode().Get(""))
+			assert.Equal(t, expectedErr.Error(), stateChanged.State.ErrCode().Get(""))
 			assert.Zero(t, stateChanged.State.LastReadyVersion())
 		})
 
@@ -434,7 +437,7 @@ func Test_Target(t *testing.T) {
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
 
-			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			err := target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				"another-app": {
 					domain.Production: {
 						"some-entrypoint": 5000,
@@ -448,6 +451,7 @@ func Test_Target(t *testing.T) {
 				},
 			}, nil)
 
+			assert.Nil(t, err)
 			assert.HasNEvents(t, 5, &target)
 			entrypointsChanged := assert.EventIs[domain.TargetEntrypointsChanged](t, &target, 3)
 			assert.DeepEqual(t, domain.TargetEntrypointsChanged{
@@ -486,7 +490,7 @@ func Test_Target(t *testing.T) {
 			target.ExposeEntrypoints("app", domain.Production, domain.Services{app.Service, db.Service})
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
-			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			assert.Nil(t, target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
 					domain.Production: {
 						http.Name(): 3000,
@@ -497,7 +501,7 @@ func Test_Target(t *testing.T) {
 						tcp.Name():  3003,
 					},
 				},
-			}, nil)
+			}, nil))
 
 			target.UnExposeEntrypoints(deployment.Config().AppID())
 
@@ -521,7 +525,7 @@ func Test_Target(t *testing.T) {
 				target := fixture.Target()
 				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
-				target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+				assert.Nil(t, target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 					deployment.Config().AppID(): {
 						domain.Production: {
 							http.Name(): 3000,
@@ -532,7 +536,7 @@ func Test_Target(t *testing.T) {
 							tcp.Name():  3003,
 						},
 					},
-				}, nil)
+				}, nil))
 
 				target.UnExposeEntrypoints(deployment.Config().AppID(), domain.Production)
 
@@ -556,7 +560,7 @@ func Test_Target(t *testing.T) {
 				assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("https://example.com")), true)))
 				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
 				target.ExposeEntrypoints(deployment.Config().AppID(), domain.Staging, domain.Services{app.Service, db.Service})
-				target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+				assert.Nil(t, target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 					deployment.Config().AppID(): {
 						domain.Production: {
 							http.Name(): 3000,
@@ -567,7 +571,7 @@ func Test_Target(t *testing.T) {
 							tcp.Name():  3003,
 						},
 					},
-				}, nil)
+				}, nil))
 
 				target.UnExposeEntrypoints(deployment.Config().AppID(), domain.Production)
 
@@ -589,18 +593,18 @@ func Test_Target(t *testing.T) {
 			})
 		})
 
-		t.Run("should be ignored if the target cleanup has been requested", func(t *testing.T) {
+		t.Run("should be ignored if the target is being deleted", func(t *testing.T) {
 			target := fixture.Target()
 			target.ExposeEntrypoints(deployment.Config().AppID(), domain.Production, domain.Services{app.Service, db.Service})
-			target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
+			assert.Nil(t, target.Configured(target.CurrentVersion(), domain.TargetEntrypointsAssigned{
 				deployment.Config().AppID(): {
 					domain.Production: {
 						http.Name(): 3000,
 						tcp.Name():  3001,
 					},
 				},
-			}, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			}, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			target.UnExposeEntrypoints(deployment.Config().AppID(), domain.Production)
 
@@ -617,22 +621,22 @@ func Test_Target(t *testing.T) {
 
 		t.Run("when configuration failed", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed")))
 
 			assert.ErrorIs(t, domain.ErrTargetConfigurationFailed, target.CheckAvailability())
 		})
 
 		t.Run("when ready", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 
 			assert.Nil(t, target.CheckAvailability())
 		})
 
-		t.Run("when cleanup requested", func(t *testing.T) {
+		t.Run("when deleting", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.CheckAvailability())
 		})
@@ -645,97 +649,91 @@ func Test_Target(t *testing.T) {
 			assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, target.Reconfigure())
 		})
 
-		t.Run("should fail if cleanup requested", func(t *testing.T) {
+		t.Run("should fail if deleting", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.Reconfigure())
 		})
 
 		t.Run("should succeed otherwise", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			firstVersion := target.CurrentVersion()
+			assert.Nil(t, target.Configured(firstVersion, nil, nil))
 
 			assert.Nil(t, target.Reconfigure())
 
 			assert.HasNEvents(t, 3, &target)
 			stateChanged := assert.EventIs[domain.TargetStateChanged](t, &target, 2)
 			assert.Equal(t, domain.TargetStatusConfiguring, stateChanged.State.Status())
+			assert.Equal(t, firstVersion, stateChanged.State.LastReadyVersion().Get(time.Time{}))
 		})
 	})
 
-	t.Run("could be marked for cleanup", func(t *testing.T) {
+	t.Run("could be marked for deletion", func(t *testing.T) {
 		t.Run("should returns an err if some applications are using it", func(t *testing.T) {
 			target := fixture.Target()
 
-			assert.ErrorIs(t, domain.ErrTargetInUse, target.RequestCleanup(true, "uid"))
+			assert.ErrorIs(t, domain.ErrTargetInUse, target.RequestDelete(true, "uid"))
 		})
 
 		t.Run("should returns an err if configuring", func(t *testing.T) {
 			target := fixture.Target()
 
-			assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, target.RequestCleanup(false, "uid"))
+			assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, target.RequestDelete(false, "uid"))
+		})
+
+		t.Run("should returns an error if already requested", func(t *testing.T) {
+			target := fixture.Target()
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
+
+			assert.ErrorIs(t, domain.ErrTargetCleanupRequested, target.RequestDelete(false, "uid"))
+
+			assert.HasNEvents(t, 3, &target)
 		})
 
 		t.Run("should succeed otherwise", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
 			assert.HasNEvents(t, 3, &target)
 			requested := assert.EventIs[domain.TargetCleanupRequested](t, &target, 2)
 			assert.Equal(t, domain.TargetCleanupRequested{
 				ID:        target.ID(),
-				Requested: shared.ActionFrom[auth.UserID]("uid", assert.NotZero(t, requested.Requested.At())),
+				Requested: shared.ActionFrom(auth.UserID("uid"), assert.NotZero(t, requested.Requested.At())),
 			}, requested)
-		})
-
-		t.Run("should do nothing if already being cleaned up", func(t *testing.T) {
-			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
-
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
-
-			assert.HasNEvents(t, 3, &target)
 		})
 	})
 
 	t.Run("should expose a cleanup strategy to determine how the target resources should be handled", func(t *testing.T) {
-		t.Run("should returns an error if there are running or pending deployments on the target", func(t *testing.T) {
+		t.Run("should returns an error if the target is not being deleted", func(t *testing.T) {
 			target := fixture.Target()
 
-			_, err := target.CleanupStrategy(true)
+			_, err := target.CanBeCleaned(false)
+
+			assert.ErrorIs(t, domain.ErrTargetCleanupNeeded, err)
+		})
+
+		t.Run("should returns an error if there are running or pending deployments on the target", func(t *testing.T) {
+			target := fixture.Target()
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
+
+			_, err := target.CanBeCleaned(true)
 
 			assert.ErrorIs(t, domain.ErrRunningOrPendingDeployments, err)
 		})
 
-		t.Run("should returns an error if the target is being configured", func(t *testing.T) {
+		t.Run("should returns the skip strategy if the target is currently failing", func(t *testing.T) {
 			target := fixture.Target()
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, errors.New("failed")))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
-			_, err := target.CleanupStrategy(false)
-
-			assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
-		})
-
-		t.Run("should returns an error if the target configuration has failed and it has been at least ready once", func(t *testing.T) {
-			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.Reconfigure())
-			target.Configured(target.CurrentVersion(), nil, errors.New("failed"))
-
-			_, err := target.CleanupStrategy(false)
-
-			assert.ErrorIs(t, domain.ErrTargetConfigurationFailed, err)
-		})
-
-		t.Run("should returns the skip strategy if the target has never been correctly configured and is currently failing", func(t *testing.T) {
-			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, errors.New("failed"))
-
-			strategy, err := target.CleanupStrategy(false)
+			strategy, err := target.CanBeCleaned(false)
 
 			assert.Nil(t, err)
 			assert.Equal(t, domain.CleanupStrategySkip, strategy)
@@ -743,9 +741,10 @@ func Test_Target(t *testing.T) {
 
 		t.Run("should returns the default strategy if the target is ready", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
-			strategy, err := target.CleanupStrategy(false)
+			strategy, err := target.CanBeCleaned(false)
 
 			assert.Nil(t, err)
 			assert.Equal(t, domain.CleanupStrategyDefault, strategy)
@@ -755,10 +754,10 @@ func Test_Target(t *testing.T) {
 	t.Run("should expose an application cleanup strategy to determine how application resources should be handled", func(t *testing.T) {
 		t.Run("should returns the skip strategy if the target is being cleaned up", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
-			strategy, err := target.AppCleanupStrategy(false, true)
+			strategy, err := target.CanAppBeCleaned(false, true)
 
 			assert.Nil(t, err)
 			assert.Equal(t, domain.CleanupStrategySkip, strategy)
@@ -767,7 +766,7 @@ func Test_Target(t *testing.T) {
 		t.Run("should returns an error if there are still running deployments on the target for this application", func(t *testing.T) {
 			target := fixture.Target()
 
-			_, err := target.AppCleanupStrategy(true, true)
+			_, err := target.CanAppBeCleaned(true, true)
 
 			assert.ErrorIs(t, domain.ErrRunningOrPendingDeployments, err)
 		})
@@ -775,7 +774,7 @@ func Test_Target(t *testing.T) {
 		t.Run("should returns the skip strategy if no successful deployment has been made and no one is running", func(t *testing.T) {
 			target := fixture.Target()
 
-			strategy, err := target.AppCleanupStrategy(false, false)
+			strategy, err := target.CanAppBeCleaned(false, false)
 
 			assert.Nil(t, err)
 			assert.Equal(t, domain.CleanupStrategySkip, strategy)
@@ -784,50 +783,46 @@ func Test_Target(t *testing.T) {
 		t.Run("should returns an error if the target is being configured", func(t *testing.T) {
 			target := fixture.Target()
 
-			_, err := target.AppCleanupStrategy(false, true)
+			_, err := target.CanAppBeCleaned(false, true)
 
 			assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
 		})
 
 		t.Run("should returns an error if the target configuration has failed", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, errors.New("failed"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, errors.New("failed")))
 
-			_, err := target.AppCleanupStrategy(false, true)
+			_, err := target.CanAppBeCleaned(false, true)
 
 			assert.ErrorIs(t, domain.ErrTargetConfigurationFailed, err)
 		})
 
 		t.Run("should returns the default strategy if the target is ready", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 
-			strategy, err := target.AppCleanupStrategy(false, true)
+			strategy, err := target.CanAppBeCleaned(false, true)
 
 			assert.Nil(t, err)
 			assert.Equal(t, domain.CleanupStrategyDefault, strategy)
 		})
 	})
 
-	t.Run("could be deleted", func(t *testing.T) {
+	t.Run("could be mark as cleaned up", func(t *testing.T) {
 		t.Run("should returns an error if the target has not been mark for cleanup", func(t *testing.T) {
 			target := fixture.Target()
 
-			assert.ErrorIs(t, domain.ErrTargetCleanupNeeded, target.Delete(true))
-		})
-
-		t.Run("should returns an error if the target resources has not been cleaned up", func(t *testing.T) {
-			target := fixture.Target()
-
-			assert.ErrorIs(t, domain.ErrTargetCleanupNeeded, target.Delete(false))
+			assert.ErrorIs(t, domain.ErrTargetCleanupNeeded, target.CleanedUp())
 		})
 
 		t.Run("should succeed otherwise", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
-			assert.Nil(t, target.RequestCleanup(false, "uid"))
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+			assert.Nil(t, target.RequestDelete(false, "uid"))
 
-			assert.Nil(t, target.Delete(true))
+			err := target.CleanedUp()
+
+			assert.Nil(t, err)
 			assert.HasNEvents(t, 4, &target)
 			deleted := assert.EventIs[domain.TargetDeleted](t, &target, 3)
 			assert.Equal(t, domain.TargetDeleted{
@@ -838,10 +833,10 @@ func Test_Target(t *testing.T) {
 }
 
 func Test_TargetEvents(t *testing.T) {
-	t.Run("should provide a function to check for configuration changes", func(t *testing.T) {
+	t.Run("should provide a function to check if the target went to the configuring state", func(t *testing.T) {
 		t.Run("should return false if the state is not configuring", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 
 			evt := assert.EventIs[domain.TargetStateChanged](t, &target, 1)
 			assert.False(t, evt.WentToConfiguringState())
@@ -849,7 +844,7 @@ func Test_TargetEvents(t *testing.T) {
 
 		t.Run("should return true if going to the configuring state", func(t *testing.T) {
 			target := fixture.Target()
-			target.Configured(target.CurrentVersion(), nil, nil)
+			assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 			assert.Nil(t, target.Reconfigure())
 
 			evt := assert.EventIs[domain.TargetStateChanged](t, &target, 2)

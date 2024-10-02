@@ -34,7 +34,7 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		if err = target.RequestCleanup(apps, auth.CurrentUser(ctx).MustGet()); err != nil {
+		if err = target.RequestDelete(apps, auth.CurrentUser(ctx).MustGet()); err != nil {
 			return bus.Unit, err
 		}
 

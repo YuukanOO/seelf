@@ -11,25 +11,46 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 )
 
 func Test_CleanupTarget(t *testing.T) {
 
 	arrange := func(tb testing.TB, provider domain.Provider, seed ...fixture.SeedBuilder) (
-		bus.RequestHandler[bus.UnitType, cleanup_target.Command],
+		bus.RequestHandler[bus.AsyncResult, cleanup_target.Command],
 		context.Context,
+		spy.Dispatcher,
 	) {
 		context := fixture.PrepareDatabase(tb, seed...)
-		return cleanup_target.Handler(context.TargetsStore, context.DeploymentsStore, provider), context.Context
+		return cleanup_target.Handler(context.TargetsStore, context.TargetsStore, context.DeploymentsStore, provider), context.Context, context.Dispatcher
 	}
 
 	t.Run("should silently fail if the target does not exist anymore", func(t *testing.T) {
 		var provider dummyProvider
-		handler, ctx := arrange(t, &provider)
+		handler, ctx, _ := arrange(t, &provider)
 
-		_, err := handler(ctx, cleanup_target.Command{})
+		r, err := handler(ctx, cleanup_target.Command{})
 
 		assert.Nil(t, err)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
+		assert.False(t, provider.called)
+	})
+
+	t.Run("should fail if the target has not been requested for cleanup", func(t *testing.T) {
+		var provider dummyProvider
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		handler, ctx, _ := arrange(t, &provider,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
+
+		r, err := handler(ctx, cleanup_target.Command{
+			ID: string(target.ID()),
+		})
+
+		assert.ErrorIs(t, domain.ErrTargetCleanupNeeded, err)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 		assert.False(t, provider.called)
 	})
 
@@ -37,24 +58,28 @@ func Test_CleanupTarget(t *testing.T) {
 		var provider dummyProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, errors.New("configuration_failed"))
-		handler, ctx := arrange(t, &provider,
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, errors.New("configuration_failed")))
+		assert.Nil(t, target.RequestDelete(false, user.ID()))
+		handler, ctx, _ := arrange(t, &provider,
 			fixture.WithUsers(&user),
 			fixture.WithTargets(&target),
 		)
 
-		_, err := handler(ctx, cleanup_target.Command{
+		r, err := handler(ctx, cleanup_target.Command{
 			ID: string(target.ID()),
 		})
 
 		assert.Nil(t, err)
+		assert.Equal(t, bus.AsyncResultProcessed, r)
 		assert.False(t, provider.called)
 	})
 
-	t.Run("should fail if a deployment is running on this target", func(t *testing.T) {
+	t.Run("should be delayed if a deployment is running on this target", func(t *testing.T) {
 		var provider dummyProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+		assert.Nil(t, target.RequestDelete(false, user.ID()))
 		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
 				domain.NewEnvironmentConfig(target.ID()),
@@ -64,55 +89,19 @@ func Test_CleanupTarget(t *testing.T) {
 			fixture.ForEnvironment(domain.Production),
 			fixture.WithDeploymentRequestedBy(user.ID()))
 		assert.Nil(t, deployment.HasStarted())
-		handler, ctx := arrange(t, &provider,
+		handler, ctx, _ := arrange(t, &provider,
 			fixture.WithUsers(&user),
 			fixture.WithTargets(&target),
 			fixture.WithApps(&app),
 			fixture.WithDeployments(&deployment),
 		)
 
-		_, err := handler(ctx, cleanup_target.Command{
+		r, err := handler(ctx, cleanup_target.Command{
 			ID: string(target.ID()),
 		})
 
-		assert.ErrorIs(t, domain.ErrRunningOrPendingDeployments, err)
-		assert.False(t, provider.called)
-	})
-
-	t.Run("should fail if being configured", func(t *testing.T) {
-		var provider dummyProvider
-		user := authfixture.User()
-		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		handler, ctx := arrange(t, &provider,
-			fixture.WithUsers(&user),
-			fixture.WithTargets(&target),
-		)
-
-		_, err := handler(ctx, cleanup_target.Command{
-			ID: string(target.ID()),
-		})
-
-		assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
-		assert.False(t, provider.called)
-	})
-
-	t.Run("should fail if has been configured in the past but is now unreachable", func(t *testing.T) {
-		var provider dummyProvider
-		user := authfixture.User()
-		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
-		assert.Nil(t, target.Reconfigure())
-		target.Configured(target.CurrentVersion(), nil, errors.New("configuration_failed"))
-		handler, ctx := arrange(t, &provider,
-			fixture.WithUsers(&user),
-			fixture.WithTargets(&target),
-		)
-
-		_, err := handler(ctx, cleanup_target.Command{
-			ID: string(target.ID()),
-		})
-
-		assert.ErrorIs(t, domain.ErrTargetConfigurationFailed, err)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.AsyncResultDelay, r)
 		assert.False(t, provider.called)
 	})
 
@@ -120,8 +109,9 @@ func Test_CleanupTarget(t *testing.T) {
 		var provider dummyProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
-		handler, ctx := arrange(t, &provider,
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
+		assert.Nil(t, target.RequestDelete(false, user.ID()))
+		handler, ctx, dispatcher := arrange(t, &provider,
 			fixture.WithUsers(&user),
 			fixture.WithTargets(&target),
 		)
@@ -132,6 +122,11 @@ func Test_CleanupTarget(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.True(t, provider.called)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		deleted := assert.Is[domain.TargetDeleted](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.TargetDeleted{
+			ID: target.ID(),
+		}, deleted)
 	})
 }
 

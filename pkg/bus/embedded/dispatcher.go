@@ -57,6 +57,8 @@ func (b *dispatcher) Send(ctx context.Context, msg bus.Request) (any, error) {
 		return nil, bus.ErrNoHandlerRegistered
 	}
 
+	// FIXME: maybe retry on concurrency update error
+
 	return handler.(bus.NextFunc)(ctx, msg)
 }
 

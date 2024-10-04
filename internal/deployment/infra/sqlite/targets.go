@@ -62,6 +62,7 @@ func (s *targetsStore) GetLocalTarget(ctx context.Context) (domain.Target, error
 			,cleanup_requested_by
 			,created_at
 			,created_by
+			,version
 		FROM targets
 		WHERE provider_fingerprint = ''
 		LIMIT 1`).
@@ -86,92 +87,59 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 			,cleanup_requested_by
 			,created_at
 			,created_by
+			,version
 		FROM targets
 		WHERE id = ?`, id).
 		One(s.db, ctx, domain.TargetFrom)
 }
 
 func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error {
-	return sqlite.WriteEvents(s.db, c, targets, func(ctx context.Context, e event.Event) error {
-		switch evt := e.(type) {
-		case domain.TargetCreated:
-			return builder.
-				Insert("targets", builder.Values{
-					"id":                       evt.ID,
-					"name":                     evt.Name,
-					"provider_kind":            evt.Provider.Kind(),
-					"provider_fingerprint":     evt.Provider.Fingerprint(),
-					"provider":                 evt.Provider,
-					"state_status":             evt.State.Status(),
-					"state_version":            evt.State.Version(),
-					"state_errcode":            evt.State.ErrCode(),
-					"state_last_ready_version": evt.State.LastReadyVersion(),
-					"entrypoints":              evt.Entrypoints,
-					"created_at":               evt.Created.At(),
-					"created_by":               evt.Created.By(),
-				}).
-				Exec(s.db, ctx)
-		case domain.TargetStateChanged:
-			return builder.
-				Update("targets", builder.Values{
-					"state_status":             evt.State.Status(),
-					"state_version":            evt.State.Version(),
-					"state_errcode":            evt.State.ErrCode(),
-					"state_last_ready_version": evt.State.LastReadyVersion(),
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetRenamed:
-			return builder.
-				Update("targets", builder.Values{
-					"name": evt.Name,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetUrlChanged:
-			return builder.
-				Update("targets", builder.Values{
-					"url": evt.Url,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetUrlRemoved:
-			return builder.
-				Update("targets", builder.Values{
-					"url": nil,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetProviderChanged:
-			return builder.
-				Update("targets", builder.Values{
-					"provider_kind":        evt.Provider.Kind(),
-					"provider_fingerprint": evt.Provider.Fingerprint(),
-					"provider":             evt.Provider,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetEntrypointsChanged:
-			return builder.
-				Update("targets", builder.Values{
-					"entrypoints": evt.Entrypoints,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetCleanupRequested:
-			return builder.
-				Update("targets", builder.Values{
-					"cleanup_requested_at": evt.Requested.At(),
-					"cleanup_requested_by": evt.Requested.By(),
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.TargetDeleted:
-			return builder.
-				Command("DELETE FROM targets WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		default:
-			return nil
-		}
-	})
+	return sqlite.WriteEvents(s.db, c, targets,
+		"targets",
+		func(t *domain.Target) sqlite.Key {
+			return sqlite.Key{
+				"id": t.ID(),
+			}
+		},
+		func(e event.Event, v builder.Values) sqlite.WriteMode {
+			switch evt := e.(type) {
+			case domain.TargetCreated:
+				v["id"] = evt.ID
+				v["name"] = evt.Name
+				v["provider_kind"] = evt.Provider.Kind()
+				v["provider_fingerprint"] = evt.Provider.Fingerprint()
+				v["provider"] = evt.Provider
+				v["state_status"] = evt.State.Status()
+				v["state_version"] = evt.State.Version()
+				v["state_errcode"] = evt.State.ErrCode()
+				v["state_last_ready_version"] = evt.State.LastReadyVersion()
+				v["entrypoints"] = evt.Entrypoints
+				v["created_at"] = evt.Created.At()
+				v["created_by"] = evt.Created.By()
+			case domain.TargetStateChanged:
+				v["state_status"] = evt.State.Status()
+				v["state_version"] = evt.State.Version()
+				v["state_errcode"] = evt.State.ErrCode()
+				v["state_last_ready_version"] = evt.State.LastReadyVersion()
+			case domain.TargetRenamed:
+				v["name"] = evt.Name
+			case domain.TargetUrlChanged:
+				v["url"] = evt.Url
+			case domain.TargetUrlRemoved:
+				v["url"] = nil
+			case domain.TargetProviderChanged:
+				v["provider_kind"] = evt.Provider.Kind()
+				v["provider_fingerprint"] = evt.Provider.Fingerprint()
+				v["provider"] = evt.Provider
+			case domain.TargetEntrypointsChanged:
+				v["entrypoints"] = evt.Entrypoints
+			case domain.TargetCleanupRequested:
+				v["cleanup_requested_at"] = evt.Requested.At()
+				v["cleanup_requested_by"] = evt.Requested.By()
+			case domain.TargetDeleted:
+				return sqlite.WriteModeDelete
+			}
+
+			return sqlite.WriteModeUpsert
+		})
 }

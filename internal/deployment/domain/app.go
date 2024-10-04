@@ -169,6 +169,7 @@ func NewApp(
 // Recreates an app from the persistent storage.
 func AppFrom(scanner storage.Scanner) (a App, err error) {
 	var (
+		version            event.Version
 		url                monad.Maybe[Url]
 		token              monad.Maybe[string]
 		createdAt          time.Time
@@ -193,7 +194,14 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		&a.history,
 		&createdAt,
 		&createdBy,
+		&version,
 	)
+
+	if err != nil {
+		return a, err
+	}
+
+	event.Hydrate(&a, version)
 
 	a.created = shared.ActionFrom(createdBy, createdAt)
 
@@ -281,17 +289,18 @@ func (a *App) RequestDelete(requestedBy domain.UserID) error {
 
 // Marks the application has being cleaned for a specific environment and a specific target.
 func (a *App) CleanedUp(environment Environment, target TargetID) {
-	if a.history.remove(environment, target) && a.cleanupRequested.HasValue() {
+	if a.history.remove(environment, target) {
+		a.apply(AppHistoryChanged{
+			ID:      a.id,
+			History: a.history,
+		})
+	}
+
+	if a.history.isEmpty() && a.cleanupRequested.HasValue() {
 		a.apply(AppDeleted{
 			ID: a.id,
 		})
-		return
 	}
-
-	a.apply(AppHistoryChanged{
-		ID:      a.id,
-		History: a.history,
-	})
 }
 
 func (a *App) ID() AppID                                   { return a.id }
@@ -384,12 +393,13 @@ func (a AppTargetHistory) push(environment Environment, target TargetID) {
 	a[environment] = append(targets, target)
 }
 
-// Remove the given target and environment history and returns true if the history is empty.
+// Remove the given target and environment history and returns true if the history has been
+// modified.
 func (a AppTargetHistory) remove(environment Environment, target TargetID) bool {
 	targets, exists := a[environment]
 
 	if !exists {
-		return a.isEmpty()
+		return false
 	}
 
 	for i, existingTarget := range targets {
@@ -398,12 +408,13 @@ func (a AppTargetHistory) remove(environment Environment, target TargetID) bool 
 			if len(a[environment]) == 0 {
 				delete(a, environment)
 			}
-			break
+			return true
 		}
 	}
 
-	return a.isEmpty()
+	return false
 }
+
 func (a AppTargetHistory) isEmpty() bool { return len(a) == 0 }
 
 func (a AppTargetHistory) Value() (driver.Value, error) { return storage.ValueJSON(a) }

@@ -168,6 +168,7 @@ func NewTarget(
 
 func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	var (
+		version               event.Version
 		createdAt             time.Time
 		createdBy             auth.UserID
 		deleteRequestedAt     monad.Maybe[time.Time]
@@ -191,11 +192,14 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 		&deleteRequestedBy,
 		&createdAt,
 		&createdBy,
+		&version,
 	)
 
 	if err != nil {
 		return t, err
 	}
+
+	event.Hydrate(&t, version)
 
 	if requestedAt, isSet := deleteRequestedAt.TryGet(); isSet {
 		t.cleanupRequested.Set(

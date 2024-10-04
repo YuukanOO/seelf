@@ -7,6 +7,7 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 // Cleanup a target and all its associated resources.
@@ -25,6 +26,7 @@ func Handler(
 	writer domain.TargetsWriter,
 	deploymentsReader domain.DeploymentsReader,
 	provider domain.Provider,
+	uow storage.UnitOfWorkFactory,
 ) bus.RequestHandler[bus.AsyncResult, Command] {
 	return func(ctx context.Context, cmd Command) (result bus.AsyncResult, finalErr error) {
 		target, err := reader.GetByID(ctx, domain.TargetID(cmd.ID))
@@ -59,20 +61,22 @@ func Handler(
 				return
 			}
 
-			if target, err = reader.GetByID(ctx, target.ID()); err != nil {
-				if errors.Is(err, apperr.ErrNotFound) {
-					return
+			finalErr = uow.Create(ctx, func(ctx context.Context) error {
+				if target, err = reader.GetByID(ctx, target.ID()); err != nil {
+					if errors.Is(err, apperr.ErrNotFound) {
+						return nil
+					}
+
+					return err
 				}
 
-				finalErr = err
-				return
-			}
+				if err = target.CleanedUp(); err != nil {
+					return err
+				}
 
-			if finalErr = target.CleanedUp(); finalErr != nil {
-				return
-			}
+				return writer.Write(ctx, &target)
+			})
 
-			finalErr = writer.Write(ctx, &target)
 		}()
 
 		finalErr = provider.CleanupTarget(ctx, target, strategy)

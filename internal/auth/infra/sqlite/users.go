@@ -33,6 +33,7 @@ func (s *usersStore) GetAdminUser(ctx context.Context) (domain.User, error) {
 			,password_hash
 			,api_key
 			,registered_at
+			,version
 		FROM users
 		ORDER BY registered_at ASC
 		LIMIT 1`).
@@ -58,6 +59,7 @@ func (s *usersStore) GetByID(ctx context.Context, id domain.UserID) (u domain.Us
 				,password_hash
 				,api_key
 				,registered_at
+				,version
 			FROM users
 			WHERE id = ?`, id).
 		One(s.db, ctx, domain.UserFrom)
@@ -72,47 +74,36 @@ func (s *usersStore) GetByEmail(ctx context.Context, email domain.Email) (u doma
 				,password_hash
 				,api_key
 				,registered_at
+				,version
 			FROM users
 			WHERE email = ?`, email).
 		One(s.db, ctx, domain.UserFrom)
 }
 
 func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
-	return sqlite.WriteEvents(s.db, c, users, func(ctx context.Context, e event.Event) error {
-		switch evt := e.(type) {
-		case domain.UserRegistered:
-			return builder.
-				Insert("users", builder.Values{
-					"id":            evt.ID,
-					"email":         evt.Email,
-					"password_hash": evt.Password,
-					"api_key":       evt.Key,
-					"registered_at": evt.RegisteredAt,
-				}).
-				Exec(s.db, ctx)
-		case domain.UserEmailChanged:
-			return builder.
-				Update("users", builder.Values{
-					"email": evt.Email,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.UserPasswordChanged:
-			return builder.
-				Update("users", builder.Values{
-					"password_hash": evt.Password,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.UserAPIKeyChanged:
-			return builder.
-				Update("users", builder.Values{
-					"api_key": evt.Key,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		default:
-			return nil
-		}
-	})
+	return sqlite.WriteEvents(s.db, c, users,
+		"users",
+		func(u *domain.User) sqlite.Key {
+			return sqlite.Key{
+				"id": u.ID(),
+			}
+		},
+		func(e event.Event, v builder.Values) sqlite.WriteMode {
+			switch evt := e.(type) {
+			case domain.UserRegistered:
+				v["id"] = evt.ID
+				v["email"] = evt.Email
+				v["password_hash"] = evt.Password
+				v["api_key"] = evt.Key
+				v["registered_at"] = evt.RegisteredAt
+			case domain.UserEmailChanged:
+				v["email"] = evt.Email
+			case domain.UserPasswordChanged:
+				v["password_hash"] = evt.Password
+			case domain.UserAPIKeyChanged:
+				v["api_key"] = evt.Key
+			}
+
+			return sqlite.WriteModeUpsert
+		})
 }

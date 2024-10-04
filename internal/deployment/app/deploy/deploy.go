@@ -92,6 +92,9 @@ func Handler(
 		// checking for errors when writing the domain.
 		// Based on wether or not there was an error, it will update the deployment
 		// accordingly.
+		//
+		// Unlike other async jobs, the unit of work is not needed here because the deployment could not be
+		// updated by someone else. And if it was, a concurrent update error will be returned.
 		defer func() {
 			// Since the deployment process could take some time, retrieve a fresh version of the
 			// deployment right now

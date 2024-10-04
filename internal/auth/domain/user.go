@@ -108,13 +108,18 @@ func NewUser(emailRequirement EmailRequirement, password PasswordHash, key APIKe
 
 // Recreates a user from a storage driver
 func UserFrom(scanner storage.Scanner) (u User, err error) {
+	var version event.Version
+
 	err = scanner.Scan(
 		&u.id,
 		&u.email,
 		&u.password,
 		&u.key,
 		&u.registeredAt,
+		&version,
 	)
+
+	event.Hydrate(&u, version)
 
 	return u, err
 }

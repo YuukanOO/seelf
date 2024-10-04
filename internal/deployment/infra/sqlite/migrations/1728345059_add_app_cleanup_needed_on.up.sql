@@ -7,6 +7,11 @@ SET
   state_finished_at = datetime('now')
 WHERE state_status = 0; -- Running jobs will be failed with the server_reset error so no need to handle them here
 
+ALTER TABLE deployments ADD version DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE apps ADD version DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE registries ADD version DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE targets ADD version DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
 ALTER TABLE apps ADD history TEXT NOT NULL DEFAULT '{}';
 UPDATE apps SET history = '{"production": ["' || production_target || '"], "staging": ["'|| staging_target ||'"]}';
 

@@ -22,7 +22,7 @@ func Test_ConfigureTarget(t *testing.T) {
 		spy.Dispatcher,
 	) {
 		context := fixture.PrepareDatabase(tb, seed...)
-		return configure_target.Handler(context.TargetsStore, context.TargetsStore, provider), context.Dispatcher
+		return configure_target.Handler(context.TargetsStore, context.TargetsStore, provider, context.UnitOfWorkFactory), context.Dispatcher
 	}
 
 	t.Run("should fail silently if the target is not found", func(t *testing.T) {

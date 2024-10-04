@@ -9,6 +9,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 // Check if the cleanup is needed for a specific app, environment and a specific target.
@@ -34,6 +35,7 @@ func Handler(
 	appsReader domain.AppsReader,
 	appsWriter domain.AppsWriter,
 	provider domain.Provider,
+	uow storage.UnitOfWorkFactory,
 ) bus.RequestHandler[bus.AsyncResult, Command] {
 	return func(ctx context.Context, cmd Command) (result bus.AsyncResult, finalErr error) {
 		target, finalErr := reader.GetByID(ctx, domain.TargetID(cmd.TargetID))
@@ -79,21 +81,22 @@ func Handler(
 				return
 			}
 
-			app, err := appsReader.GetByID(ctx, appid)
+			finalErr = uow.Create(ctx, func(ctx context.Context) error {
+				app, err := appsReader.GetByID(ctx, appid)
 
-			if err != nil {
-				// Application does not exist anymore, nothing specific to do
-				if errors.Is(err, apperr.ErrNotFound) {
-					return
+				if err != nil {
+					// Application does not exist anymore, nothing specific to do
+					if errors.Is(err, apperr.ErrNotFound) {
+						return nil
+					}
+
+					return err
 				}
 
-				finalErr = err
-				return
-			}
+				app.CleanedUp(env, target.ID())
 
-			app.CleanedUp(env, target.ID())
-
-			finalErr = appsWriter.Write(ctx, &app)
+				return appsWriter.Write(ctx, &app)
+			})
 		}()
 
 		finalErr = provider.Cleanup(ctx, appid, target, env, strategy)

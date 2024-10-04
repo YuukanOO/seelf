@@ -47,6 +47,7 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 			,source
 			,requested_at
 			,requested_by
+			,version
 		FROM deployments
 		WHERE app_id = ? AND deployment_number = ?`, id.AppID(), id.DeploymentNumber()).
 		One(s.db, ctx, domain.DeploymentFrom)
@@ -72,6 +73,7 @@ func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppI
 			,source
 			,requested_at
 			,requested_by
+			,version
 		FROM deployments
 		WHERE app_id = ? AND config_environment = ?
 		ORDER BY deployment_number DESC
@@ -151,44 +153,43 @@ func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, cr
 }
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {
-	return sqlite.WriteEvents(s.db, c, deployments, func(ctx context.Context, e event.Event) error {
-		switch evt := e.(type) {
-		case domain.DeploymentCreated:
-			return builder.
-				Insert("deployments", builder.Values{
-					"app_id":               evt.ID.AppID(),
-					"deployment_number":    evt.ID.DeploymentNumber(),
-					"config_appid":         evt.Config.AppID(),
-					"config_appname":       evt.Config.AppName(),
-					"config_environment":   evt.Config.Environment(),
-					"config_target":        evt.Config.Target(),
-					"config_vars":          evt.Config.Vars(),
-					"state_status":         evt.State.Status(),
-					"state_errcode":        evt.State.ErrCode(),
-					"state_services":       evt.State.Services(),
-					"state_started_at":     evt.State.StartedAt(),
-					"state_finished_at":    evt.State.FinishedAt(),
-					"source_discriminator": evt.Source.Kind(),
-					"source":               evt.Source,
-					"requested_at":         evt.Requested.At(),
-					"requested_by":         evt.Requested.By(),
-				}).
-				Exec(s.db, ctx)
-		case domain.DeploymentStateChanged:
-			return builder.
-				Update("deployments", builder.Values{
-					"state_status":      evt.State.Status(),
-					"state_errcode":     evt.State.ErrCode(),
-					"state_services":    evt.State.Services(),
-					"state_started_at":  evt.State.StartedAt(),
-					"state_finished_at": evt.State.FinishedAt(),
-				}).
-				F("WHERE app_id = ? AND deployment_number = ?", evt.ID.AppID(), evt.ID.DeploymentNumber()).
-				Exec(s.db, ctx)
-		default:
-			return nil
-		}
-	})
+	return sqlite.WriteEvents(s.db, c, deployments,
+		"deployments",
+		func(d *domain.Deployment) sqlite.Key {
+			return sqlite.Key{
+				"app_id":            d.ID().AppID(),
+				"deployment_number": d.ID().DeploymentNumber(),
+			}
+		},
+		func(e event.Event, v builder.Values) sqlite.WriteMode {
+			switch evt := e.(type) {
+			case domain.DeploymentCreated:
+				v["app_id"] = evt.ID.AppID()
+				v["deployment_number"] = evt.ID.DeploymentNumber()
+				v["config_appid"] = evt.Config.AppID()
+				v["config_appname"] = evt.Config.AppName()
+				v["config_environment"] = evt.Config.Environment()
+				v["config_target"] = evt.Config.Target()
+				v["config_vars"] = evt.Config.Vars()
+				v["state_status"] = evt.State.Status()
+				v["state_errcode"] = evt.State.ErrCode()
+				v["state_services"] = evt.State.Services()
+				v["state_started_at"] = evt.State.StartedAt()
+				v["state_finished_at"] = evt.State.FinishedAt()
+				v["source_discriminator"] = evt.Source.Kind()
+				v["source"] = evt.Source
+				v["requested_at"] = evt.Requested.At()
+				v["requested_by"] = evt.Requested.By()
+			case domain.DeploymentStateChanged:
+				v["state_status"] = evt.State.Status()
+				v["state_errcode"] = evt.State.ErrCode()
+				v["state_services"] = evt.State.Services()
+				v["state_started_at"] = evt.State.StartedAt()
+				v["state_finished_at"] = evt.State.FinishedAt()
+			}
+
+			return sqlite.WriteModeUpsert
+		})
 }
 
 type deploymentsOnAppTargetEnv struct {

@@ -21,7 +21,7 @@ func Test_CleanupApp(t *testing.T) {
 		context.Context,
 	) {
 		context := fixture.PrepareDatabase(tb, seed...)
-		return cleanup_app.Handler(context.TargetsStore, context.DeploymentsStore, context.AppsStore, context.AppsStore, provider), context.Context
+		return cleanup_app.Handler(context.TargetsStore, context.DeploymentsStore, context.AppsStore, context.AppsStore, provider, context.UnitOfWorkFactory), context.Context
 	}
 
 	t.Run("should fail silently if the target does not exist anymore", func(t *testing.T) {

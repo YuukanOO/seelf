@@ -22,7 +22,7 @@ func Test_CleanupTarget(t *testing.T) {
 		spy.Dispatcher,
 	) {
 		context := fixture.PrepareDatabase(tb, seed...)
-		return cleanup_target.Handler(context.TargetsStore, context.TargetsStore, context.DeploymentsStore, provider), context.Context, context.Dispatcher
+		return cleanup_target.Handler(context.TargetsStore, context.TargetsStore, context.DeploymentsStore, provider, context.UnitOfWorkFactory), context.Context, context.Dispatcher
 	}
 
 	t.Run("should silently fail if the target does not exist anymore", func(t *testing.T) {

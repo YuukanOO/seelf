@@ -116,6 +116,7 @@ func (a *App) NewDeployment(
 
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	var (
+		version                 event.Version
 		requestedAt             time.Time
 		requestedBy             domain.UserID
 		sourceMetaDiscriminator string
@@ -139,11 +140,14 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&sourceMetaData,
 		&requestedAt,
 		&requestedBy,
+		&version,
 	)
 
 	if err != nil {
 		return d, err
 	}
+
+	event.Hydrate(&d, version)
 
 	d.source, err = SourceDataTypes.From(sourceMetaDiscriminator, sourceMetaData)
 	d.requested = shared.ActionFrom(requestedBy, requestedAt)

@@ -311,6 +311,15 @@ func Test_App(t *testing.T) {
 			}, historyChanged)
 		})
 
+		t.Run("should not raise the history changed event if the target was not existing", func(t *testing.T) {
+			app := fixture.App()
+			assert.Nil(t, app.RequestDelete("uid"))
+
+			app.CleanedUp(domain.Production, "non-existing-target")
+
+			assert.HasNEvents(t, 2, &app)
+		})
+
 		t.Run("should delete the app if being requested and all resources cleaned up", func(t *testing.T) {
 			production := domain.NewEnvironmentConfig("production-target")
 			staging := domain.NewEnvironmentConfig("staging-target")
@@ -322,13 +331,13 @@ func Test_App(t *testing.T) {
 			app.CleanedUp(domain.Staging, staging.Target())
 			app.CleanedUp(domain.Production, "another-target")
 
-			assert.HasNEvents(t, 7, &app)
-			historyChanged := assert.EventIs[domain.AppHistoryChanged](t, &app, 4)
+			assert.HasNEvents(t, 8, &app)
+			historyChanged := assert.EventIs[domain.AppHistoryChanged](t, &app, 6)
 			assert.DeepEqual(t, domain.AppHistoryChanged{
 				ID:      app.ID(),
 				History: domain.AppTargetHistory{},
 			}, historyChanged)
-			deleted := assert.EventIs[domain.AppDeleted](t, &app, 6)
+			deleted := assert.EventIs[domain.AppDeleted](t, &app, 7)
 			assert.DeepEqual(t, domain.AppDeleted{
 				ID: app.ID(),
 			}, deleted)

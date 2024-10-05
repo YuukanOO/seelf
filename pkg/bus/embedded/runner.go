@@ -36,7 +36,7 @@ type (
 		started                bool
 		store                  JobsStore
 		logger                 log.Logger
-		done                   []chan bool
+		done                   chan struct{}
 		exitGroup              sync.WaitGroup
 		groups                 []*workerGroup
 		messageNameToWorkerIdx map[string]int
@@ -82,7 +82,6 @@ func NewRunner(
 		}
 
 		s.groups[i] = &workerGroup{
-			jobs: make(chan Job),
 			size: g.Size,
 		}
 
@@ -101,6 +100,12 @@ func (s *Runner) Start() {
 
 	s.started = true
 
+	s.done = make(chan struct{}, 1)
+
+	for _, g := range s.groups {
+		g.jobs = make(chan Job)
+	}
+
 	s.startGroupRunners()
 	s.startPolling()
 }
@@ -110,29 +115,30 @@ func (s *Runner) Stop() {
 		return
 	}
 
+	s.started = false
+
 	s.logger.Info("waiting for current jobs to finish")
 
-	for _, done := range s.done {
-		done <- true
+	close(s.done)
+
+	for _, j := range s.groups {
+		close(j.jobs)
 	}
 
 	s.exitGroup.Wait()
 }
 
 // Tiny helper to run a function in a goroutine and keep track of done channels.
-func (s *Runner) run(fn func(<-chan bool)) {
-	done := make(chan bool, 1)
-	s.done = append(s.done, done)
-
+func (s *Runner) run(fn func()) {
 	s.exitGroup.Add(1)
-	go func(d <-chan bool) {
+	go func() {
 		defer s.exitGroup.Done()
-		fn(d)
-	}(done)
+		fn()
+	}()
 }
 
 func (s *Runner) startPolling() {
-	s.run(func(done <-chan bool) {
+	s.run(func() {
 		var (
 			delay   time.Duration
 			lastRun time.Time = time.Now()
@@ -142,7 +148,7 @@ func (s *Runner) startPolling() {
 			delay = s.pollInterval - time.Since(lastRun)
 
 			select {
-			case <-done:
+			case <-s.done:
 				return
 			case <-time.After(delay):
 			}
@@ -175,17 +181,12 @@ func (s *Runner) startGroupRunners() {
 	for _, g := range s.groups {
 		group := g
 		for i := 0; i < group.size; i++ {
-			s.run(func(done <-chan bool) {
-				for {
-					select {
-					case <-done:
-						return
-					case job := <-group.jobs:
-						ctx := context.Background()
-						result, err := bus.Send(s.dispatcher, ctx, job.Command())
+			s.run(func() {
+				for job := range group.jobs {
+					ctx := context.Background()
+					result, err := bus.Send(s.dispatcher, ctx, job.Command())
 
-						s.handleJobReturn(ctx, job, result, err)
-					}
+					s.handleJobReturn(ctx, job, result, err)
 				}
 			})
 		}

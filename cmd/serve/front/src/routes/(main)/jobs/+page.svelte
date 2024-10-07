@@ -48,7 +48,6 @@
 		{:else if value === 'resource'}
 			<!-- @ts-ignore -->
 			<div>{translateMessageName(item.message_name)}</div>
-			<div class="meta">{item.resource_id}</div>
 		{/if}
 	</svelte:fragment>
 

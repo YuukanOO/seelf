@@ -181,9 +181,8 @@ type asyncCommand struct {
 	SomeValue int
 }
 
-func (asyncCommand) Name_() string      { return "AsyncCommand" }
-func (asyncCommand) ResourceID() string { return "" }
-func (asyncCommand) Group() string      { return "" }
+func (asyncCommand) Name_() string { return "AsyncCommand" }
+func (asyncCommand) Group() string { return "" }
 
 type getQuery struct {
 	bus.Query[int]

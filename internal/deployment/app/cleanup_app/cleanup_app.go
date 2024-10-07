@@ -25,9 +25,8 @@ type Command struct {
 	To          time.Time `json:"to"`
 }
 
-func (Command) Name_() string        { return "deployment.command.cleanup_app" }
-func (c Command) ResourceID() string { return c.AppID }
-func (c Command) Group() string      { return bus.Group(c.AppID, c.Environment, c.TargetID) }
+func (Command) Name_() string   { return "deployment.command.cleanup_app" }
+func (c Command) Group() string { return bus.Group(c.AppID, c.Environment, c.TargetID) }
 
 func Handler(
 	reader domain.TargetsReader,

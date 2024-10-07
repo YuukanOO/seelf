@@ -15,11 +15,13 @@ func OnJobDismissedHandler(
 	writer domain.TargetsWriter,
 ) bus.SignalHandler[embedded.JobDismissed] {
 	return func(ctx context.Context, evt embedded.JobDismissed) error {
-		if _, isCleanupJob := evt.Command.(Command); !isCleanupJob {
+		cmd, isCleanupJob := evt.Command.(Command)
+
+		if !isCleanupJob {
 			return nil
 		}
 
-		target, err := reader.GetByID(ctx, domain.TargetID(evt.Command.ResourceID()))
+		target, err := reader.GetByID(ctx, domain.TargetID(cmd.ID))
 
 		if err != nil {
 			// Target deleted, no need to go further

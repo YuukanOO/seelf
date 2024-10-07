@@ -14,13 +14,12 @@ import (
 type Command struct {
 	bus.AsyncCommand
 
-	ID      string    `json:"id"`
+	ID      string    `json:"target_id"`
 	Version time.Time `json:"version"`
 }
 
-func (Command) Name_() string        { return "deployment.command.configure_target" }
-func (c Command) ResourceID() string { return c.ID }
-func (c Command) Group() string      { return c.ID }
+func (Command) Name_() string   { return "deployment.command.configure_target" }
+func (c Command) Group() string { return c.ID }
 
 func Handler(
 	reader domain.TargetsReader,

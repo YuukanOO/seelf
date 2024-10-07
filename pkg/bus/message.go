@@ -65,8 +65,7 @@ type (
 	AsyncRequest interface {
 		MutateRequest
 		TypedRequest[AsyncResult]
-		ResourceID() string // ID of the main resource processed by the request
-		Group() string      // Work group for this request, at most one job per group is processed at any given time
+		Group() string // Work group for this request, at most one job per group is processed at any given time
 	}
 
 	// Request to query the system.

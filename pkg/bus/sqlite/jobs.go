@@ -58,7 +58,6 @@ func (s *JobsStore) GetAllJobs(ctx context.Context, query get_jobs.Query) (stora
 	return builder.
 		Select[get_jobs.Job](`
 			id
-			,resource_id
 			,[group]
 			,message_name
 			,message_data
@@ -124,27 +123,33 @@ func (s *JobsStore) DismissJob(ctx context.Context, cmd dismiss_job.Command) (bu
 
 func (s *JobsStore) Queue(
 	ctx context.Context,
-	msg bus.AsyncRequest,
+	requests ...bus.AsyncRequest,
 ) error {
 	now := time.Now().UTC()
-	msgData, err := storage.ValueJSON(msg)
 
-	if err != nil {
-		return err
+	for _, req := range requests {
+		cmdData, err := storage.ValueJSON(req)
+
+		if err != nil {
+			return err
+		}
+
+		if err = builder.
+			Insert("scheduled_jobs", builder.Values{
+				"id":           id.New[string](),
+				"[group]":      req.Group(),
+				"message_name": req.Name_(),
+				"message_data": cmdData,
+				"queued_at":    now,
+				"not_before":   now,
+				"retrieved":    false,
+			}).
+			Exec(s.db, ctx); err != nil {
+			return err
+		}
 	}
 
-	return builder.
-		Insert("scheduled_jobs", builder.Values{
-			"id":           id.New[string](),
-			"resource_id":  msg.ResourceID(),
-			"[group]":      msg.Group(),
-			"message_name": msg.Name_(),
-			"message_data": msgData,
-			"queued_at":    now,
-			"not_before":   now,
-			"retrieved":    false,
-		}).
-		Exec(s.db, ctx)
+	return nil
 }
 
 func (s *JobsStore) GetNextPendingJobs(ctx context.Context) ([]embedded.Job, error) {
@@ -226,7 +231,6 @@ func jobMapper(scanner storage.Scanner) (embedded.Job, error) {
 func jobQueryMapper(scanner storage.Scanner) (j get_jobs.Job, err error) {
 	err = scanner.Scan(
 		&j.ID,
-		&j.ResourceID,
 		&j.Group,
 		&j.MessageName,
 		&j.MessageData,

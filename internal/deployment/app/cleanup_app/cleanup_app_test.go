@@ -108,7 +108,7 @@ func Test_CleanupApp(t *testing.T) {
 		var provider mockProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 		assert.Nil(t, target.RequestDelete(false, "uid"))
 
 		handler, ctx := arrange(t, &provider,
@@ -146,7 +146,7 @@ func Test_CleanupApp(t *testing.T) {
 		var provider mockProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed"))
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, errors.New("configuration failed")))
 		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
 				domain.NewEnvironmentConfig(target.ID()),
@@ -181,7 +181,7 @@ func Test_CleanupApp(t *testing.T) {
 		var provider mockProvider
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
-		target.Configured(target.CurrentVersion(), nil, nil)
+		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
 		app := fixture.App(fixture.WithAppCreatedBy(user.ID()),
 			fixture.WithEnvironmentConfig(
 				domain.NewEnvironmentConfig(target.ID()),

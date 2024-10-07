@@ -4,7 +4,6 @@ import type { Paginated } from '$lib/pagination';
 
 export type Job = {
 	id: string;
-	resource_id: string;
 	group: string;
 	message_name: string;
 	message_data: string;

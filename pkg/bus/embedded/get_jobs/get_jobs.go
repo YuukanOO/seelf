@@ -11,7 +11,6 @@ import (
 type (
 	Job struct {
 		ID          string              `json:"id"`
-		ResourceID  string              `json:"resource_id"`
 		Group       string              `json:"group"`
 		MessageName string              `json:"message_name"`
 		MessageData string              `json:"message_data"`

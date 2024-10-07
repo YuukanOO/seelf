@@ -126,17 +126,15 @@ type returnCommand struct {
 	err    error
 }
 
-func (r returnCommand) Name_() string      { return "returnCommand" }
-func (r returnCommand) ResourceID() string { return "" }
-func (r returnCommand) Group() string      { return "" }
+func (r returnCommand) Name_() string { return "returnCommand" }
+func (r returnCommand) Group() string { return "" }
 
 type unhandledCommand struct {
 	bus.AsyncCommand
 }
 
-func (u unhandledCommand) Name_() string      { return "unhandledCommand" }
-func (u unhandledCommand) ResourceID() string { return "" }
-func (u unhandledCommand) Group() string      { return "" }
+func (u unhandledCommand) Name_() string { return "unhandledCommand" }
+func (u unhandledCommand) Group() string { return "" }
 
 var (
 	_ embedded.JobsStore = (*adapter)(nil)
@@ -145,12 +143,12 @@ var (
 
 type job struct {
 	id  string
-	msg bus.AsyncRequest
+	cmd bus.AsyncRequest
 	err error
 }
 
 func (j *job) ID() string                { return j.id }
-func (j *job) Command() bus.AsyncRequest { return j.msg }
+func (j *job) Command() bus.AsyncRequest { return j.cmd }
 
 type adapter struct {
 	wg      sync.WaitGroup
@@ -160,9 +158,13 @@ type adapter struct {
 	done    []*job
 }
 
-func (a *adapter) Queue(ctx context.Context, msg bus.AsyncRequest) error {
+func (a *adapter) Queue(ctx context.Context, requests ...bus.AsyncRequest) error {
 	a.wg.Add(1)
-	a.jobs = append(a.jobs, &job{id: id.New[string](), msg: msg})
+
+	for _, req := range requests {
+		a.jobs = append(a.jobs, &job{id: id.New[string](), cmd: req})
+	}
+
 	return nil
 }
 

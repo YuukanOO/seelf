@@ -3,7 +3,6 @@ package deploy
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -20,9 +19,8 @@ type Command struct {
 	TargetID         string `json:"target_id"`
 }
 
-func (Command) Name_() string        { return "deployment.command.deploy" }
-func (c Command) ResourceID() string { return c.AppID + "-" + strconv.Itoa(c.DeploymentNumber) }
-func (c Command) Group() string      { return bus.Group(c.AppID, c.Environment, c.TargetID) }
+func (Command) Name_() string   { return "deployment.command.deploy" }
+func (c Command) Group() string { return bus.Group(c.AppID, c.Environment, c.TargetID) }
 
 // Handle the deployment process.
 // If an unexpected error occurs during this process, it uses the bus.PreserveOrder function

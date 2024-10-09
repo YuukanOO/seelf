@@ -67,11 +67,11 @@ func PrepareDatabase(t testing.TB, options ...SeedBuilder) *Context {
 		o(&s)
 	}
 
-	if err := result.UsersStore.Write(result.Context, s.users...); err != nil {
-		t.Fatal(err)
-	}
-
 	if len(s.users) > 0 {
+		if err := result.UsersStore.Write(result.Context, s.users...); err != nil {
+			t.Fatal(err)
+		}
+
 		result.Context = domain.WithUserID(result.Context, s.users[0].ID()) // The first created user will be used as the authenticated one
 	}
 

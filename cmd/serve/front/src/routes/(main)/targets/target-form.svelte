@@ -26,7 +26,8 @@
 	let name = initialData?.name ?? '';
 	let url = initialData?.url ?? '';
 	let provider: ProviderTypes = initialData?.provider.kind ?? providerTypes[0];
-	let isRemote = !!initialData?.provider.data.host ?? false;
+	let isRemote = !!initialData?.provider.data.host || false;
+	let automaticProxyConfiguration = initialData ? !!initialData.url : true;
 
 	const docker = { ...initialData?.provider.data };
 
@@ -48,7 +49,7 @@
 		if (!initialData) {
 			formData = {
 				name,
-				url,
+				url: automaticProxyConfiguration ? url : undefined,
 				docker:
 					provider === 'docker'
 						? isRemote
@@ -64,7 +65,7 @@
 		} else {
 			formData = {
 				name,
-				url,
+				url: automaticProxyConfiguration ? (initialData?.url !== url ? url : undefined) : null,
 				docker:
 					provider === 'docker'
 						? isRemote
@@ -114,9 +115,17 @@
 					<TextInput autofocus label="name" bind:value={name} required remoteError={errors?.name}>
 						<p>{l.translate('target.name.help')}</p>
 					</TextInput>
-					<TextInput label="url" bind:value={url} required type="url" remoteError={errors?.url}>
-						<p>{@html l.translate('target.url.help')}</p>
-					</TextInput>
+					<Checkbox
+						label="target.automatic_proxy_configuration"
+						bind:checked={automaticProxyConfiguration}
+					>
+						<p>{@html l.translate('target.automatic_proxy_configuration.help')}</p>
+					</Checkbox>
+					{#if automaticProxyConfiguration}
+						<TextInput label="url" bind:value={url} required type="url" remoteError={errors?.url}>
+							<p>{@html l.translate('target.url.help')}</p>
+						</TextInput>
+					{/if}
 				</Stack>
 			</FormSection>
 

@@ -11,7 +11,7 @@ type healthCheckResponse struct {
 }
 
 func (s *server) healthcheckHandler(ctx *gin.Context) {
-	http.Ok(ctx, healthCheckResponse{
+	_ = http.Ok(ctx, healthCheckResponse{
 		Version: version.Current(),
 	})
 }

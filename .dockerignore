@@ -1,5 +1,4 @@
 examples
-Makefile
 Dockerfile
 compose.yml
 docs

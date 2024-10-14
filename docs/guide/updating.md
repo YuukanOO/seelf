@@ -6,6 +6,10 @@ This procedure depends on the method you choose when [installing seelf](/guide/i
 When switching from a major version to another one (ex. `v1.x.x` to `v2.x.x`), check the [Migration page](/guide/migration) for additional instructions.
 :::
 
+::: warning
+You should always **make a backup** before updating **seelf** to make sure you don't lose anything if something goes wrong.
+:::
+
 ## With Compose
 
 Go where the initial `compose.yml` file has been created and run:
@@ -28,4 +32,4 @@ docker pull yuukanoo/seelf && docker rm $(docker stop $(docker ps -a -q --filter
 
 ## From sources
 
-Simply build the application again with the latest sources and you're good to go.
+Simply build the application again with the latest sources, run it and you're good to go.

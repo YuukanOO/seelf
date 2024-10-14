@@ -2,9 +2,7 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"embed"
-	"errors"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -21,7 +19,7 @@ var (
 	//go:embed migrations/*.sql
 	migrations embed.FS
 
-	migrationsModule = sqlite.NewMigrationsModule("scheduler", "migrations", migrations)
+	Migrations = sqlite.NewMigrationsModule("scheduler", "migrations", migrations)
 )
 
 type (
@@ -67,7 +65,7 @@ func NewScheduledJobsStore(db *sqlite.Database) bus.ScheduledJobsStore {
 // them as not retrieved so they will be picked up next time GetNextPendingJobs is called.
 // You MUST call this method at the application startup.
 func (s *store) Setup() error {
-	if err := s.db.Migrate(migrationsModule); err != nil {
+	if err := s.db.Migrate(Migrations); err != nil {
 		return err
 	}
 
@@ -99,18 +97,16 @@ func (s *store) Create(
 
 	// Could not use the ON CONFLICT here :'(
 	if flag.IsSet(options.Policy, bus.JobPolicyMerge) {
-		var existingJobId string
+		result, err := s.db.ExecContext(ctx, `
+			UPDATE scheduled_jobs
+			SET message_data = ?
+			WHERE id = (
+				SELECT id
+				FROM scheduled_jobs
+				WHERE resource_id = ? AND message_name = ? AND retrieved = false
+			)`, msgValue, resourceId, msgName)
 
-		if err = s.db.QueryRowContext(ctx, `
-		SELECT id
-		FROM scheduled_jobs
-		WHERE resource_id = ? AND message_name = ? AND retrieved = false`, resourceId, msgName).
-			Scan(&existingJobId); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-
-		if existingJobId != "" {
-			_, err = s.db.ExecContext(ctx, `UPDATE scheduled_jobs SET message_data = ? WHERE id = ?`, msgValue, existingJobId)
+		if affected, _ := result.RowsAffected(); affected > 0 {
 			return err
 		}
 	}

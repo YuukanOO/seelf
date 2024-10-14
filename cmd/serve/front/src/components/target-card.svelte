@@ -5,6 +5,7 @@
 	import Stack from '$components/stack.svelte';
 	import CleanupNotice from '$components/cleanup-notice.svelte';
 	import routes from '$lib/path';
+	import l from '$lib/localization';
 	import { type Target, TargetStatus } from '$lib/resources/targets';
 
 	export let data: Target;
@@ -27,7 +28,7 @@
 	<Stack direction="column">
 		<div>
 			<h2 class="title"><Link href={routes.editTarget(data.id)}>{data.name}</Link></h2>
-			<div class="url">{data.url}</div>
+			<div class="url">{data.url ?? l.translate('target.manual_proxy')}</div>
 		</div>
 		<CleanupNotice requested_at={data.cleanup_requested_at} />
 	</Stack>

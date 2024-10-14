@@ -5,7 +5,7 @@ Most of the time, you don't have to act manually when upgrading **seelf**. Howev
 ## From v1 to v2 {#v2}
 
 ::: warning
-This migration assumes you have **at least one application** on your seelf instance. If you do not have any application yet, you **should** remove everything and go back to [installing seelf](/guide/installation).
+This migration assumes you have **at least one application you care about** on your seelf instance. If you do not have any application yet, you **should** remove everything and go back to [installing seelf](/guide/installation) since it will be easier.
 :::
 
 The **seelf** `v2` introduces some breaking changes. When coming from the `v1.x.x`, you will need to take manual actions.

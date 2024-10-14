@@ -2,76 +2,95 @@ package delete_app_test
 
 import (
 	"context"
-	"os"
 	"testing"
 
-	"github.com/YuukanOO/seelf/cmd/config"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/delete_app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 	"github.com/YuukanOO/seelf/pkg/log"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
-func DeleteApp(t *testing.T) {
-	ctx := context.Background()
-	logger, _ := log.NewLogger()
+func Test_DeleteApp(t *testing.T) {
 
-	sut := func(initialApps ...*domain.App) bus.RequestHandler[bus.UnitType, delete_app.Command] {
-		opts := config.Default(config.WithTestDefaults())
-		appsStore := memory.NewAppsStore(initialApps...)
-		artifactManager := artifact.NewLocal(opts, logger)
-
-		t.Cleanup(func() {
-			os.RemoveAll(opts.DataDir())
-		})
-
-		return delete_app.Handler(appsStore, appsStore, artifactManager)
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[bus.UnitType, delete_app.Command],
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		logger, _ := log.NewLogger()
+		artifactManager := artifact.NewLocal(context.Config, logger)
+		return delete_app.Handler(context.AppsStore, context.AppsStore, artifactManager), context.Dispatcher
 	}
 
 	t.Run("should fail silently if the application does not exist anymore", func(t *testing.T) {
-		uc := sut()
+		handler, dispatcher := arrange(t)
 
-		r, err := uc(ctx, delete_app.Command{
+		r, err := handler(context.Background(), delete_app.Command{
 			ID: "some-id",
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
+		assert.HasLength(t, 0, dispatcher.Signals())
 	})
 
-	t.Run("should fail if the application cleanup has not been requested", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "uid"))
-		uc := sut(&app)
+	t.Run("should fail if the application cleanup has not been requested first", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		handler, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		r, err := uc(ctx, delete_app.Command{
+		r, err := handler(context.Background(), delete_app.Command{
 			ID: string(app.ID()),
 		})
 
-		testutil.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
-		testutil.Equals(t, bus.Unit, r)
+		assert.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
+		assert.Equal(t, bus.Unit, r)
 	})
 
 	t.Run("should succeed if everything is good", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "uid"))
-		app.RequestCleanup("uid")
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		app.RequestCleanup(user.ID())
+		handler, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
 
-		uc := sut(&app)
-
-		r, err := uc(ctx, delete_app.Command{
+		r, err := handler(context.Background(), delete_app.Command{
 			ID: string(app.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
-		testutil.HasNEvents(t, &app, 3)
-		testutil.EventIs[domain.AppDeleted](t, &app, 2)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
+		assert.HasLength(t, 1, dispatcher.Signals())
+
+		deleted := assert.Is[domain.AppDeleted](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.AppDeleted{
+			ID: app.ID(),
+		}, deleted)
 	})
 }

@@ -1,6 +1,13 @@
 {
   "branches": [
-    "main"
+    {
+      "name": "main"
+    },
+    {
+      "name": "next",
+      "channel": "next",
+      "prerelease": true
+    }
   ],
   "plugins": [
     "@semantic-release/commit-analyzer",
@@ -8,7 +15,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "SEELF_VERSION=${nextRelease.version} make prepare-release && echo \"docker_tags=yuukanoo/seelf:${nextRelease.version},yuukanoo/seelf:latest\" >> \"$GITHUB_ENV\"",
+        "prepareCmd": "SEELF_VERSION=${nextRelease.version} make prepare-release && sh -c \"if [ ${branch.name} = 'next' ]; then echo 'docker_tags=yuukanoo/seelf:next'; else echo 'docker_tags=yuukanoo/seelf:${nextRelease.version},yuukanoo/seelf:latest'; fi\" >> \"$GITHUB_ENV\"",
         "publishCmd": "echo \"docker_publish=true\" >> \"$GITHUB_ENV\""
       }
     ],

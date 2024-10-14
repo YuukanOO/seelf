@@ -3,94 +3,127 @@ package domain_test
 import (
 	"testing"
 
+	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
+	"github.com/YuukanOO/seelf/pkg/assert"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_Registry(t *testing.T) {
 	t.Run("should returns an error if the url is not unique", func(t *testing.T) {
 		_, err := domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), false), "uid")
 
-		testutil.ErrorIs(t, domain.ErrUrlAlreadyTaken, err)
+		assert.ErrorIs(t, domain.ErrUrlAlreadyTaken, err)
 	})
 
 	t.Run("could be created from a valid url", func(t *testing.T) {
-		r, err := domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid")
+		var (
+			url              = must.Panic(domain.UrlFrom("http://example.com"))
+			name             = "registry"
+			uid  auth.UserID = "uid"
+		)
 
-		testutil.IsNil(t, err)
-		created := testutil.EventIs[domain.RegistryCreated](t, &r, 0)
-		testutil.Equals(t, "http://example.com", created.Url.String())
-		testutil.NotEquals(t, "", created.ID)
-		testutil.Equals(t, "uid", created.Created.By())
-		testutil.IsFalse(t, created.Created.At().IsZero())
+		r, err := domain.NewRegistry(name, domain.NewRegistryUrlRequirement(url, true), uid)
+
+		assert.Nil(t, err)
+		assert.NotZero(t, r.ID())
+		assert.Equal(t, url, r.Url())
+		assert.Equal(t, name, r.Name())
+
+		created := assert.EventIs[domain.RegistryCreated](t, &r, 0)
+
+		assert.Equal(t, domain.RegistryCreated{
+			ID:      r.ID(),
+			Name:    name,
+			Url:     url,
+			Created: shared.ActionFrom(uid, assert.NotZero(t, created.Created.At())),
+		}, created)
 	})
 
 	t.Run("could be renamed and raise the event only if different", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
+		r := fixture.Registry(fixture.WithRegistryName("registry"))
 
 		r.Rename("new registry")
 		r.Rename("new registry")
 
-		testutil.HasNEvents(t, &r, 2)
+		assert.HasNEvents(t, 2, &r, "should raise the event once per different name")
 
-		renamed := testutil.EventIs[domain.RegistryRenamed](t, &r, 1)
-		testutil.Equals(t, r.ID(), renamed.ID)
-		testutil.Equals(t, "new registry", renamed.Name)
+		renamed := assert.EventIs[domain.RegistryRenamed](t, &r, 1)
+
+		assert.Equal(t, domain.RegistryRenamed{
+			ID:   r.ID(),
+			Name: "new registry",
+		}, renamed)
 	})
 
 	t.Run("should require a valid url when updating it", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
+		r := fixture.Registry()
 
 		err := r.HasUrl(domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://localhost:5000")), false))
 
-		testutil.ErrorIs(t, domain.ErrUrlAlreadyTaken, err)
+		assert.ErrorIs(t, domain.ErrUrlAlreadyTaken, err)
 	})
 
 	t.Run("could have its url changed and raise the event only if different", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
+		r := fixture.Registry(fixture.WithUrl(must.Panic(domain.UrlFrom("http://example.com"))))
 
-		r.HasUrl(domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true))
-		r.HasUrl(domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://localhost:5000")), true))
+		assert.Nil(t, r.HasUrl(domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true)))
 
-		testutil.HasNEvents(t, &r, 2)
+		differentUrl := must.Panic(domain.UrlFrom("http://localhost:5000"))
+		assert.Nil(t, r.HasUrl(domain.NewRegistryUrlRequirement(differentUrl, true)))
 
-		changed := testutil.EventIs[domain.RegistryUrlChanged](t, &r, 1)
-		testutil.Equals(t, r.ID(), changed.ID)
-		testutil.Equals(t, "http://localhost:5000", changed.Url.String())
+		assert.HasNEvents(t, 2, &r, "should raise the event only if given url is different")
+
+		changed := assert.EventIs[domain.RegistryUrlChanged](t, &r, 1)
+
+		assert.Equal(t, domain.RegistryUrlChanged{
+			ID:  r.ID(),
+			Url: differentUrl,
+		}, changed)
 	})
 
 	t.Run("could have credentials attached and raise the event only if different", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
+		r := fixture.Registry()
+		credentials := domain.NewCredentials("user", "password")
 
-		r.UseAuthentication(domain.NewCredentials("user", "password"))
-		r.UseAuthentication(domain.NewCredentials("user", "password"))
+		r.UseAuthentication(credentials)
+		r.UseAuthentication(credentials)
 
-		testutil.HasNEvents(t, &r, 2)
+		assert.HasNEvents(t, 2, &r, "should raise the event once per different credentials")
 
-		changed := testutil.EventIs[domain.RegistryCredentialsChanged](t, &r, 1)
-		testutil.Equals(t, r.ID(), changed.ID)
-		testutil.Equals(t, "user", changed.Credentials.Username())
-		testutil.Equals(t, "password", changed.Credentials.Password())
+		changed := assert.EventIs[domain.RegistryCredentialsChanged](t, &r, 1)
+
+		assert.Equal(t, domain.RegistryCredentialsChanged{
+			ID:          r.ID(),
+			Credentials: credentials,
+		}, changed)
 	})
 
 	t.Run("could have credentials removed and raise the event once", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
+		r := fixture.Registry()
 		r.UseAuthentication(domain.NewCredentials("user", "password"))
 
 		r.RemoveAuthentication()
 		r.RemoveAuthentication()
 
-		removed := testutil.EventIs[domain.RegistryCredentialsRemoved](t, &r, 2)
-		testutil.Equals(t, r.ID(), removed.ID)
+		removed := assert.EventIs[domain.RegistryCredentialsRemoved](t, &r, 2)
+
+		assert.Equal(t, domain.RegistryCredentialsRemoved{
+			ID: r.ID(),
+		}, removed)
 	})
 
 	t.Run("could be deleted", func(t *testing.T) {
-		r := must.Panic(domain.NewRegistry("registry", domain.NewRegistryUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true), "uid"))
+		r := fixture.Registry()
 
 		r.Delete()
 
-		deleted := testutil.EventIs[domain.RegistryDeleted](t, &r, 1)
-		testutil.Equals(t, r.ID(), deleted.ID)
+		deleted := assert.EventIs[domain.RegistryDeleted](t, &r, 1)
+
+		assert.Equal(t, domain.RegistryDeleted{
+			ID: r.ID(),
+		}, deleted)
 	})
 }

@@ -3,8 +3,8 @@ package storage_test
 import (
 	"testing"
 
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/storage"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
 func Test_SecretString(t *testing.T) {
@@ -13,8 +13,8 @@ func Test_SecretString(t *testing.T) {
 
 		err := s.Scan("test")
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, "test", s)
+		assert.Nil(t, err)
+		assert.Equal(t, "test", s)
 	})
 
 	t.Run("should marshal to a json string with the same length as the original string and custom characters", func(t *testing.T) {
@@ -23,8 +23,8 @@ func Test_SecretString(t *testing.T) {
 		data, err := s.MarshalJSON()
 		dataStr := string(data)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, `"******************"`, dataStr)
+		assert.Nil(t, err)
+		assert.Equal(t, `"******************"`, dataStr)
 	})
 
 	t.Run("should keep newlines", func(t *testing.T) {
@@ -35,7 +35,7 @@ and another one`)
 		data, err := s.MarshalJSON()
 		dataStr := string(data)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, `"******************\n**************\n***************"`, dataStr)
+		assert.Nil(t, err)
+		assert.Equal(t, `"******************\n**************\n***************"`, dataStr)
 	})
 }

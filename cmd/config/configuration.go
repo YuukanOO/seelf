@@ -16,6 +16,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
+	"github.com/YuukanOO/seelf/pkg/ostools"
 	"github.com/YuukanOO/seelf/pkg/validate"
 	"github.com/YuukanOO/seelf/pkg/validate/numbers"
 )
@@ -43,7 +44,7 @@ const (
 type (
 	// Configuration used to configure seelf commands.
 	Configuration interface {
-		serve.Options // The configuration should provide every settings needed by the seelf server
+		serve.Options
 
 		Initialize(log.ConfigurableLogger, string) error // Initialize the configuration by loading it (from config file, env vars, etc.)
 	}
@@ -139,6 +140,11 @@ func (c *configuration) Initialize(logger log.ConfigurableLogger, path string) e
 		return err
 	}
 
+	// Make sure the data path exists
+	if err = ostools.MkdirAll(c.Data.Path); err != nil {
+		return err
+	}
+
 	// Update logger based on loaded configuration
 	if err = logger.Configure(c.logFormat, c.logLevel); err != nil {
 		return err
@@ -173,6 +179,7 @@ func (c *configuration) Secret() []byte                            { return []by
 func (c *configuration) RunnersPollInterval() time.Duration        { return c.pollInterval }
 func (c *configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 func (c *configuration) RunnersCleanupCount() int                  { return c.Runners.Cleanup }
+func (c *configuration) IsDebug() bool                             { return c.logLevel == log.DebugLevel }
 
 func (c *configuration) IsSecure() bool {
 	// If secure has been explicitly isSet, returns it

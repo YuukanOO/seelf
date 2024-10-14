@@ -3,174 +3,228 @@ package deploy_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 
-	"github.com/YuukanOO/seelf/cmd/config"
-	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/artifact"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
 	"github.com/YuukanOO/seelf/internal/deployment/infra/source/raw"
-	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 	"github.com/YuukanOO/seelf/pkg/log"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 )
 
-type initialData struct {
-	deployments []*domain.Deployment
-	targets     []*domain.Target
-}
-
 func Test_Deploy(t *testing.T) {
-	ctx := auth.WithUserID(context.Background(), "some-uid")
-	logger, _ := log.NewLogger()
 
-	sut := func(
+	arrange := func(
+		tb testing.TB,
 		source domain.Source,
 		provider domain.Provider,
-		data initialData,
-	) bus.RequestHandler[bus.UnitType, deploy.Command] {
-		opts := config.Default(config.WithTestDefaults())
-		store := memory.NewDeploymentsStore(data.deployments...)
-		targetsStore := memory.NewTargetsStore(data.targets...)
-		registriesStore := memory.NewRegistriesStore()
-		artifactManager := artifact.NewLocal(opts, logger)
-
-		t.Cleanup(func() {
-			os.RemoveAll(opts.DataDir())
-		})
-
-		return deploy.Handler(store, store, artifactManager, source, provider, targetsStore, registriesStore)
+		seed ...fixture.SeedBuilder,
+	) (
+		bus.RequestHandler[bus.UnitType, deploy.Command],
+		context.Context,
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		logger, _ := log.NewLogger()
+		artifactManager := artifact.NewLocal(context.Config, logger)
+		return deploy.Handler(context.DeploymentsStore, context.DeploymentsStore, artifactManager, source, provider, context.TargetsStore, context.RegistriesStore), context.Context, context.Dispatcher
 	}
 
 	t.Run("should fail silently if the deployment does not exists", func(t *testing.T) {
-		uc := sut(source(nil), provider(nil), initialData{})
-		r, err := uc(ctx, deploy.Command{})
+		handler, ctx, _ := arrange(t, source(nil), provider(nil))
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
+		r, err := handler(ctx, deploy.Command{})
+
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
 	})
 
-	t.Run("should mark the deployment has failed if the target does not exist anymore", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "some-uid"))
-		src := source(nil)
-		meta := must.Panic(src.Prepare(ctx, app, 42))
-		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
+	t.Run("should mark the deployment has failed if the target is configuring", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		deployment := fixture.Deployment(
+			fixture.WithDeploymentRequestedBy(user.ID()),
+			fixture.FromApp(app),
+		)
+		handler, ctx, dispatcher := arrange(t, source(nil), provider(nil),
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
 
-		uc := sut(src, provider(nil), initialData{
-			deployments: []*domain.Deployment{&depl},
+		_, err := handler(ctx, deploy.Command{
+			AppID:            string(deployment.ID().AppID()),
+			DeploymentNumber: int(deployment.ID().DeploymentNumber()),
 		})
 
-		_, err := uc(ctx, deploy.Command{
-			AppID:            string(depl.ID().AppID()),
-			DeploymentNumber: int(depl.ID().DeploymentNumber()),
-		})
-
-		testutil.IsNil(t, err)
-		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
-		testutil.Equals(t, apperr.ErrNotFound.Error(), evt.State.ErrCode().MustGet())
+		assert.ErrorIs(t, domain.ErrTargetConfigurationInProgress, err)
+		assert.HasLength(t, 0, dispatcher.Signals())
 	})
 
 	t.Run("should mark the deployment has failed if source does not succeed", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		deployment := fixture.Deployment(
+			fixture.WithDeploymentRequestedBy(user.ID()),
+			fixture.FromApp(app),
+		)
+		sourceErr := errors.New("source_failed")
+		handler, ctx, dispatcher := arrange(t, source(sourceErr), provider(nil),
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
 
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "some-uid"))
-		srcErr := errors.New("source_failed")
-		src := source(srcErr)
-		meta := must.Panic(src.Prepare(ctx, app, 42))
-		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
-		uc := sut(src, provider(nil), initialData{
-			deployments: []*domain.Deployment{&depl},
-			targets:     []*domain.Target{&target},
+		r, err := handler(ctx, deploy.Command{
+			AppID:            string(deployment.ID().AppID()),
+			DeploymentNumber: int(deployment.ID().DeploymentNumber()),
 		})
 
-		r, err := uc(ctx, deploy.Command{
-			AppID:            string(depl.ID().AppID()),
-			DeploymentNumber: int(depl.ID().DeploymentNumber()),
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
+
+		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
+
+		changed = assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.DeploymentStatusFailed, changed.State.Status())
+		assert.Equal(t, sourceErr.Error(), changed.State.ErrCode().MustGet())
+	})
+
+	t.Run("should mark the deployment has failed in the target is not correctly configured", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		target.Configured(target.CurrentVersion(), nil, errors.New("target_failed"))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		deployment := fixture.Deployment(
+			fixture.WithDeploymentRequestedBy(user.ID()),
+			fixture.FromApp(app),
+		)
+		handler, ctx, dispatcher := arrange(t, source(nil), provider(nil),
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
+
+		r, err := handler(ctx, deploy.Command{
+			AppID:            string(deployment.ID().AppID()),
+			DeploymentNumber: int(deployment.ID().DeploymentNumber()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
 
-		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
-		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
-		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
-		testutil.Equals(t, srcErr.Error(), evt.State.ErrCode().MustGet())
-		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
+		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
+
+		changed = assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.DeploymentStatusFailed, changed.State.Status())
+		assert.Equal(t, domain.ErrTargetConfigurationFailed.Error(), changed.State.ErrCode().MustGet())
 	})
 
 	t.Run("should mark the deployment has failed if provider does not run the deployment successfully", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		deployment := fixture.Deployment(
+			fixture.WithDeploymentRequestedBy(user.ID()),
+			fixture.FromApp(app),
+		)
+		providerErr := errors.New("provider_failed")
+		handler, ctx, dispatcher := arrange(t, source(nil), provider(providerErr),
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
 
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "some-uid"))
-		providerErr := errors.New("run_failed")
-		be := provider(providerErr)
-		src := source(nil)
-		meta := must.Panic(src.Prepare(ctx, app, 42))
-		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
-		uc := sut(src, be, initialData{
-			deployments: []*domain.Deployment{&depl},
-			targets:     []*domain.Target{&target},
+		r, err := handler(ctx, deploy.Command{
+			AppID:            string(deployment.ID().AppID()),
+			DeploymentNumber: int(deployment.ID().DeploymentNumber()),
 		})
 
-		r, err := uc(ctx, deploy.Command{
-			AppID:            string(depl.ID().AppID()),
-			DeploymentNumber: int(depl.ID().DeploymentNumber()),
-		})
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
-		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
-		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
-		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
-		testutil.Equals(t, providerErr.Error(), evt.State.ErrCode().MustGet())
-		testutil.Equals(t, domain.DeploymentStatusFailed, evt.State.Status())
+		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
+
+		changed = assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.DeploymentStatusFailed, changed.State.Status())
+		assert.Equal(t, providerErr.Error(), changed.State.ErrCode().MustGet())
 	})
 
 	t.Run("should mark the deployment has succeeded if all is good", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(nil, true), "some-uid"))
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		target.Configured(target.CurrentVersion(), nil, nil)
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
+		deployment := fixture.Deployment(
+			fixture.WithDeploymentRequestedBy(user.ID()),
+			fixture.FromApp(app),
+		)
+		handler, ctx, dispatcher := arrange(t, source(nil), provider(nil),
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+			fixture.WithDeployments(&deployment),
+		)
 
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig(target.ID()), true, true), "some-uid"))
-		src := source(nil)
-		meta := must.Panic(src.Prepare(ctx, app, 42))
-		depl := must.Panic(app.NewDeployment(1, meta, domain.Production, "some-uid"))
-		uc := sut(src, provider(nil), initialData{
-			deployments: []*domain.Deployment{&depl},
-			targets:     []*domain.Target{&target},
+		r, err := handler(ctx, deploy.Command{
+			AppID:            string(deployment.ID().AppID()),
+			DeploymentNumber: int(deployment.ID().DeploymentNumber()),
 		})
 
-		r, err := uc(ctx, deploy.Command{
-			AppID:            string(depl.ID().AppID()),
-			DeploymentNumber: int(depl.ID().DeploymentNumber()),
-		})
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
-		evt := testutil.EventIs[domain.DeploymentStateChanged](t, &depl, 2)
-		testutil.IsTrue(t, evt.State.StartedAt().HasValue())
-		testutil.IsTrue(t, evt.State.FinishedAt().HasValue())
-		testutil.Equals(t, domain.DeploymentStatusSucceeded, evt.State.Status())
+		changed := assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.DeploymentStatusRunning, changed.State.Status())
+
+		changed = assert.Is[domain.DeploymentStateChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.DeploymentStatusSucceeded, changed.State.Status())
 	})
 }
 

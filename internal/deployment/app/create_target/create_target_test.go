@@ -4,119 +4,141 @@ import (
 	"context"
 	"testing"
 
-	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/create_target"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
-	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
+	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validate"
+	"github.com/YuukanOO/seelf/pkg/validate/strings"
 )
 
 func Test_CreateTarget(t *testing.T) {
-	var (
-		uid    auth.UserID = "uid"
-		ctx                = auth.WithUserID(context.Background(), uid)
-		config dummyConfig
-	)
 
-	sut := func(existingTargets ...*domain.Target) bus.RequestHandler[string, create_target.Command] {
-		store := memory.NewTargetsStore(existingTargets...)
-
-		return create_target.Handler(store, store, &dummyProvider{})
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[string, create_target.Command],
+		context.Context,
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return create_target.Handler(context.TargetsStore, context.TargetsStore, &dummyProvider{}), context.Context, context.Dispatcher
 	}
 
 	t.Run("should require valid inputs", func(t *testing.T) {
-		uc := sut()
+		handler, ctx, _ := arrange(t)
 
-		_, err := uc(ctx, create_target.Command{})
+		_, err := handler(ctx, create_target.Command{})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
+		assert.ValidationError(t, validate.FieldErrors{
+			"name": strings.ErrRequired,
+		}, err)
 	})
 
-	t.Run("should require a unique url", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true),
-			domain.NewProviderConfigRequirement(config, true), uid))
+	t.Run("should require a unique url and config", func(t *testing.T) {
+		var config = fixture.ProviderConfig()
+		user := authfixture.User()
+		target := fixture.Target(
+			fixture.WithTargetCreatedBy(user.ID()),
+			fixture.WithProviderConfig(config),
+		)
+		assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true)))
 
-		uc := sut(&target)
+		handler, ctx, _ := arrange(t, fixture.WithUsers(&user), fixture.WithTargets(&target))
 
-		_, err := uc(ctx, create_target.Command{
+		_, err := handler(ctx, create_target.Command{
 			Name:     "target",
-			Url:      "http://example.com",
+			Url:      monad.Value("http://example.com"),
 			Provider: config,
 		})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		validateError, ok := apperr.As[validate.FieldErrors](err)
-		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrUrlAlreadyTaken, validateError["url"])
-		testutil.ErrorIs(t, domain.ErrConfigAlreadyTaken, validateError[config.Kind()])
+		assert.ValidationError(t, validate.FieldErrors{
+			"url":         domain.ErrUrlAlreadyTaken,
+			config.Kind(): domain.ErrConfigAlreadyTaken,
+		}, err)
 	})
 
 	t.Run("should require a valid provider config", func(t *testing.T) {
-		uc := sut()
+		handler, ctx, _ := arrange(t)
 
-		_, err := uc(ctx, create_target.Command{
+		_, err := handler(ctx, create_target.Command{
 			Name: "target",
-			Url:  "http://example.com",
 		})
 
-		testutil.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
-	t.Run("should require a unique provider config", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://example.com")), true),
-			domain.NewProviderConfigRequirement(config, true), uid))
+	t.Run("should allow multiple manual targets to co-exists", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		handler, ctx, dispatcher := arrange(t, fixture.WithUsers(&user), fixture.WithTargets(&target))
 
-		uc := sut(&target)
-
-		_, err := uc(ctx, create_target.Command{
-			Name:     "target",
-			Url:      "http://another.example.com",
-			Provider: config,
+		id, err := handler(ctx, create_target.Command{
+			Name:     "target-one",
+			Provider: fixture.ProviderConfig(),
 		})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		validateError, ok := apperr.As[validate.FieldErrors](err)
-		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrConfigAlreadyTaken, validateError[config.Kind()])
+		assert.Nil(t, err)
+		assert.NotZero(t, id)
+
+		id, err = handler(ctx, create_target.Command{
+			Name:     "target-two",
+			Provider: fixture.ProviderConfig(),
+		})
+
+		assert.Nil(t, err)
+		assert.NotZero(t, id)
+
+		assert.HasLength(t, 2, dispatcher.Signals())
 	})
 
 	t.Run("should create a new target", func(t *testing.T) {
-		uc := sut()
+		var config = fixture.ProviderConfig()
+		user := authfixture.User()
+		handler, ctx, dispatcher := arrange(t, fixture.WithUsers(&user))
 
-		id, err := uc(ctx, create_target.Command{
+		id, err := handler(ctx, create_target.Command{
 			Name:     "target",
-			Url:      "http://example.com",
+			Url:      monad.Value("http://example.com"),
 			Provider: config,
 		})
 
-		testutil.IsNil(t, err)
-		testutil.NotEquals(t, "", id)
+		assert.Nil(t, err)
+		assert.NotZero(t, id)
+		assert.HasLength(t, 3, dispatcher.Signals())
+
+		created := assert.Is[domain.TargetCreated](t, dispatcher.Signals()[0])
+		assert.DeepEqual(t, domain.TargetCreated{
+			ID:          domain.TargetID(id),
+			Name:        "target",
+			State:       created.State,
+			Entrypoints: make(domain.TargetEntrypoints),
+			Provider:    config, // Since the mock returns the config "as is"
+			Created:     shared.ActionFrom(user.ID(), assert.NotZero(t, created.Created.At())),
+		}, created)
+
+		urlChanged := assert.Is[domain.TargetUrlChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.TargetUrlChanged{
+			ID:  domain.TargetID(id),
+			Url: must.Panic(domain.UrlFrom("http://example.com")),
+		}, urlChanged)
+
+		assert.Is[domain.TargetStateChanged](t, dispatcher.Signals()[2])
 	})
 }
 
-type (
-	dummyProvider struct {
-		domain.Provider
-	}
-
-	dummyConfig struct{}
-)
+type dummyProvider struct {
+	domain.Provider
+}
 
 func (*dummyProvider) Prepare(ctx context.Context, payload any, existing ...domain.ProviderConfig) (domain.ProviderConfig, error) {
 	if payload == nil {
 		return nil, domain.ErrNoValidProviderFound
 	}
 
-	return dummyConfig{}, nil
+	return payload.(domain.ProviderConfig), nil
 }
-
-func (dummyConfig) Fingerprint() string                   { return "dummy" }
-func (c dummyConfig) Equals(o domain.ProviderConfig) bool { return c == o }
-func (dummyConfig) Kind() string                          { return "dummy" }
-func (dummyConfig) String() string                        { return "dummy" }

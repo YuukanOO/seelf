@@ -31,7 +31,7 @@ func (s *server) authenticate(withApiAccess bool) gin.HandlerFunc {
 
 		// If it failed and api access is not allowed, return early
 		if failed && !withApiAccess {
-			ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
+			_ = ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
 			return
 		}
 
@@ -46,14 +46,14 @@ func (s *server) authenticate(withApiAccess bool) gin.HandlerFunc {
 		authHeader := ctx.GetHeader(apiAuthHeader)
 
 		if !strings.HasPrefix(authHeader, apiAuthPrefix) {
-			ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
+			_ = ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
 			return
 		}
 
 		id, err := s.usersReader.GetIDFromAPIKey(ctx.Request.Context(), domain.APIKey(authHeader[apiAuthPrefixLength:]))
 
 		if err != nil {
-			ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
+			_ = ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
 			return
 		}
 
@@ -66,8 +66,8 @@ func (s *server) authenticate(withApiAccess bool) gin.HandlerFunc {
 
 func (s *server) requestLogger(ctx *gin.Context) {
 	defer func(start time.Time, c *gin.Context) {
-		path := ctx.Request.URL.Path
-		raw := ctx.Request.URL.RawQuery
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
 
 		if raw != "" {
 			path = path + "?" + raw

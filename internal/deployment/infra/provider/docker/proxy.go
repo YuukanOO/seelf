@@ -17,6 +17,10 @@ const (
 )
 
 type (
+	ProxyProjectBuilder interface {
+		Build(context.Context) (*types.Project, domain.TargetEntrypointsAssigned, error)
+	}
+
 	// Builder used to create a compose project with everything needed to deploy
 	// the proxy used to expose application entrypoints.
 	// It will handle the assignment of new entrypoints ports if needed.
@@ -44,23 +48,24 @@ type (
 	}
 )
 
-func newProxyProjectBuilder(client *client, target domain.Target) *proxyProjectBuilder {
+func newProxyProjectBuilder(client *client, target domain.Target) ProxyProjectBuilder {
 	id := target.ID()
-	idLower := strings.ToLower(string(id))
+	idLower := domain.TargetID(strings.ToLower(string(id)))
+	url := target.Url().MustGet()
 
 	b := &proxyProjectBuilder{
 		client:      client,
 		target:      string(id),
-		host:        target.Url().Host(),
+		host:        url.Host(),
 		entrypoints: target.CustomEntrypoints(),
 		assigned:    make(domain.TargetEntrypointsAssigned),
-		networkName: targetPublicNetworkName(target.ID()),
-		projectName: "seelf-internal-" + idLower,
+		networkName: targetPublicNetworkName(idLower),
+		projectName: targetProjectName(idLower),
 		labels:      types.Labels{TargetLabel: string(id)},
 	}
 
-	if target.Url().UseSSL() {
-		b.certResolverName = "seelf-resolver-" + idLower
+	if url.UseSSL() {
+		b.certResolverName = "seelf-resolver-" + string(idLower)
 	}
 
 	return b
@@ -290,4 +295,9 @@ func ServicePortSortFunc(a, b types.ServicePortConfig) int {
 // Retrieve the network name of a specific target
 func targetPublicNetworkName(id domain.TargetID) string {
 	return "seelf-gateway-" + strings.ToLower(string(id))
+}
+
+// Retrieve the project name of a specific target
+func targetProjectName(id domain.TargetID) string {
+	return "seelf-internal-" + strings.ToLower(string(id))
 }

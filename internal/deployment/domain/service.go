@@ -33,25 +33,116 @@ type (
 		port      Port
 	}
 
-	HttpEntrypointOptions struct {
-		// True if this entrypoint should take the default subdomain for an application.
-		UseDefaultSubdomain bool
-		// True if this entrypoint is natively managed by the target and does not require specific port exposure.
-		Managed bool
-	}
-
 	// Custom types to hold Service array which implements the Scanner and Valuer
 	// interface to store it as a json string in the database (no need to create another table for it).
 	Services []Service
 
 	// Hold data related to services deployed upon a deployment success.
 	Service struct {
-		name          string
+		name        string
+		image       string
+		entrypoints []Entrypoint
+	}
+
+	// Main structure used to build a services array. Manipulated by actual providers.
+	ServicesBuilder struct {
+		config                    ConfigSnapshot
+		defaultSubdomainAvailable bool
+		services                  []*ServiceBuilder
+	}
+
+	ServiceBuilder struct {
+		parent        *ServicesBuilder
 		qualifiedName string
-		image         string
-		entrypoints   []Entrypoint
+		subdomain     monad.Maybe[string]
+		Service
 	}
 )
+
+// Returns a new builder used to ease the process of building the services array.
+func (c ConfigSnapshot) ServicesBuilder() ServicesBuilder {
+	return ServicesBuilder{
+		config:                    c,
+		defaultSubdomainAvailable: true,
+	}
+}
+
+func (b *ServicesBuilder) AddService(name, image string) *ServiceBuilder {
+	// Check if the service already exists
+	for _, service := range b.services {
+		if service.Service.name == name {
+			return service
+		}
+	}
+
+	builder := &ServiceBuilder{
+		parent:        b,
+		qualifiedName: b.config.qualifiedName(name),
+		Service: Service{
+			name:  name,
+			image: image,
+		},
+	}
+
+	if builder.Service.image == "" {
+		builder.Service.image = b.config.imageName(name)
+	}
+
+	b.services = append(b.services, builder)
+
+	return builder
+}
+
+func (b *ServiceBuilder) AddHttpEntrypoint(port Port, custom bool) Entrypoint {
+	return b.addEntrypoint(RouterHttp, port, custom)
+}
+
+func (b *ServiceBuilder) AddTCPEntrypoint(port Port, custom bool) Entrypoint {
+	return b.addEntrypoint(RouterTcp, port, custom)
+}
+
+func (b *ServiceBuilder) AddUDPEntrypoint(port Port, custom bool) Entrypoint {
+	return b.addEntrypoint(RouterUdp, port, custom)
+}
+
+func (b *ServiceBuilder) addEntrypoint(router Router, port Port, custom bool) Entrypoint {
+	// Check if the entrypoint already exists and returns early
+	for _, entry := range b.Service.entrypoints {
+		if entry.port == port && entry.router == router {
+			return entry
+		}
+	}
+
+	entrypoint := Entrypoint{
+		name:     newEntrypointName(b.qualifiedName, router, port),
+		isCustom: custom,
+		router:   router,
+		port:     port,
+	}
+
+	if router == RouterHttp {
+		if !b.subdomain.HasValue() {
+			b.subdomain.Set(b.parent.config.subDomain(b.Service.name, b.parent.defaultSubdomainAvailable))
+			b.parent.defaultSubdomainAvailable = false
+		}
+
+		entrypoint.subdomain = b.subdomain
+	}
+
+	b.Service.entrypoints = append(b.Service.entrypoints, entrypoint)
+
+	return entrypoint
+}
+
+func (b *ServicesBuilder) Services() Services {
+	services := make(Services, len(b.services))
+
+	for i, service := range b.services {
+		services[i] = service.Service
+	}
+
+	return services
+}
 
 // Try to parse the given port from a raw string.
 func ParsePort(raw string) (Port, error) {
@@ -66,71 +157,6 @@ func ParsePort(raw string) (Port, error) {
 
 func (p Port) String() string { return strconv.FormatUint(uint64(p), 10) }
 func (p Port) Uint32() uint32 { return uint32(p) }
-
-func newEntrypointName(suffix string, router Router, port Port) EntrypointName {
-	return EntrypointName(suffix + "-" + port.String() + "-" + string(router))
-}
-
-// Creates a new service. If the image is empty, a unique image name will be
-// generated.
-func (c DeploymentConfig) NewService(name, image string) (s Service) {
-	s.name = name
-	s.qualifiedName = c.QualifiedName(name)
-
-	if image == "" {
-		s.image = c.ImageName(name)
-	} else {
-		s.image = image
-	}
-
-	return s
-}
-
-// Adds an HTTP entrypoint to the service.
-// HTTP entrypoints can be marked as automatically managed meaning they do not need a
-// specific configuration and are natively handled by the target.
-func (s *Service) AddHttpEntrypoint(conf DeploymentConfig, port Port, options HttpEntrypointOptions) Entrypoint {
-	for _, entry := range s.entrypoints {
-		// Already have an HTTP endpoint on this service, copy the subdomain and add it as a custom one.
-		if entry.router == RouterHttp {
-			return s.addEntrypoint(RouterHttp, !options.Managed, port, entry.subdomain.Get(""))
-		}
-	}
-
-	return s.addEntrypoint(RouterHttp, !options.Managed, port, conf.SubDomain(s.name, options.UseDefaultSubdomain))
-}
-
-// Adds a custom TCP entrypoint.
-func (s *Service) AddTCPEntrypoint(port Port) Entrypoint {
-	return s.addEntrypoint(RouterTcp, true, port)
-}
-
-// Adds a custom UDP entrypoint.
-func (s *Service) AddUDPEntrypoint(port Port) Entrypoint {
-	return s.addEntrypoint(RouterUdp, true, port)
-}
-
-func (s *Service) addEntrypoint(router Router, isCustom bool, port Port, subdomain ...string) (e Entrypoint) {
-	// Check if the entrypoint already exists
-	for _, entry := range s.entrypoints {
-		if entry.port == port && entry.router == router {
-			return entry
-		}
-	}
-
-	e.name = newEntrypointName(s.qualifiedName, router, port)
-	e.isCustom = isCustom
-	e.router = router
-	e.port = port
-
-	if len(subdomain) > 0 {
-		e.subdomain.Set(subdomain[0])
-	}
-
-	s.entrypoints = append(s.entrypoints, e)
-
-	return e
-}
 
 func (s Service) Name() string  { return s.name }
 func (s Service) Image() string { return s.image }
@@ -155,7 +181,7 @@ func (e EntrypointName) Protocol() string {
 	return string(p)
 }
 
-// Retrieve entrypoints for this service.
+// Retrieve all entrypoints for every services.
 func (s Services) Entrypoints() []Entrypoint {
 	var result []Entrypoint
 
@@ -166,7 +192,7 @@ func (s Services) Entrypoints() []Entrypoint {
 	return result
 }
 
-// Retrieve custom entrypoints for this service. Ones that are not natively
+// Retrieve all custom entrypoints. Ones that are not natively
 // managed by the target and requires a manual configuration.
 func (s Services) CustomEntrypoints() []Entrypoint {
 	return slices.DeleteFunc(s.Entrypoints(), isNotCustom)
@@ -177,6 +203,10 @@ func (s *Services) Scan(value any) error        { return storage.ScanJSON(value,
 
 func isNotCustom(entrypoint Entrypoint) bool {
 	return !entrypoint.isCustom
+}
+
+func newEntrypointName(prefix string, router Router, port Port) EntrypointName {
+	return EntrypointName(prefix + "-" + port.String() + "-" + string(router))
 }
 
 // Types needed to marshal an unexposed Service data.
@@ -190,23 +220,21 @@ type (
 	}
 
 	marshalledService struct {
-		Name          string                 `json:"name"`
-		QualifiedName string                 `json:"qualified_name"`
-		Image         string                 `json:"image"`
-		Entrypoints   []marshalledEntrypoint `json:"entrypoints"`
+		Name        string                 `json:"name"`
+		Image       string                 `json:"image"`
+		Entrypoints []marshalledEntrypoint `json:"entrypoints"`
 	}
 )
 
 func (s Service) MarshalJSON() ([]byte, error) {
-	serv := marshalledService{
-		Name:          s.name,
-		QualifiedName: s.qualifiedName,
-		Image:         s.image,
-		Entrypoints:   make([]marshalledEntrypoint, len(s.entrypoints)),
+	service := marshalledService{
+		Name:        s.name,
+		Image:       s.image,
+		Entrypoints: make([]marshalledEntrypoint, len(s.entrypoints)),
 	}
 
 	for i, entry := range s.entrypoints {
-		serv.Entrypoints[i] = marshalledEntrypoint{
+		service.Entrypoints[i] = marshalledEntrypoint{
 			Name:      string(entry.name),
 			IsCustom:  entry.isCustom,
 			Router:    entry.router,
@@ -215,7 +243,7 @@ func (s Service) MarshalJSON() ([]byte, error) {
 		}
 	}
 
-	return json.Marshal(serv)
+	return json.Marshal(service)
 }
 
 func (s *Service) UnmarshalJSON(b []byte) error {
@@ -227,7 +255,6 @@ func (s *Service) UnmarshalJSON(b []byte) error {
 
 	s.image = m.Image
 	s.name = m.Name
-	s.qualifiedName = m.QualifiedName
 	s.entrypoints = make([]Entrypoint, len(m.Entrypoints))
 
 	for i, entry := range m.Entrypoints {

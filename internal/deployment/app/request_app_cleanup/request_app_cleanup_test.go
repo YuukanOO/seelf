@@ -4,47 +4,69 @@ import (
 	"context"
 	"testing"
 
-	auth "github.com/YuukanOO/seelf/internal/auth/domain"
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/request_app_cleanup"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
+	shared "github.com/YuukanOO/seelf/pkg/domain"
 )
 
 func Test_RequestAppCleanup(t *testing.T) {
-	ctx := auth.WithUserID(context.Background(), "some-uid")
-	sut := func(existingApps ...*domain.App) bus.RequestHandler[bus.UnitType, request_app_cleanup.Command] {
-		store := memory.NewAppsStore(existingApps...)
-		return request_app_cleanup.Handler(store, store)
+
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[bus.UnitType, request_app_cleanup.Command],
+		context.Context,
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return request_app_cleanup.Handler(context.AppsStore, context.AppsStore), context.Context, context.Dispatcher
 	}
 
 	t.Run("should fail if the application does not exist", func(t *testing.T) {
-		uc := sut()
+		handler, ctx, _ := arrange(t)
 
-		r, err := uc(ctx, request_app_cleanup.Command{
+		r, err := handler(ctx, request_app_cleanup.Command{
 			ID: "some-id",
 		})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
-		testutil.Equals(t, bus.Unit, r)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.Equal(t, bus.Unit, r)
 	})
 
 	t.Run("should mark an application has ready for deletion", func(t *testing.T) {
-		app := must.Panic(domain.NewApp("my-app",
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true),
-			domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("1"), true, true), "some-uid"))
-		uc := sut(&app)
+		user := authfixture.User()
+		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
+		app := fixture.App(
+			fixture.WithAppCreatedBy(user.ID()),
+			fixture.WithEnvironmentConfig(
+				domain.NewEnvironmentConfig(target.ID()),
+				domain.NewEnvironmentConfig(target.ID()),
+			),
+		)
 
-		r, err := uc(ctx, request_app_cleanup.Command{
+		handler, ctx, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+			fixture.WithApps(&app),
+		)
+
+		r, err := handler(ctx, request_app_cleanup.Command{
 			ID: string(app.ID()),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, bus.Unit, r)
-
-		testutil.EventIs[domain.AppCleanupRequested](t, &app, 1)
+		assert.Nil(t, err)
+		assert.Equal(t, bus.Unit, r)
+		assert.HasLength(t, 1, dispatcher.Signals())
+		requested := assert.Is[domain.AppCleanupRequested](t, dispatcher.Signals()[0])
+		assert.DeepEqual(t, domain.AppCleanupRequested{
+			ID:               app.ID(),
+			ProductionConfig: requested.ProductionConfig,
+			StagingConfig:    requested.StagingConfig,
+			Requested:        shared.ActionFrom(user.ID(), assert.NotZero(t, requested.Requested.At())),
+		}, requested)
 	})
 }

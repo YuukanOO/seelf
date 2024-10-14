@@ -5,7 +5,7 @@ RUN npm ci
 COPY ./cmd/serve/front .
 RUN npm run build
 
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 # build-base needed to compile the sqlite3 dependency
 RUN apk add --update-cache build-base
 WORKDIR /app
@@ -13,7 +13,7 @@ COPY go.* ./
 RUN go mod download
 COPY . .
 COPY --from=front_builder /app/build ./cmd/serve/front/build
-RUN go build -ldflags="-s -w" -o seelf
+RUN make build-back
 
 FROM alpine:3.16
 LABEL org.opencontainers.image.authors="julien@leicher.me" \

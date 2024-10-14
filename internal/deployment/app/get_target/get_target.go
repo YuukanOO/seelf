@@ -22,7 +22,7 @@ type (
 	Target struct {
 		ID                 string                       `json:"id"`
 		Name               string                       `json:"name"`
-		Url                string                       `json:"url"`
+		Url                monad.Maybe[string]          `json:"url"`
 		Provider           Provider                     `json:"provider"`
 		State              State                        `json:"state"`
 		CleanupRequestedAt monad.Maybe[time.Time]       `json:"cleanup_requested_at"`

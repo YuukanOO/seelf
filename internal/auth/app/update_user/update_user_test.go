@@ -6,79 +6,110 @@ import (
 
 	"github.com/YuukanOO/seelf/internal/auth/app/update_user"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/auth/infra/crypto"
-	"github.com/YuukanOO/seelf/internal/auth/infra/memory"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 	"github.com/YuukanOO/seelf/pkg/monad"
-	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_UpdateUser(t *testing.T) {
-	hasher := crypto.NewBCryptHasher()
-	passwordHash := must.Panic(hasher.Hash("apassword"))
 
-	sut := func(existingUsers ...*domain.User) bus.RequestHandler[string, update_user.Command] {
-		store := memory.NewUsersStore(existingUsers...)
-		return update_user.Handler(store, store, hasher)
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[string, update_user.Command],
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return update_user.Handler(context.UsersStore, context.UsersStore, crypto.NewBCryptHasher()), context.Dispatcher
 	}
 
-	t.Run("should require valid inputs", func(t *testing.T) {
-		uc := sut()
-		_, err := uc(context.Background(), update_user.Command{})
+	t.Run("should require an existing user", func(t *testing.T) {
+		handler, _ := arrange(t)
+		_, err := handler(context.Background(), update_user.Command{})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
+	})
+
+	t.Run("should require valid inputs", func(t *testing.T) {
+		handler, _ := arrange(t)
+
+		_, err := handler(context.Background(), update_user.Command{
+			Email: monad.Value("notanemail"),
+		})
+
+		assert.ValidationError(t, validate.FieldErrors{
+			"email": domain.ErrInvalidEmail,
+		}, err)
 	})
 
 	t.Run("should fail if the email is taken by another user", func(t *testing.T) {
-		john := must.Panic(domain.NewUser(domain.NewEmailRequirement("john@doe.com", true), passwordHash, "anapikey"))
-		jane := must.Panic(domain.NewUser(domain.NewEmailRequirement("jane@doe.com", true), passwordHash, "anapikey"))
+		john := fixture.User(fixture.WithEmail("john@doe.com"))
+		jane := fixture.User(fixture.WithEmail("jane@doe.com"))
 
-		uc := sut(&john, &jane)
+		handler, _ := arrange(t, fixture.WithUsers(&john, &jane))
 
-		_, err := uc(context.Background(), update_user.Command{
+		_, err := handler(context.Background(), update_user.Command{
 			ID:    string(john.ID()),
 			Email: monad.Value("jane@doe.com"),
 		})
 
-		validationErr, ok := apperr.As[validate.FieldErrors](err)
-		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrEmailAlreadyTaken, validationErr["email"])
+		assert.ValidationError(t, validate.FieldErrors{
+			"email": domain.ErrEmailAlreadyTaken,
+		}, err)
 	})
 
 	t.Run("should succeed if values are the same", func(t *testing.T) {
-		john := must.Panic(domain.NewUser(domain.NewEmailRequirement("john@doe.com", true), passwordHash, "anapikey"))
-		uc := sut(&john)
+		existingUser := fixture.User(fixture.WithEmail("john@doe.com"))
+		handler, dispatcher := arrange(t, fixture.WithUsers(&existingUser))
 
-		id, err := uc(context.Background(), update_user.Command{
-			ID:       string(john.ID()),
+		id, err := handler(context.Background(), update_user.Command{
+			ID:       string(existingUser.ID()),
 			Email:    monad.Value("john@doe.com"),
 			Password: monad.Value("apassword"),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(john.ID()), id)
-		testutil.HasNEvents(t, &john, 2) // 2 since bcrypt will produce different hashes
-		testutil.EventIs[domain.UserPasswordChanged](t, &john, 1)
+		assert.Nil(t, err)
+		assert.Equal(t, string(existingUser.ID()), id)
+
+		assert.HasLength(t, 1, dispatcher.Signals())
+		changed := assert.Is[domain.UserPasswordChanged](t, dispatcher.Signals()[0])
+
+		assert.Equal(t, domain.UserPasswordChanged{
+			ID:       existingUser.ID(),
+			Password: changed.Password,
+		}, changed)
 	})
 
 	t.Run("should update user if everything is good", func(t *testing.T) {
-		john := must.Panic(domain.NewUser(domain.NewEmailRequirement("john@doe.com", true), passwordHash, "anapikey"))
-		uc := sut(&john)
+		existingUser := fixture.User()
+		handler, dispatcher := arrange(t, fixture.WithUsers(&existingUser))
 
-		id, err := uc(context.Background(), update_user.Command{
-			ID:       string(john.ID()),
+		id, err := handler(context.Background(), update_user.Command{
+			ID:       string(existingUser.ID()),
 			Email:    monad.Value("another@email.com"),
 			Password: monad.Value("anotherpassword"),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(john.ID()), id)
-		testutil.HasNEvents(t, &john, 3)
-		evt := testutil.EventIs[domain.UserEmailChanged](t, &john, 1)
-		testutil.Equals(t, "another@email.com", string(evt.Email))
-		testutil.EventIs[domain.UserPasswordChanged](t, &john, 2)
+		assert.Nil(t, err)
+		assert.Equal(t, string(existingUser.ID()), id)
+
+		assert.HasLength(t, 2, dispatcher.Signals())
+
+		passwordChanged := assert.Is[domain.UserPasswordChanged](t, dispatcher.Signals()[1])
+
+		assert.Equal(t, domain.UserPasswordChanged{
+			ID:       existingUser.ID(),
+			Password: passwordChanged.Password,
+		}, passwordChanged)
+
+		emailChanged := assert.Is[domain.UserEmailChanged](t, dispatcher.Signals()[0])
+
+		assert.Equal(t, domain.UserEmailChanged{
+			ID:    existingUser.ID(),
+			Email: "another@email.com",
+		}, emailChanged)
 	})
 }

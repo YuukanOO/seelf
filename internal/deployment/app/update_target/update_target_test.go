@@ -4,97 +4,142 @@ import (
 	"context"
 	"testing"
 
+	authfixture "github.com/YuukanOO/seelf/internal/auth/fixture"
 	"github.com/YuukanOO/seelf/internal/deployment/app/update_target"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/internal/deployment/infra/memory"
+	"github.com/YuukanOO/seelf/internal/deployment/fixture"
 	"github.com/YuukanOO/seelf/pkg/apperr"
+	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/bus/spy"
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
-	"github.com/YuukanOO/seelf/pkg/testutil"
 	"github.com/YuukanOO/seelf/pkg/validate"
 )
 
 func Test_UpdateTarget(t *testing.T) {
-	sut := func(existingTargets ...*domain.Target) bus.RequestHandler[string, update_target.Command] {
-		store := memory.NewTargetsStore(existingTargets...)
-		provider := &dummyProvider{}
-		return update_target.Handler(store, store, provider)
+
+	arrange := func(tb testing.TB, seed ...fixture.SeedBuilder) (
+		bus.RequestHandler[string, update_target.Command],
+		spy.Dispatcher,
+	) {
+		context := fixture.PrepareDatabase(tb, seed...)
+		return update_target.Handler(context.TargetsStore, context.TargetsStore, &dummyProvider{}), context.Dispatcher
 	}
 
 	t.Run("should fail if the target does not exist", func(t *testing.T) {
-		uc := sut()
+		handler, _ := arrange(t)
 
-		_, err := uc(context.Background(), update_target.Command{})
+		_, err := handler(context.Background(), update_target.Command{})
 
-		testutil.ErrorIs(t, apperr.ErrNotFound, err)
+		assert.ErrorIs(t, apperr.ErrNotFound, err)
 	})
 
 	t.Run("should fail if url or config are already taken", func(t *testing.T) {
-		t1 := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(dummyConfig{"1"}, true), "uid"))
-		t2 := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true),
-			domain.NewProviderConfigRequirement(dummyConfig{"2"}, true), "uid"))
-		uc := sut(&t1, &t2)
+		user := authfixture.User()
+		config := fixture.ProviderConfig()
+		targetOne := fixture.Target(
+			fixture.WithTargetCreatedBy(user.ID()),
+			fixture.WithProviderConfig(config),
+		)
+		assert.Nil(t, targetOne.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true)))
+		targetTwo := fixture.Target(
+			fixture.WithTargetCreatedBy(user.ID()),
+		)
+		assert.Nil(t, targetTwo.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true)))
+		handler, _ := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&targetOne, &targetTwo),
+		)
 
-		_, err := uc(context.Background(), update_target.Command{
-			ID:       string(t1.ID()),
-			Provider: "2",
-			Url:      monad.Value("http://docker.localhost"),
+		_, err := handler(context.Background(), update_target.Command{
+			ID:       string(targetTwo.ID()),
+			Provider: config,
+			Url:      monad.PatchValue("http://localhost"),
 		})
 
-		testutil.ErrorIs(t, validate.ErrValidationFailed, err)
-		validationErr, ok := apperr.As[validate.FieldErrors](err)
-		testutil.IsTrue(t, ok)
-		testutil.ErrorIs(t, domain.ErrConfigAlreadyTaken, validationErr["dummy"])
-		testutil.ErrorIs(t, domain.ErrUrlAlreadyTaken, validationErr["url"])
+		assert.ValidationError(t, validate.FieldErrors{
+			"url":         domain.ErrUrlAlreadyTaken,
+			config.Kind(): domain.ErrConfigAlreadyTaken,
+		}, err)
+	})
+
+	t.Run("should be able to remove the url", func(t *testing.T) {
+		user := authfixture.User()
+		target := fixture.Target(
+			fixture.WithTargetCreatedBy(user.ID()),
+			fixture.WithProviderConfig(fixture.ProviderConfig(fixture.WithFingerprint("test"))),
+		)
+		assert.Nil(t, target.ExposeServicesAutomatically(domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://docker.localhost")), true)))
+		handler, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
+
+		_, err := handler(context.Background(), update_target.Command{
+			ID:  string(target.ID()),
+			Url: monad.Nil[string](),
+		})
+
+		assert.Nil(t, err)
+		assert.HasLength(t, 2, dispatcher.Signals())
+		urlRemoved := assert.Is[domain.TargetUrlRemoved](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.TargetUrlRemoved{
+			ID: target.ID(),
+		}, urlRemoved)
 	})
 
 	t.Run("should update the target if everything is good", func(t *testing.T) {
-		target := must.Panic(domain.NewTarget("my-target",
-			domain.NewTargetUrlRequirement(must.Panic(domain.UrlFrom("http://localhost")), true),
-			domain.NewProviderConfigRequirement(dummyConfig{"1"}, true), "uid"))
-		uc := sut(&target)
+		user := authfixture.User()
+		target := fixture.Target(
+			fixture.WithTargetCreatedBy(user.ID()),
+			fixture.WithProviderConfig(fixture.ProviderConfig(fixture.WithFingerprint("test"), fixture.WithKind("test"))),
+		)
+		handler, dispatcher := arrange(t,
+			fixture.WithUsers(&user),
+			fixture.WithTargets(&target),
+		)
+		newConfig := fixture.ProviderConfig(fixture.WithFingerprint("test"), fixture.WithKind("test"))
 
-		id, err := uc(context.Background(), update_target.Command{
+		id, err := handler(context.Background(), update_target.Command{
 			ID:       string(target.ID()),
 			Name:     monad.Value("new name"),
-			Provider: "1",
-			Url:      monad.Value("http://docker.localhost"),
+			Provider: newConfig,
+			Url:      monad.PatchValue("http://docker.localhost"),
 		})
 
-		testutil.IsNil(t, err)
-		testutil.Equals(t, string(target.ID()), id)
-		testutil.HasNEvents(t, &target, 6)
+		assert.Nil(t, err)
+		assert.Equal(t, string(target.ID()), id)
+		assert.HasLength(t, 5, dispatcher.Signals())
 
-		renamed := testutil.EventIs[domain.TargetRenamed](t, &target, 1)
-		testutil.Equals(t, "new name", renamed.Name)
-		urlChanged := testutil.EventIs[domain.TargetUrlChanged](t, &target, 2)
-		testutil.Equals(t, "http://docker.localhost", urlChanged.Url.String())
-		providerChanged := testutil.EventIs[domain.TargetProviderChanged](t, &target, 4)
-		testutil.Equals(t, domain.ProviderConfig(dummyConfig{"1"}), providerChanged.Provider)
-		testutil.EventIs[domain.TargetStateChanged](t, &target, 3)
-		testutil.EventIs[domain.TargetStateChanged](t, &target, 5)
+		renamed := assert.Is[domain.TargetRenamed](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.TargetRenamed{
+			ID:   target.ID(),
+			Name: "new name",
+		}, renamed)
+
+		urlChanged := assert.Is[domain.TargetUrlChanged](t, dispatcher.Signals()[1])
+		assert.Equal(t, domain.TargetUrlChanged{
+			ID:  target.ID(),
+			Url: must.Panic(domain.UrlFrom("http://docker.localhost")),
+		}, urlChanged)
+
+		assert.Is[domain.TargetStateChanged](t, dispatcher.Signals()[2])
+
+		providerChanged := assert.Is[domain.TargetProviderChanged](t, dispatcher.Signals()[3])
+		assert.Equal(t, domain.TargetProviderChanged{
+			ID:       target.ID(),
+			Provider: newConfig,
+		}, providerChanged)
+
+		assert.Is[domain.TargetStateChanged](t, dispatcher.Signals()[4])
 	})
 }
 
-type (
-	dummyProvider struct {
-		domain.Provider
-	}
-
-	dummyConfig struct {
-		data string
-	}
-)
-
-func (*dummyProvider) Prepare(ctx context.Context, payload any, existing ...domain.ProviderConfig) (domain.ProviderConfig, error) {
-	return dummyConfig{payload.(string)}, nil
+type dummyProvider struct {
+	domain.Provider
 }
 
-func (dummyConfig) Kind() string                              { return "dummy" }
-func (c dummyConfig) Fingerprint() string                     { return c.data }
-func (c dummyConfig) Equals(other domain.ProviderConfig) bool { return false }
-func (c dummyConfig) String() string                          { return c.data }
+func (*dummyProvider) Prepare(ctx context.Context, payload any, existing ...domain.ProviderConfig) (domain.ProviderConfig, error) {
+	return payload.(domain.ProviderConfig), nil
+}

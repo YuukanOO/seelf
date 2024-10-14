@@ -102,7 +102,7 @@ func Handler(
 				vcs.Authenticated(token)
 			}
 
-			app.UseVersionControl(vcs)
+			_ = app.UseVersionControl(vcs)
 		}
 
 		if err := writer.Write(ctx, &app); err != nil {

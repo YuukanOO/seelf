@@ -11,7 +11,7 @@ export default {
 			'Remplissez le formulaire ci-dessous pour accéder au tableau de bord.',
 		// App
 		'app.no_targets': 'Aucune cible trouvée',
-		'app.no_targets.description': `Vous avez besoin d'au moins une cible pour pouvoir déployer votre application. Dirigez-vous vers la <a href="/targets/new">page de création</a> pour en créer une.`,
+		'app.no_targets.description': `Vous avez besoin d'au moins une cible pour pouvoir déployer votre application. Dirigez-vous vers la <a href="${routes.createTarget}">page de création</a> pour en créer une.`,
 		'app.not_found':
 			"Il semblerait que l'application que vous recherchez n'existe pas. Retournez à la",
 		'app.not_found.cta': "page d'accueil",
@@ -47,8 +47,8 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées sur 
 		'app.environment.staging': 'Paramètres de staging',
 		'app.environment.target': 'Cible de déploiement',
 		'app.environment.target.changed': 'Cible mise à jour',
-		'app.environment.target.changed.description': (url: string) =>
-			`Si vous changez de cible, toutes les ressources liées à cette application déployées par seelf sur <strong>${url}</strong> seront <strong>SUPPRIMÉES</strong> et un déploiement sur la nouvelle cible sera programmé si possible. Si vous devez sauvegarder quelque chose, faites le avant de changer la cible.`,
+		'app.environment.target.changed.description': (name: string) =>
+			`Si vous changez de cible, toutes les ressources liées à cette application déployées par seelf sur <strong>${name}</strong> seront <strong>SUPPRIMÉES</strong> et un déploiement sur la nouvelle cible sera programmé si possible. Si vous devez sauvegarder quelque chose, faites le avant de changer la cible.`,
 		'app.environment.vars': "Variables d'environnement",
 		'app.environment.vars.service.add': 'Ajouter un service',
 		'app.environment.vars.service.delete': 'Supprimer le service',
@@ -83,6 +83,9 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées sur 
 		'target.blankslate': `Aucune cible pour le moment. <br />Les cibles déterminent sur quel hôte vos <strong>applications seront déployées</strong>. Commencez par <a href="${routes.createTarget}">en créer une !</a>`,
 		'target.general': 'Paramètres généraux',
 		'target.name.help': `Le nom est utilisé uniquement pour l'affichage. Vous pouvez choisir ce que vous voulez.`,
+		'target.manual_proxy': 'Proxy manuel',
+		'target.automatic_proxy_configuration': 'Exposer les services automatiquement',
+		'target.automatic_proxy_configuration.help': `Si activé, un proxy sera déployé sur la cible et vos services seront <a target="_blank" href="https://yuukanoo.github.io/seelf/reference/providers/docker.html#exposing-services">automatiquement exposés</a>. Si désactivé, vous <strong>devrez faire le nécessaire</strong> pour rendre vos services accessibles en utilisant la méthode de votre choix. Changer ce paramètre <strong>pourra</strong> nécessiter le redéploiement de vos applications.`,
 		'target.url.help': `Toutes les applications déployées sur cette cible seront disponibles en tant que <strong>sous-domaine</strong> de cette URL racine (sans sous-chemin). Elle doit être <strong>unique</strong> parmi les cibles. Vous <strong>DEVEZ</strong> configurer un <strong>DNS wildcard</strong> pour les sous-domaines de telle sorte que <code>*.&lt;url configurée&gt;</code> redirige vers l'IP de cette cible.`,
 		'target.provider': 'Fournisseur',
 		'target.provider.docker.help': "Docker engine <strong>DOIT</strong> être installé sur l'hôte.",

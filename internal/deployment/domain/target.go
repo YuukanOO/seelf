@@ -28,7 +28,13 @@ var (
 
 const (
 	CleanupStrategyDefault CleanupStrategy = iota // Default strategy, try to remove the target data but returns an error if it fails
-	CleanupStrategySkip                           // Skip the cleanup because no resource has been deployed
+	CleanupStrategySkip                           // Skip the cleanup because no resource has been deployed or we can't remove them anymore
+)
+
+const (
+	TargetStatusConfiguring TargetStatus = iota
+	TargetStatusFailed
+	TargetStatusReady
 )
 
 type (
@@ -43,7 +49,7 @@ type (
 
 		id                TargetID
 		name              string
-		url               Url
+		url               monad.Maybe[Url]
 		provider          ProviderConfig
 		state             TargetState
 		customEntrypoints TargetEntrypoints
@@ -67,7 +73,6 @@ type (
 
 		ID          TargetID
 		Name        string
-		Url         Url
 		Provider    ProviderConfig
 		State       TargetState
 		Entrypoints TargetEntrypoints
@@ -93,6 +98,12 @@ type (
 
 		ID  TargetID
 		Url Url
+	}
+
+	TargetUrlRemoved struct {
+		bus.Notification
+
+		ID TargetID
 	}
 
 	TargetProviderChanged struct {
@@ -127,6 +138,7 @@ func (TargetCreated) Name_() string            { return "deployment.event.target
 func (TargetStateChanged) Name_() string       { return "deployment.event.target_state_changed" }
 func (TargetRenamed) Name_() string            { return "deployment.event.target_renamed" }
 func (TargetUrlChanged) Name_() string         { return "deployment.event.target_url_changed" }
+func (TargetUrlRemoved) Name_() string         { return "deployment.event.target_url_removed" }
 func (TargetProviderChanged) Name_() string    { return "deployment.event.target_provider_changed" }
 func (TargetEntrypointsChanged) Name_() string { return "deployment.event.target_entrypoints_changed" }
 func (TargetCleanupRequested) Name_() string   { return "deployment.event.target_cleanup_requested" }
@@ -139,16 +151,9 @@ func (e TargetStateChanged) WentToConfiguringState() bool {
 // Builds a new deployment target.
 func NewTarget(
 	name string,
-	urlRequirement TargetUrlRequirement,
 	providerRequirement ProviderConfigRequirement,
 	createdBy auth.UserID,
 ) (t Target, err error) {
-	url, err := urlRequirement.Met()
-
-	if err != nil {
-		return t, err
-	}
-
 	provider, err := providerRequirement.Met()
 
 	if err != nil {
@@ -158,7 +163,6 @@ func NewTarget(
 	t.apply(TargetCreated{
 		ID:          id.New[TargetID](),
 		Name:        name,
-		Url:         url.Root(),
 		Provider:    provider,
 		State:       newTargetState(),
 		Entrypoints: make(TargetEntrypoints),
@@ -229,8 +233,8 @@ func (t *Target) Rename(name string) error {
 	return nil
 }
 
-// Update the internal domain used by this target.
-func (t *Target) HasUrl(urlRequirement TargetUrlRequirement) error {
+// Mark this target as exposing automatically services on the given root url.
+func (t *Target) ExposeServicesAutomatically(urlRequirement TargetUrlRequirement) error {
 	if t.cleanupRequested.HasValue() {
 		return ErrTargetCleanupRequested
 	}
@@ -241,13 +245,35 @@ func (t *Target) HasUrl(urlRequirement TargetUrlRequirement) error {
 		return err
 	}
 
-	if t.url == url {
+	url = url.Root() // Remove path and query part
+
+	if existing, isSet := t.url.TryGet(); isSet && existing == url {
 		return nil
 	}
 
 	t.apply(TargetUrlChanged{
 		ID:  t.id,
-		Url: url.Root(),
+		Url: url,
+	})
+
+	t.reconfigure()
+
+	return nil
+}
+
+// Mark this target as being manually managed by the user. The url will be removed
+// and the user will have to manually manage the proxy configuration.
+func (t *Target) ExposeServicesManually() error {
+	if t.cleanupRequested.HasValue() {
+		return ErrTargetCleanupRequested
+	}
+
+	if !t.url.HasValue() {
+		return nil
+	}
+
+	t.apply(TargetUrlRemoved{
+		ID: t.id,
 	})
 
 	t.reconfigure()
@@ -324,7 +350,7 @@ func (t *Target) Reconfigure() error {
 // Mark the target (in the given version) has configured (by an external system).
 // If the given version does not match the current one, nothing will be done.
 func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigned, err error) {
-	if !t.state.Configured(version, err) {
+	if !t.state.configured(version, err) {
 		return
 	}
 
@@ -347,7 +373,7 @@ func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigne
 // If needed (new or removed entrypoints), a configuration will be triggered.
 func (t *Target) ExposeEntrypoints(app AppID, env Environment, services Services) {
 	// Target is being deleted, no need to reconfigure anything
-	if t.cleanupRequested.HasValue() || services == nil {
+	if t.cleanupRequested.HasValue() {
 		return
 	}
 
@@ -461,18 +487,19 @@ func (t *Target) Delete(cleanedUp bool) error {
 }
 
 func (t *Target) ID() TargetID                         { return t.id }
-func (t *Target) Url() Url                             { return t.url }
+func (t *Target) Url() monad.Maybe[Url]                { return t.url }
+func (t *Target) IsManual() bool                       { return !t.url.HasValue() }
 func (t *Target) Provider() ProviderConfig             { return t.provider }
 func (t *Target) CustomEntrypoints() TargetEntrypoints { return t.customEntrypoints } // FIXME: Should we return a copy?
 func (t *Target) CurrentVersion() time.Time            { return t.state.version }
 
 // Returns true if the given configuration version is different from the current one.
 func (t *Target) IsOutdated(version time.Time) bool {
-	return t.state.IsOutdated(version)
+	return t.state.isOutdated(version)
 }
 
 func (t *Target) reconfigure() {
-	t.state.Reconfigure()
+	t.state.reconfigure()
 
 	t.apply(TargetStateChanged{
 		ID:    t.id,
@@ -486,6 +513,10 @@ func (t *Target) raiseEntrypointsChangedAndReconfigure() {
 		Entrypoints: t.customEntrypoints,
 	})
 
+	if t.IsManual() {
+		return
+	}
+
 	t.reconfigure()
 }
 
@@ -494,7 +525,6 @@ func (t *Target) apply(e event.Event) {
 	case TargetCreated:
 		t.id = evt.ID
 		t.name = evt.Name
-		t.url = evt.Url
 		t.provider = evt.Provider
 		t.state = evt.State
 		t.created = evt.Created
@@ -502,7 +532,9 @@ func (t *Target) apply(e event.Event) {
 	case TargetRenamed:
 		t.name = evt.Name
 	case TargetUrlChanged:
-		t.url = evt.Url
+		t.url.Set(evt.Url)
+	case TargetUrlRemoved:
+		t.url.Unset()
 	case TargetProviderChanged:
 		t.provider = evt.Provider
 	case TargetEntrypointsChanged:
@@ -515,6 +547,66 @@ func (t *Target) apply(e event.Event) {
 
 	event.Store(t, e)
 }
+
+type (
+	TargetStatus uint8
+
+	TargetState struct {
+		status           TargetStatus
+		version          time.Time
+		errcode          monad.Maybe[string]
+		lastReadyVersion monad.Maybe[time.Time] // Hold down the last time the target was marked as ready
+	}
+)
+
+func newTargetState() (t TargetState) {
+	t.reconfigure()
+	return t
+}
+
+// Mark the state as configuring and update the version.
+func (t *TargetState) reconfigure() {
+	t.status = TargetStatusConfiguring
+	t.version = time.Now().UTC()
+	t.errcode.Unset()
+}
+
+// Update the state based on wether or not an error is given and returns a boolean indicating
+// if the state has changed.
+//
+// If there is no error, the target will be considered ready.
+// If an error is given, the target will be marked as failed.
+//
+// In either case, if the state has changed since it has been processed (the version param),
+// it will return without doing anything because the result is outdated.
+func (t *TargetState) configured(version time.Time, err error) bool {
+	if t.isOutdated(version) {
+		return false
+	}
+
+	if err != nil {
+		t.status = TargetStatusFailed
+		t.errcode.Set(err.Error())
+		return true
+	}
+
+	t.status = TargetStatusReady
+	t.lastReadyVersion.Set(version)
+	t.errcode.Unset()
+
+	return true
+}
+
+// Returns true if the given version is different from the current one or if the one
+// provided is already configured.
+func (t TargetState) isOutdated(version time.Time) bool {
+	return version != t.version || t.status != TargetStatusConfiguring
+}
+
+func (t TargetState) Status() TargetStatus                     { return t.status }
+func (t TargetState) ErrCode() monad.Maybe[string]             { return t.errcode }
+func (t TargetState) Version() time.Time                       { return t.version }
+func (t TargetState) LastReadyVersion() monad.Maybe[time.Time] { return t.lastReadyVersion }
 
 func (e TargetEntrypoints) Value() (driver.Value, error) { return storage.ValueJSON(e) }
 func (e *TargetEntrypoints) Scan(value any) error        { return storage.ScanJSON(value, e) }

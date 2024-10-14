@@ -14,7 +14,7 @@
 	export let data;
 
 	const submit = (d: UpdateTarget) =>
-		service.update(data.target.id, d).then((t) => goto(routes.targets));
+		service.update(data.target.id, d).then(() => goto(routes.targets));
 
 	const {
 		loading: deleting,

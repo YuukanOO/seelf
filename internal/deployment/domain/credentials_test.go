@@ -4,15 +4,15 @@ import (
 	"testing"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
-	"github.com/YuukanOO/seelf/pkg/testutil"
+	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
 func Test_Credentials(t *testing.T) {
 	t.Run("should be instantiable", func(t *testing.T) {
 		cred := domain.NewCredentials("user", "pass")
 
-		testutil.Equals(t, "user", cred.Username())
-		testutil.Equals(t, "pass", cred.Password())
+		assert.Equal(t, "user", cred.Username())
+		assert.Equal(t, "pass", cred.Password())
 	})
 
 	t.Run("should be able to change the username", func(t *testing.T) {
@@ -20,8 +20,8 @@ func Test_Credentials(t *testing.T) {
 
 		cred.HasUsername("newuser")
 
-		testutil.Equals(t, "newuser", cred.Username())
-		testutil.Equals(t, "pass", cred.Password())
+		assert.Equal(t, "newuser", cred.Username())
+		assert.Equal(t, "pass", cred.Password())
 	})
 
 	t.Run("should be able to change the password", func(t *testing.T) {
@@ -29,7 +29,7 @@ func Test_Credentials(t *testing.T) {
 
 		cred.HasPassword("newpass")
 
-		testutil.Equals(t, "user", cred.Username())
-		testutil.Equals(t, "newpass", cred.Password())
+		assert.Equal(t, "user", cred.Username())
+		assert.Equal(t, "newpass", cred.Password())
 	})
 }

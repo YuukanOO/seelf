@@ -238,12 +238,12 @@ func (a *App) RemoveVersionControl() error {
 
 // Updates the production configuration for this application.
 func (a *App) HasProductionConfig(configRequirement EnvironmentConfigRequirement) error {
-	return a.tryUpdateEnvironmentConfig(Production, configRequirement)
+	return a.tryUpdateEnvironmentConfig(Production, a.production, configRequirement)
 }
 
 // Updates the staging configuration for this application.
 func (a *App) HasStagingConfig(configRequirement EnvironmentConfigRequirement) error {
-	return a.tryUpdateEnvironmentConfig(Staging, configRequirement)
+	return a.tryUpdateEnvironmentConfig(Staging, a.staging, configRequirement)
 }
 
 // Request cleaning for this application. This marks the application for deletion.
@@ -275,26 +275,14 @@ func (a *App) Delete(cleanedUp bool) error {
 
 func (a *App) ID() AppID                                   { return a.id }
 func (a *App) VersionControl() monad.Maybe[VersionControl] { return a.versionControl }
-func (a *App) Production() EnvironmentConfig               { return a.production }
-func (a *App) Staging() EnvironmentConfig                  { return a.staging }
 
 func (a *App) tryUpdateEnvironmentConfig(
 	env Environment,
+	existingConfig EnvironmentConfig,
 	updatedConfigRequirement EnvironmentConfigRequirement,
 ) error {
 	if a.cleanupRequested.HasValue() {
 		return ErrAppCleanupRequested
-	}
-
-	var existingConfig EnvironmentConfig
-
-	switch env {
-	case Production:
-		existingConfig = a.production
-	case Staging:
-		existingConfig = a.staging
-	default:
-		return ErrInvalidEnvironmentName
 	}
 
 	updatedConfig, err := updatedConfigRequirement.Met()
@@ -308,10 +296,7 @@ func (a *App) tryUpdateEnvironmentConfig(
 		return nil
 	}
 
-	// Same target, does not update the inner version
-	if updatedConfig.target == existingConfig.target {
-		updatedConfig.version = existingConfig.version
-	}
+	updatedConfig.consolidate(existingConfig)
 
 	a.apply(AppEnvChanged{
 		ID:          a.id,

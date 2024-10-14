@@ -7,40 +7,38 @@ import (
 	"github.com/YuukanOO/seelf/pkg/bus"
 )
 
-// When an application cleanup has been requested, unexpose the application from all targets.
+// When an application cleanup has been requested, un-expose the application from all targets.
 func OnAppCleanupRequestedHandler(
 	reader domain.TargetsReader,
 	writer domain.TargetsWriter,
 ) bus.SignalHandler[domain.AppCleanupRequested] {
 	return func(ctx context.Context, evt domain.AppCleanupRequested) error {
+		if err := unExpose(ctx, reader, writer, evt.ProductionConfig.Target(), evt.ID); err != nil {
+			return err
+		}
+
 		if evt.ProductionConfig.Target() == evt.StagingConfig.Target() {
-			target, err := reader.GetByID(ctx, evt.ProductionConfig.Target())
-
-			if err != nil {
-				return err
-			}
-
-			target.UnExposeEntrypoints(evt.ID)
-
-			return writer.Write(ctx, &target)
+			return nil
 		}
 
-		productionTarget, err := reader.GetByID(ctx, evt.ProductionConfig.Target())
-
-		if err != nil {
-			return err
-		}
-
-		productionTarget.UnExposeEntrypoints(evt.ID, domain.Production)
-
-		stagingTarget, err := reader.GetByID(ctx, evt.StagingConfig.Target())
-
-		if err != nil {
-			return err
-		}
-
-		stagingTarget.UnExposeEntrypoints(evt.ID, domain.Staging)
-
-		return writer.Write(ctx, &productionTarget, &stagingTarget)
+		return unExpose(ctx, reader, writer, evt.StagingConfig.Target(), evt.ID)
 	}
+}
+
+func unExpose(
+	ctx context.Context,
+	reader domain.TargetsReader,
+	writer domain.TargetsWriter,
+	id domain.TargetID,
+	app domain.AppID,
+) error {
+	target, err := reader.GetByID(ctx, id)
+
+	if err != nil {
+		return err
+	}
+
+	target.UnExposeEntrypoints(app)
+
+	return writer.Write(ctx, &target)
 }

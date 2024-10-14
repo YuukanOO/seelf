@@ -7,7 +7,7 @@ The **seelf** backend is written in the [Golang](https://go.dev/) language for i
 ### Packages overview
 
 - `cmd/`: contains application commands such as the `serve` one
-- `internal/`: contains internal package representing the **core features** of this application organized by bounded contexts and `app`, `domain` and `infra` folders (see [The Domain](#the-domain))
+- `internal/`: contains internal package representing the **core features** of this application organized by bounded contexts and `app`, `domain`, `infra` and `fixture` folders (see [The Domain](#the-domain))
 - `pkg/`: contains reusable stuff not tied to seelf which can be reused if needed
 
 ### The Domain {#the-domain}
@@ -19,6 +19,7 @@ The `internal/` follows a classic DDD structure with:
 - `app`: commands and queries to orchestrate the domain logic
 - `domain`: core stuff, entities and values objects, as pure as possible to be easily testable
 - `infra`: implementation of domain specific interfaces for the current context
+- `fixture`: test helpers, mostly for generating correct and random aggregates satisfying needed state
 
 In Go, it's common to see entities as structs with every field exposed. In this project, I have decided to try something else to prevent unwanted mutations from happening and making things more explicit.
 

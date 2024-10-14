@@ -18,6 +18,7 @@
 	import type { Target } from '$lib/resources/targets';
 	import l from '$lib/localization';
 	import Dropdown, { type DropdownOption } from '$components/dropdown.svelte';
+	import ServiceUrl from './service-url.svelte';
 
 	export let handler: (data: any) => Promise<unknown>;
 	export let targets: Target[];
@@ -40,8 +41,8 @@
 
 	let prodScheme = l.translate('app.how.placeholder.scheme');
 	let prodUrl = l.translate('app.how.placeholder.url');
-	let stagingScheme = l.translate('app.how.placeholder.scheme');
-	let stagingUrl = l.translate('app.how.placeholder.url');
+	let stagingScheme = prodScheme;
+	let stagingUrl = prodUrl;
 
 	const targetsMap = targets.reduce<Record<string, Target>>((acc, value) => {
 		acc[value.id] = value;
@@ -51,19 +52,23 @@
 	$: appName = name || l.translate('app.how.placeholder.name');
 	$: {
 		try {
-			const u = new URL(targetsMap[production.target]?.url);
+			const u = new URL(targetsMap[production.target]?.url!);
 
 			prodScheme = u.protocol + '//';
 			prodUrl = u.hostname;
-		} catch {}
+		} catch {
+			prodScheme = prodUrl = '';
+		}
 	}
 	$: {
 		try {
-			const u = new URL(targetsMap[staging.target]?.url);
+			const u = new URL(targetsMap[staging.target]?.url!);
 
 			stagingScheme = u.protocol + '//';
 			stagingUrl = u.hostname;
-		} catch {}
+		} catch {
+			stagingScheme = stagingUrl = '';
+		}
 	}
 
 	const environmentText = l.translate('app.how.env');
@@ -73,7 +78,7 @@
 
 	const targetsOptions = targets.map((target) => ({
 		value: target.id,
-		label: `${target.url} - ${target.name}`
+		label: `${target.url ?? l.translate('target.manual_proxy')} - ${target.name}`
 	})) satisfies DropdownOption<string>[];
 
 	// Type $$Props to narrow the handler function based on wether this is an update or a new app
@@ -167,19 +172,35 @@
 									<tr>
 										<td data-label={environmentText}><strong>production</strong></td>
 										<td data-label={defaultServiceText}>
-											{prodScheme}{appName}.{prodUrl}
+											<ServiceUrl scheme={prodScheme} host={prodUrl} {appName} />
 										</td>
 										<td data-label={otherServicesTitleText}>
-											{prodScheme}dashboard.{appName}.{prodUrl}
+											<ServiceUrl
+												scheme={prodScheme}
+												host={prodUrl}
+												{appName}
+												prefix="dashboard."
+											/>
 										</td>
 									</tr>
 									<tr>
 										<td data-label={environmentText}><strong>staging</strong></td>
 										<td data-label={defaultServiceText}>
-											{stagingScheme}{appName}-staging.{stagingUrl}
+											<ServiceUrl
+												scheme={stagingScheme}
+												host={stagingUrl}
+												{appName}
+												suffix="-staging"
+											/>
 										</td>
 										<td data-label={otherServicesTitleText}>
-											{stagingScheme}dashboard.{appName}-staging.{stagingUrl}
+											<ServiceUrl
+												scheme={stagingScheme}
+												host={stagingUrl}
+												{appName}
+												prefix="dashboard."
+												suffix="-staging"
+											/>
 										</td>
 									</tr>
 								</tbody>
@@ -223,7 +244,7 @@
 						<Panel title="app.environment.target.changed" variant="warning">
 							<p>
 								{@html l.translate('app.environment.target.changed.description', [
-									initialData.production.target.url
+									initialData.production.target.name
 								])}
 							</p>
 						</Panel>
@@ -252,7 +273,7 @@
 						<Panel title="app.environment.target.changed" variant="warning">
 							<p>
 								{@html l.translate('app.environment.target.changed.description', [
-									initialData.production.target.url
+									initialData.production.target.name
 								])}
 							</p>
 						</Panel>

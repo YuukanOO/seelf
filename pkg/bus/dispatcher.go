@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/YuukanOO/seelf/pkg/storage"
-	"github.com/YuukanOO/seelf/pkg/types"
 )
 
 var ErrNoHandlerRegistered = errors.New("no_handler_registered")
@@ -13,8 +12,10 @@ var ErrNoHandlerRegistered = errors.New("no_handler_registered")
 type (
 	// Handler for a specific message.
 	RequestHandler[TResult any, TMsg TypedRequest[TResult]] func(context.Context, TMsg) (TResult, error)
-	// Handler for signal.
+
+	// Handler for a signal.
 	SignalHandler[TSignal Signal] func(context.Context, TSignal) error
+
 	// Generic handler (as seen by middlewares).
 	NextFunc func(context.Context, Message) (any, error)
 
@@ -45,12 +46,18 @@ func Register[TResult any, TMsg TypedRequest[TResult]](bus Bus, handler RequestH
 
 	bus.Register(msg, h)
 
-	// If the message is schedulable, register the unmarshaller automatically.
+	// If the message is an AsyncRequest, register the unmarshaller automatically.
 	// This is done here because of the known type TMsg but maybe I should try to
 	// move it to bus/memory in the future.
-	if types.Is[Schedulable](msg) {
-		Marshallable.Register(msg, func(s string) (Request, error) {
-			return storage.UnmarshalJSON[TMsg](s)
+	if asyncRequest, ok := any(msg).(AsyncRequest); ok {
+		Marshallable.Register(asyncRequest, func(s string) (AsyncRequest, error) {
+			m, err := storage.UnmarshalJSON[TMsg](s)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return any(m).(AsyncRequest), nil
 		})
 	}
 }

@@ -118,6 +118,7 @@ func NewRegistry(
 // Recreates a registry from the persistent storage.
 func RegistryFrom(scanner storage.Scanner) (r Registry, err error) {
 	var (
+		version   event.Version
 		username  monad.Maybe[string]
 		password  monad.Maybe[string]
 		createdAt time.Time
@@ -132,7 +133,14 @@ func RegistryFrom(scanner storage.Scanner) (r Registry, err error) {
 		&password,
 		&createdAt,
 		&createdBy,
+		&version,
 	)
+
+	if err != nil {
+		return r, err
+	}
+
+	event.Hydrate(&r, version)
 
 	r.created = shared.ActionFrom(createdBy, createdAt)
 

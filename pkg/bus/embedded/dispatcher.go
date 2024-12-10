@@ -1,4 +1,4 @@
-package memory
+package embedded
 
 import (
 	"context"
@@ -56,6 +56,8 @@ func (b *dispatcher) Send(ctx context.Context, msg bus.Request) (any, error) {
 	if handler == nil {
 		return nil, bus.ErrNoHandlerRegistered
 	}
+
+	// FIXME: maybe retry on concurrency update error
 
 	return handler.(bus.NextFunc)(ctx, msg)
 }

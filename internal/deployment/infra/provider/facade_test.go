@@ -38,13 +38,13 @@ func Test_Facade(t *testing.T) {
 		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
 	})
 
-	t.Run("should return an error if no provider can unconfigure the target", func(t *testing.T) {
+	t.Run("should return nil if no provider can unconfigure the target", func(t *testing.T) {
 		sut := provider.NewFacade()
 		target := fixture.Target()
 
-		err := sut.RemoveConfiguration(context.Background(), target)
+		err := sut.RemoveConfiguration(context.Background(), target.ID())
 
-		assert.ErrorIs(t, domain.ErrNoValidProviderFound, err)
+		assert.Nil(t, err)
 	})
 
 	t.Run("should return an error if no provider can cleanup the target", func(t *testing.T) {

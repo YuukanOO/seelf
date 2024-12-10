@@ -6,7 +6,10 @@ import (
 	"errors"
 )
 
-var ErrCouldNotUnmarshalGivenType = errors.New("could not unmarshal given type")
+var (
+	ErrCouldNotUnmarshalGivenType = errors.New("could not unmarshal given type")
+	ErrConcurrencyUpdate          = errors.New("concurrent update detected")
+)
 
 type (
 	// Deserialize a storage row to field. This is the interface making possible the

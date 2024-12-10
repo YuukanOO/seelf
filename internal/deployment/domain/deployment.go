@@ -17,15 +17,6 @@ var (
 	ErrCouldNotPromoteProductionDeployment = apperr.New("could_not_promote_production_deployment")
 	ErrRunningOrPendingDeployments         = apperr.New("running_or_pending_deployments")
 	ErrInvalidSourceDeployment             = apperr.New("invalid_source_deployment")
-	ErrNotInPendingState                   = apperr.New("not_in_pending_state")
-	ErrNotInRunningState                   = apperr.New("not_in_running_state")
-)
-
-const (
-	DeploymentStatusPending DeploymentStatus = iota
-	DeploymentStatusRunning
-	DeploymentStatusFailed
-	DeploymentStatusSucceeded
 )
 
 type (
@@ -125,6 +116,7 @@ func (a *App) NewDeployment(
 
 func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 	var (
+		version                 event.Version
 		requestedAt             time.Time
 		requestedBy             domain.UserID
 		sourceMetaDiscriminator string
@@ -148,11 +140,14 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&sourceMetaData,
 		&requestedAt,
 		&requestedBy,
+		&version,
 	)
 
 	if err != nil {
 		return d, err
 	}
+
+	event.Hydrate(&d, version)
 
 	d.source, err = SourceDataTypes.From(sourceMetaDiscriminator, sourceMetaData)
 	d.requested = shared.ActionFrom(requestedBy, requestedAt)
@@ -240,6 +235,18 @@ func (d *Deployment) apply(e event.Event) {
 
 	event.Store(d, e)
 }
+
+var (
+	ErrNotInPendingState = apperr.New("not_in_pending_state")
+	ErrNotInRunningState = apperr.New("not_in_running_state")
+)
+
+const (
+	DeploymentStatusPending DeploymentStatus = iota
+	DeploymentStatusRunning
+	DeploymentStatusFailed
+	DeploymentStatusSucceeded
+)
 
 type (
 	DeploymentStatus uint8

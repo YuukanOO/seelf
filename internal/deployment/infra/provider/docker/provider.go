@@ -198,8 +198,8 @@ func (d *docker) Setup(ctx context.Context, target domain.Target) (domain.Target
 	})
 }
 
-func (d *docker) RemoveConfiguration(_ context.Context, target domain.Target) error {
-	return d.sshConfig.Remove(string(target.ID()))
+func (d *docker) RemoveConfiguration(_ context.Context, target domain.TargetID) error {
+	return d.sshConfig.Remove(string(target))
 }
 
 func (d *docker) PrepareLocal(context.Context) (domain.ProviderConfig, error) {

@@ -19,15 +19,15 @@ import (
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
 )
 
-type gateway struct {
+type Gateway struct {
 	db *sqlite.Database
 }
 
-func NewGateway(db *sqlite.Database) *gateway {
-	return &gateway{db}
+func NewGateway(db *sqlite.Database) *Gateway {
+	return &Gateway{db}
 }
 
-func (s *gateway) GetAllApps(ctx context.Context, cmd get_apps.Query) ([]get_apps.App, error) {
+func (s *Gateway) GetAllApps(ctx context.Context, cmd get_apps.Query) ([]get_apps.App, error) {
 	return builder.
 		Query[get_apps.App](`
 			SELECT
@@ -53,7 +53,7 @@ func (s *gateway) GetAllApps(ctx context.Context, cmd get_apps.Query) ([]get_app
 		All(s.db, ctx, appDataMapper, getDeploymentDataloader)
 }
 
-func (s *gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get_app_detail.App, error) {
+func (s *Gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get_app_detail.App, error) {
 	return builder.
 		Query[get_app_detail.App](`
 			SELECT
@@ -84,7 +84,7 @@ func (s *gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get
 		One(s.db, ctx, appDetailDataMapper, getDeploymentDetailDataloader)
 }
 
-func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deployments.Query) (storage.Paginated[get_app_deployments.Deployment], error) {
+func (s *Gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deployments.Query) (storage.Paginated[get_app_deployments.Deployment], error) {
 	return builder.
 		Select[get_app_deployments.Deployment](`
 			deployments.app_id
@@ -114,7 +114,7 @@ func (s *gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deploy
 		Paginate(s.db, ctx, deploymentMapper(nil), cmd.Page.Get(1), 5)
 }
 
-func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Query) (get_deployment.Deployment, error) {
+func (s *Gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Query) (get_deployment.Deployment, error) {
 	return builder.
 		Query[get_deployment.Deployment](`
 		SELECT
@@ -144,7 +144,7 @@ func (s *gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Quer
 		One(s.db, ctx, deploymentDetailMapper(nil))
 }
 
-func (s *gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]get_target.Target, error) {
+func (s *Gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]get_target.Target, error) {
 	return builder.
 		Query[get_target.Target](`
 		SELECT
@@ -171,7 +171,7 @@ func (s *gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]g
 		All(s.db, ctx, targetMapper)
 }
 
-func (s *gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_target.Target, error) {
+func (s *Gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_target.Target, error) {
 	return builder.
 		Query[get_target.Target](`
 		SELECT
@@ -196,7 +196,7 @@ func (s *gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_
 		One(s.db, ctx, targetMapper)
 }
 
-func (s *gateway) GetRegistries(ctx context.Context, cmd get_registries.Query) ([]get_registry.Registry, error) {
+func (s *Gateway) GetRegistries(ctx context.Context, cmd get_registries.Query) ([]get_registry.Registry, error) {
 	return builder.
 		Query[get_registry.Registry](`
 		SELECT
@@ -213,7 +213,7 @@ func (s *gateway) GetRegistries(ctx context.Context, cmd get_registries.Query) (
 		All(s.db, ctx, registryMapper)
 }
 
-func (s *gateway) GetRegistryByID(ctx context.Context, cmd get_registry.Query) (get_registry.Registry, error) {
+func (s *Gateway) GetRegistryByID(ctx context.Context, cmd get_registry.Query) (get_registry.Registry, error) {
 	return builder.
 		Query[get_registry.Registry](`
 		SELECT

@@ -20,6 +20,6 @@ func OnAppEnvChangedHandler(scheduler bus.Scheduler) bus.SignalHandler[domain.Ap
 			Environment: string(evt.Environment),
 			From:        evt.OldConfig.Version(),
 			To:          time.Now().UTC(),
-		}, bus.WithPolicy(bus.JobPolicyCancellable))
+		})
 	}
 }

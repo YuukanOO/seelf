@@ -10,14 +10,12 @@ import (
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/configure_target"
-	"github.com/YuukanOO/seelf/internal/deployment/app/delete_app"
-	"github.com/YuukanOO/seelf/internal/deployment/app/delete_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/expose_seelf_container"
 	deploymentdomain "github.com/YuukanOO/seelf/internal/deployment/domain"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/bus/memory"
+	"github.com/YuukanOO/seelf/pkg/bus/embedded"
 	bussqlite "github.com/YuukanOO/seelf/pkg/bus/sqlite"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -30,8 +28,6 @@ type (
 		Cleanup() error
 		Bus() bus.Dispatcher
 		Logger() log.Logger
-		UsersReader() domain.UsersReader
-		ScheduledJobsStore() bus.ScheduledJobsStore
 	}
 
 	ServerOptions interface {
@@ -47,12 +43,10 @@ type (
 	}
 
 	serverRoot struct {
-		bus            bus.Bus
-		logger         log.Logger
-		db             *sqlite.Database
-		usersReader    domain.UsersReader
-		schedulerStore bus.ScheduledJobsStore
-		scheduler      bus.RunnableScheduler
+		bus       bus.Bus
+		logger    log.Logger
+		db        *sqlite.Database
+		scheduler *embedded.Runner
 	}
 )
 
@@ -63,10 +57,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		logger: logger,
 	}
 
-	// embedded.NewBus()
-	// embedded.NewScheduler()
-
-	s.bus = memory.NewBus()
+	s.bus = embedded.NewBus()
 
 	db, err := sqlite.Open(options.ConnectionString(), s.logger, s.bus)
 
@@ -76,31 +67,29 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 
 	s.db = db
 
-	s.schedulerStore = bussqlite.NewScheduledJobsStore(s.db)
+	jobsStore, err := bussqlite.Setup(s.bus, s.db)
 
-	if err = s.schedulerStore.Setup(); err != nil {
+	if err != nil {
 		return nil, err
 	}
 
-	s.scheduler = bus.NewScheduler(s.schedulerStore, s.logger, s.bus, options.RunnersPollInterval(),
-		bus.WorkerGroup{
+	s.scheduler = embedded.NewRunner(jobsStore, s.logger, s.bus, options.RunnersPollInterval(),
+		embedded.WorkerGroup{
 			Size:     options.RunnersDeploymentCount(),
-			Messages: []string{deploy.Command{}.Name_()},
+			Requests: []bus.AsyncRequest{deploy.Command{}},
 		},
-		bus.WorkerGroup{
+		embedded.WorkerGroup{
 			Size: options.RunnersCleanupCount(),
-			Messages: []string{
-				cleanup_app.Command{}.Name_(),
-				delete_app.Command{}.Name_(),
-				configure_target.Command{}.Name_(),
-				cleanup_target.Command{}.Name_(),
-				delete_target.Command{}.Name_(),
+			Requests: []bus.AsyncRequest{
+				cleanup_app.Command{},
+				cleanup_target.Command{},
+				configure_target.Command{},
 			},
 		},
 	)
 
 	// Setup auth infrastructure
-	if s.usersReader, err = authinfra.Setup(s.logger, s.db, s.bus); err != nil {
+	if err = authinfra.Setup(s.logger, s.db, s.bus); err != nil {
 		return nil, err
 	}
 
@@ -110,7 +99,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		s.logger,
 		s.db,
 		s.bus,
-		s.scheduler,
+		jobsStore,
 	); err != nil {
 		return nil, err
 	}
@@ -153,7 +142,5 @@ func (s *serverRoot) Cleanup() error {
 	return s.db.Close()
 }
 
-func (s *serverRoot) Bus() bus.Dispatcher                        { return s.bus }
-func (s *serverRoot) Logger() log.Logger                         { return s.logger }
-func (s *serverRoot) UsersReader() domain.UsersReader            { return s.usersReader }
-func (s *serverRoot) ScheduledJobsStore() bus.ScheduledJobsStore { return s.schedulerStore }
+func (s *serverRoot) Bus() bus.Dispatcher { return s.bus }
+func (s *serverRoot) Logger() log.Logger  { return s.logger }

@@ -42,7 +42,6 @@ type (
 
 	UsersReader interface {
 		GetAdminUser(context.Context) (User, error)
-		GetIDFromAPIKey(context.Context, APIKey) (UserID, error)
 		CheckEmailAvailability(context.Context, Email, ...UserID) (EmailRequirement, error)
 		GetByEmail(context.Context, Email) (User, error)
 		GetByID(context.Context, UserID) (User, error)
@@ -109,13 +108,18 @@ func NewUser(emailRequirement EmailRequirement, password PasswordHash, key APIKe
 
 // Recreates a user from a storage driver
 func UserFrom(scanner storage.Scanner) (u User, err error) {
+	var version event.Version
+
 	err = scanner.Scan(
 		&u.id,
 		&u.email,
 		&u.password,
 		&u.key,
 		&u.registeredAt,
+		&version,
 	)
+
+	event.Hydrate(&u, version)
 
 	return u, err
 }

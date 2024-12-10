@@ -51,30 +51,31 @@ FROM apps LIMIT 1;
 -- Schedule a target configuration if a target was created above
 INSERT INTO scheduled_jobs (
     id
-    ,resource_id
     ,[group]
     ,message_name
     ,message_data
     ,queued_at
     ,not_before
-    ,policy
     ,retrieved
 )
 SELECT
     id
-    ,id
     ,'deployment.target.configure.' || id
     ,'deployment.command.configure_target'
     ,'{"id":"' || id || '","version":"2024-01-23T10:07:30Z"}'
     ,DATETIME()
     ,DATETIME()
-    ,0
     ,false
 FROM targets;
 
--- Rename the old apps table since it will be recreated with proper NOT NULL columns
--- I should have used a temporary table
-ALTER TABLE apps RENAME TO tmp_apps;
+CREATE TEMPORARY TABLE tmp_deployments
+AS SELECT * FROM deployments;
+
+CREATE TEMPORARY TABLE tmp_apps AS
+SELECT * FROM apps;
+
+DROP TABLE deployments;
+DROP TABLE apps;
 
 -- Create the new apps table with proper columns
 CREATE TABLE apps (
@@ -127,18 +128,16 @@ SELECT
 	,'2bRUdQnyRELMqyh9gFLQV1s0cqv'
     ,created_at
 	,(
-        SELECT config_env
-        FROM deployments d
-        WHERE d.app_id = tmp_apps.id AND d.config_environment = 'production'
-        ORDER BY d.requested_at DESC LIMIT 1
+        SELECT env ->> "$.production"
+        FROM tmp_apps a
+        WHERE a.id = tmp_apps.id
     )
 	,'2bRUdQnyRELMqyh9gFLQV1s0cqv'
     ,created_at
 	,(
-        SELECT config_env
-        FROM deployments d
-        WHERE d.app_id = tmp_apps.id AND d.config_environment = 'staging'
-        ORDER BY d.requested_at DESC LIMIT 1
+        SELECT env ->> "$.staging"
+        FROM tmp_apps a
+        WHERE a.id = tmp_apps.id
     )
 	,created_at
     ,created_by 
@@ -146,17 +145,15 @@ SELECT
 	,cleanup_requested_by
 FROM tmp_apps;
 
--- Do the same for deployments
--- I should have used a temporary table
-ALTER TABLE deployments RENAME TO tmp_deployments;
-
-CREATE TABLE deployments (
+CREATE TABLE deployments
+(
     app_id TEXT NOT NULL,
     deployment_number INTEGER NOT NULL,
     config_appid TEXT NOT NULL,
     config_appname TEXT NOT NULL,
     config_environment TEXT NOT NULL,
-    config_target TEXT NOT NULL, -- No FK on config_target because we don't want to deal with a target deletion.
+    config_target TEXT NOT NULL,
+    -- No FK on config_target because we don't want to deal with a target deletion.
     config_vars TEXT NULL,
     state_status INTEGER NOT NULL,
     state_errcode TEXT NULL,

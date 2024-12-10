@@ -128,6 +128,10 @@ func Test_CreateApp(t *testing.T) {
 			Production: created.Production,
 			Staging:    created.Staging,
 			Created:    shared.ActionFrom(user.ID(), assert.NotZero(t, created.Created.At())),
+			History: domain.AppTargetHistory{
+				domain.Production: []domain.TargetID{created.Production.Target()},
+				domain.Staging:    []domain.TargetID{created.Staging.Target()},
+			},
 		}, created)
 		assert.Equal(t, target.ID(), created.Production.Target())
 		assert.Equal(t, target.ID(), created.Staging.Target())

@@ -45,6 +45,7 @@ func (s *registriesStore) GetByID(ctx context.Context, id domain.RegistryID) (do
 			,credentials_password
 			,created_at
 			,created_by
+			,version
 		FROM registries
 		WHERE id = ?`, id).
 		One(s.db, ctx, domain.RegistryFrom)
@@ -61,59 +62,41 @@ func (s *registriesStore) GetAll(ctx context.Context) ([]domain.Registry, error)
 			,credentials_password
 			,created_at
 			,created_by
+			,version
 		FROM registries`).
 		All(s.db, ctx, domain.RegistryFrom)
 }
 
 func (s *registriesStore) Write(ctx context.Context, registries ...*domain.Registry) error {
-	return sqlite.WriteAndDispatch(s.db, ctx, registries, func(ctx context.Context, e event.Event) error {
-		switch evt := e.(type) {
-		case domain.RegistryCreated:
-			return builder.
-				Insert("registries", builder.Values{
-					"id":         evt.ID,
-					"name":       evt.Name,
-					"url":        evt.Url,
-					"created_at": evt.Created.At(),
-					"created_by": evt.Created.By(),
-				}).
-				Exec(s.db, ctx)
-		case domain.RegistryRenamed:
-			return builder.
-				Update("registries", builder.Values{
-					"name": evt.Name,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.RegistryUrlChanged:
-			return builder.
-				Update("registries", builder.Values{
-					"url": evt.Url,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.RegistryCredentialsChanged:
-			return builder.
-				Update("registries", builder.Values{
-					"credentials_username": evt.Credentials.Username(),
-					"credentials_password": evt.Credentials.Password(),
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.RegistryCredentialsRemoved:
-			return builder.
-				Update("registries", builder.Values{
-					"credentials_username": nil,
-					"credentials_password": nil,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.RegistryDeleted:
-			return builder.
-				Command("DELETE FROM registries WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		default:
-			return nil
-		}
-	})
+	return sqlite.WriteEvents(s.db, ctx, registries,
+		"registries",
+		func(r *domain.Registry) sqlite.Key {
+			return sqlite.Key{
+				"id": r.ID(),
+			}
+		},
+		func(e event.Event, v builder.Values) sqlite.WriteMode {
+			switch evt := e.(type) {
+			case domain.RegistryCreated:
+				v["id"] = evt.ID
+				v["name"] = evt.Name
+				v["url"] = evt.Url
+				v["created_at"] = evt.Created.At()
+				v["created_by"] = evt.Created.By()
+			case domain.RegistryRenamed:
+				v["name"] = evt.Name
+			case domain.RegistryUrlChanged:
+				v["url"] = evt.Url
+			case domain.RegistryCredentialsChanged:
+				v["credentials_username"] = evt.Credentials.Username()
+				v["credentials_password"] = evt.Credentials.Password()
+			case domain.RegistryCredentialsRemoved:
+				v["credentials_username"] = nil
+				v["credentials_password"] = nil
+			case domain.RegistryDeleted:
+				return sqlite.WriteModeDelete
+			}
+
+			return sqlite.WriteModeUpsert
+		})
 }

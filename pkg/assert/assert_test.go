@@ -3,6 +3,7 @@ package assert_test
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -549,6 +550,77 @@ time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC)`)
 		if result != time {
 			t.Error("result should be equal to the given value")
 		}
+	})
+}
+
+func Test_Match(t *testing.T) {
+	t.Run("should fail if a value does not match a regexp", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.Match(mock, "^test", "wrong value", "with a wrong string")
+
+		shouldHaveFailed(t, mock, `should match - with a wrong string
+	expected:
+"^test"
+
+	got:
+"wrong value"`)
+	})
+
+	t.Run("should succeed if a value matches a regexp", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.Match(mock, "^test", "test", "with a valid string")
+
+		shouldHaveSucceeded(t, mock)
+	})
+}
+
+func Test_FileContentEquals(t *testing.T) {
+	t.Run("should fail if the file does not exists", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.FileContentEquals(mock, "test", "not.txt", "with a non-existing file")
+
+		shouldHaveFailed(t, mock, `should contains - with a non-existing file
+	expected:
+"test"
+
+	got:
+""`)
+	})
+
+	t.Run("should fail if the content does not match", func(t *testing.T) {
+		mock := new(mockT)
+
+		_ = os.WriteFile("wrong_content.txt", []byte("wrong content"), 0644)
+
+		t.Cleanup(func() {
+			_ = os.Remove("wrong_content.txt")
+		})
+
+		assert.FileContentEquals(mock, "test", "wrong_content.txt", "with a wrong content")
+
+		shouldHaveFailed(t, mock, `should contains - with a wrong content
+	expected:
+"test"
+
+	got:
+"wrong content"`)
+	})
+
+	t.Run("should succeed if content matches", func(t *testing.T) {
+		mock := new(mockT)
+
+		_ = os.WriteFile("correct_content.txt", []byte("test"), 0644)
+
+		t.Cleanup(func() {
+			_ = os.Remove("correct_content.txt")
+		})
+
+		assert.FileContentEquals(mock, "test", "correct_content.txt", "with a correct content")
+
+		shouldHaveSucceeded(t, mock)
 	})
 }
 

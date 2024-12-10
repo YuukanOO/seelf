@@ -31,12 +31,6 @@ const (
 	CleanupStrategySkip                           // Skip the cleanup because no resource has been deployed or we can't remove them anymore
 )
 
-const (
-	TargetStatusConfiguring TargetStatus = iota
-	TargetStatusFailed
-	TargetStatusReady
-)
-
 type (
 	TargetID                  string
 	CleanupStrategy           uint8                                                          // Strategy to use when deleting a target (on the provider side) based on wether it has been successfully configured or not
@@ -174,6 +168,7 @@ func NewTarget(
 
 func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 	var (
+		version               event.Version
 		createdAt             time.Time
 		createdBy             auth.UserID
 		deleteRequestedAt     monad.Maybe[time.Time]
@@ -190,18 +185,21 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 		&providerData,
 		&t.state.status,
 		&t.state.version,
-		&t.state.errcode,
+		&t.state.errCode,
 		&t.state.lastReadyVersion,
 		&t.customEntrypoints,
 		&deleteRequestedAt,
 		&deleteRequestedBy,
 		&createdAt,
 		&createdBy,
+		&version,
 	)
 
 	if err != nil {
 		return t, err
 	}
+
+	event.Hydrate(&t, version)
 
 	if requestedAt, isSet := deleteRequestedAt.TryGet(); isSet {
 		t.cleanupRequested.Set(
@@ -317,19 +315,18 @@ func (t *Target) HasProvider(providerRequirement ProviderConfigRequirement) erro
 
 // Check the target availability and returns an appropriate error.
 func (t *Target) CheckAvailability() error {
-	if t.state.status == TargetStatusConfiguring {
-		return ErrTargetConfigurationInProgress
-	}
-
 	if t.cleanupRequested.HasValue() {
 		return ErrTargetCleanupRequested
 	}
 
-	if t.state.status != TargetStatusReady {
+	switch t.state.status {
+	case TargetStatusConfiguring:
+		return ErrTargetConfigurationInProgress
+	case TargetStatusReady:
+		return nil
+	default:
 		return ErrTargetConfigurationFailed
 	}
-
-	return nil
 }
 
 // Force the target reconfiguration.
@@ -349,9 +346,9 @@ func (t *Target) Reconfigure() error {
 
 // Mark the target (in the given version) has configured (by an external system).
 // If the given version does not match the current one, nothing will be done.
-func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigned, err error) {
-	if !t.state.configured(version, err) {
-		return
+func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigned, err error) error {
+	if stateErr := t.state.configured(version, err); stateErr != nil {
+		return stateErr
 	}
 
 	if err == nil && t.customEntrypoints.assign(assigned) {
@@ -365,6 +362,8 @@ func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigne
 		ID:    t.id,
 		State: t.state,
 	})
+
+	return nil
 }
 
 // Inform the target that it should exposes entrypoints inside the services array
@@ -399,10 +398,11 @@ func (t *Target) UnExposeEntrypoints(app AppID, envs ...Environment) {
 	t.raiseEntrypointsChangedAndReconfigure()
 }
 
-// Request the target cleanup, meaning it will be deleted with all its related data.
-func (t *Target) RequestCleanup(apps HasAppsOnTarget, by auth.UserID) error {
+// Request the target deletion, meaning every resources should be removed and the
+// target deleted when its done.
+func (t *Target) RequestDelete(apps HasAppsOnTarget, by auth.UserID) error {
 	if t.cleanupRequested.HasValue() {
-		return nil
+		return ErrTargetCleanupRequested
 	}
 
 	if apps {
@@ -422,7 +422,11 @@ func (t *Target) RequestCleanup(apps HasAppsOnTarget, by auth.UserID) error {
 }
 
 // Check the target cleanup strategy to determine how the target resources should be handled.
-func (t *Target) CleanupStrategy(deployments HasRunningOrPendingDeploymentsOnTarget) (CleanupStrategy, error) {
+func (t *Target) CanBeCleaned(deployments HasRunningOrPendingDeploymentsOnTarget) (CleanupStrategy, error) {
+	if !t.cleanupRequested.HasValue() {
+		return CleanupStrategyDefault, ErrTargetCleanupNeeded
+	}
+
 	if deployments {
 		return CleanupStrategyDefault, ErrRunningOrPendingDeployments
 	}
@@ -430,21 +434,16 @@ func (t *Target) CleanupStrategy(deployments HasRunningOrPendingDeploymentsOnTar
 	switch t.state.status {
 	case TargetStatusConfiguring:
 		return CleanupStrategyDefault, ErrTargetConfigurationInProgress
-	case TargetStatusReady:
-		return CleanupStrategyDefault, nil
+	case TargetStatusFailed:
+		return CleanupStrategySkip, nil
 	default:
-		// Never reachable or target has been marked for deletion, no way to update it anymore, just skip the cleanup
-		if !t.state.lastReadyVersion.HasValue() || t.cleanupRequested.HasValue() {
-			return CleanupStrategySkip, nil
-		}
-
-		return CleanupStrategyDefault, ErrTargetConfigurationFailed
+		return CleanupStrategyDefault, nil
 	}
 }
 
 // Check the cleanup strategy for a specific application to determine how related resources
 // should be handled.
-func (t *Target) AppCleanupStrategy(
+func (t *Target) CanAppBeCleaned(
 	ongoing HasRunningOrPendingDeploymentsOnAppTargetEnv,
 	successful HasSuccessfulDeploymentsOnAppTargetEnv,
 ) (CleanupStrategy, error) {
@@ -473,9 +472,9 @@ func (t *Target) AppCleanupStrategy(
 	}
 }
 
-// Deletes the target.
-func (t *Target) Delete(cleanedUp bool) error {
-	if !t.cleanupRequested.HasValue() || !cleanedUp {
+// Mark the target has being cleaned up, making it safe to be deleted.
+func (t *Target) CleanedUp() error {
+	if !t.cleanupRequested.HasValue() {
 		return ErrTargetCleanupNeeded
 	}
 
@@ -548,13 +547,21 @@ func (t *Target) apply(e event.Event) {
 	event.Store(t, e)
 }
 
+const (
+	TargetStatusConfiguring TargetStatus = iota
+	TargetStatusFailed
+	TargetStatusReady
+)
+
+var ErrTargetConfigurationOutdated = apperr.New("target_configuration_outdated")
+
 type (
 	TargetStatus uint8
 
 	TargetState struct {
 		status           TargetStatus
 		version          time.Time
-		errcode          monad.Maybe[string]
+		errCode          monad.Maybe[string]
 		lastReadyVersion monad.Maybe[time.Time] // Hold down the last time the target was marked as ready
 	}
 )
@@ -568,33 +575,32 @@ func newTargetState() (t TargetState) {
 func (t *TargetState) reconfigure() {
 	t.status = TargetStatusConfiguring
 	t.version = time.Now().UTC()
-	t.errcode.Unset()
+	t.errCode.Unset()
 }
 
-// Update the state based on wether or not an error is given and returns a boolean indicating
-// if the state has changed.
+// Update the state based on wether or not an error is given.
 //
 // If there is no error, the target will be considered ready.
 // If an error is given, the target will be marked as failed.
 //
 // In either case, if the state has changed since it has been processed (the version param),
 // it will return without doing anything because the result is outdated.
-func (t *TargetState) configured(version time.Time, err error) bool {
+func (t *TargetState) configured(version time.Time, err error) error {
 	if t.isOutdated(version) {
-		return false
+		return ErrTargetConfigurationOutdated
 	}
 
 	if err != nil {
 		t.status = TargetStatusFailed
-		t.errcode.Set(err.Error())
-		return true
+		t.errCode.Set(err.Error())
+		return nil
 	}
 
 	t.status = TargetStatusReady
 	t.lastReadyVersion.Set(version)
-	t.errcode.Unset()
+	t.errCode.Unset()
 
-	return true
+	return nil
 }
 
 // Returns true if the given version is different from the current one or if the one
@@ -604,7 +610,7 @@ func (t TargetState) isOutdated(version time.Time) bool {
 }
 
 func (t TargetState) Status() TargetStatus                     { return t.status }
-func (t TargetState) ErrCode() monad.Maybe[string]             { return t.errcode }
+func (t TargetState) ErrCode() monad.Maybe[string]             { return t.errCode }
 func (t TargetState) Version() time.Time                       { return t.version }
 func (t TargetState) LastReadyVersion() monad.Maybe[time.Time] { return t.lastReadyVersion }
 

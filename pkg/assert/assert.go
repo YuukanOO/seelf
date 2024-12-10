@@ -123,7 +123,8 @@ func HasNRunes[T ~string](t testing.TB, expected int, actual T, formatAndMessage
 
 // Asserts that the actual source has the expected number of events
 func HasNEvents[T event.Source](t testing.TB, expected int, source T, formatAndMessage ...any) {
-	got := len(event.Unwrap(source))
+	_, events := event.Unwrap(source)
+	got := len(events)
 
 	if got == expected {
 		return
@@ -134,7 +135,7 @@ func HasNEvents[T event.Source](t testing.TB, expected int, source T, formatAndM
 
 // Asserts that the actual source has the expected event type at the given index and returns it
 func EventIs[T event.Event](t testing.TB, source event.Source, index int, formatAndMessage ...any) T {
-	events := event.Unwrap(source)
+	_, events := event.Unwrap(source)
 
 	if index >= len(events) {
 		failed(t, "could not find an event at given index", index, len(events), formatAndMessage)

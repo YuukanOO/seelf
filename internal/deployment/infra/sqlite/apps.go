@@ -143,74 +143,60 @@ func (s *appsStore) GetByID(ctx context.Context, id domain.AppID) (domain.App, e
 			,staging_vars
 			,cleanup_requested_at
 			,cleanup_requested_by
+			,history
 			,created_at
 			,created_by
+			,version
 		FROM apps
 		WHERE id = ?`, id).
 		One(s.db, ctx, domain.AppFrom)
 }
 
 func (s *appsStore) Write(c context.Context, apps ...*domain.App) error {
-	return sqlite.WriteAndDispatch(s.db, c, apps, func(ctx context.Context, e event.Event) error {
-		switch evt := e.(type) {
-		case domain.AppCreated:
-			return builder.
-				Insert("apps", builder.Values{
-					"id":                 evt.ID,
-					"name":               evt.Name,
-					"production_target":  evt.Production.Target(),
-					"production_version": evt.Production.Version(),
-					"production_vars":    evt.Production.Vars(),
-					"staging_target":     evt.Staging.Target(),
-					"staging_version":    evt.Staging.Version(),
-					"staging_vars":       evt.Staging.Vars(),
-					"created_at":         evt.Created.At(),
-					"created_by":         evt.Created.By(),
-				}).
-				Exec(s.db, ctx)
-		case domain.AppEnvChanged:
-			// This is safe to interpolate the column name here since events are raised by our
-			// own code.
-			return builder.
-				Update("apps", builder.Values{
-					string(evt.Environment) + "_target":  evt.Config.Target(),
-					string(evt.Environment) + "_version": evt.Config.Version(),
-					string(evt.Environment) + "_vars":    evt.Config.Vars(),
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.AppVersionControlConfigured:
-			return builder.
-				Update("apps", builder.Values{
-					"version_control_url":   evt.Config.Url(),
-					"version_control_token": evt.Config.Token(),
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.AppVersionControlRemoved:
-			return builder.
-				Update("apps", builder.Values{
-					"version_control_url":   nil,
-					"version_control_token": nil,
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.AppCleanupRequested:
-			return builder.
-				Update("apps", builder.Values{
-					"cleanup_requested_at": evt.Requested.At(),
-					"cleanup_requested_by": evt.Requested.By(),
-				}).
-				F("WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		case domain.AppDeleted:
-			return builder.
-				Command("DELETE FROM apps WHERE id = ?", evt.ID).
-				Exec(s.db, ctx)
-		default:
-			return nil
-		}
-	})
+	return sqlite.WriteEvents(s.db, c, apps,
+		"apps",
+		func(app *domain.App) sqlite.Key {
+			return sqlite.Key{
+				"id": app.ID(),
+			}
+		},
+		func(e event.Event, v builder.Values) sqlite.WriteMode {
+			switch evt := e.(type) {
+			case domain.AppCreated:
+				v["id"] = evt.ID
+				v["name"] = evt.Name
+				v["production_target"] = evt.Production.Target()
+				v["production_version"] = evt.Production.Version()
+				v["production_vars"] = evt.Production.Vars()
+				v["staging_target"] = evt.Staging.Target()
+				v["staging_version"] = evt.Staging.Version()
+				v["staging_vars"] = evt.Staging.Vars()
+				v["history"] = evt.History
+				v["created_at"] = evt.Created.At()
+				v["created_by"] = evt.Created.By()
+			case domain.AppHistoryChanged:
+				v["history"] = evt.History
+			case domain.AppEnvChanged:
+				// This is safe to interpolate the column name here since events are raised by our
+				// own code.
+				v[string(evt.Environment)+"_target"] = evt.Config.Target()
+				v[string(evt.Environment)+"_version"] = evt.Config.Version()
+				v[string(evt.Environment)+"_vars"] = evt.Config.Vars()
+			case domain.AppVersionControlConfigured:
+				v["version_control_url"] = evt.Config.Url()
+				v["version_control_token"] = evt.Config.Token()
+			case domain.AppVersionControlRemoved:
+				v["version_control_url"] = nil
+				v["version_control_token"] = nil
+			case domain.AppCleanupRequested:
+				v["cleanup_requested_at"] = evt.Requested.At()
+				v["cleanup_requested_by"] = evt.Requested.By()
+			case domain.AppDeleted:
+				return sqlite.WriteModeDelete
+			}
+
+			return sqlite.WriteModeUpsert
+		})
 }
 
 type appNamingResult struct {

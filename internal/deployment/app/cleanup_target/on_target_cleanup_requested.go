@@ -11,6 +11,6 @@ func OnTargetCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[
 	return func(ctx context.Context, evt domain.TargetCleanupRequested) error {
 		return scheduler.Queue(ctx, Command{
 			ID: string(evt.ID),
-		}, bus.WithPolicy(bus.JobPolicyCancellable))
+		})
 	}
 }

@@ -4,26 +4,18 @@ import type { Paginated } from '$lib/pagination';
 
 export type Job = {
 	id: string;
-	resource_id: string;
 	group: string;
 	message_name: string;
 	message_data: string;
 	queued_at: string;
 	not_before: string;
 	error_code?: string;
-	policy: number;
 	retrieved: boolean;
 };
 
-export enum JobPolicy {
-	PreserveOrder = 1,
-	WaitForOthersResourceID = 2,
-	Cancellable = 4,
-	Mergeable = 8
-}
-
 export interface JobsService {
-	delete(id: string): Promise<void>;
+	dismiss(id: string): Promise<void>;
+	retry(id: string): Promise<void>;
 	fetchAll(page: number, options?: FetchOptions): Promise<Paginated<Job>>;
 	queryAll(page: number): QueryResult<Paginated<Job>>;
 }
@@ -35,8 +27,14 @@ type Options = {
 export class RemoteJobsService implements JobsService {
 	constructor(private readonly _fetcher: FetchService, private readonly _options: Options) {}
 
-	delete(id: string): Promise<void> {
+	dismiss(id: string): Promise<void> {
 		return this._fetcher.delete(`/api/v1/jobs/${id}`, {
+			invalidate: ['/api/v1/jobs']
+		});
+	}
+
+	retry(id: string): Promise<void> {
+		return this._fetcher.put(`/api/v1/jobs/${id}`, {
 			invalidate: ['/api/v1/jobs']
 		});
 	}

@@ -1,4 +1,4 @@
-package memory_test
+package embedded_test
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 
 	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/bus/memory"
+	"github.com/YuukanOO/seelf/pkg/bus/embedded"
 )
 
-func TestBus(t *testing.T) {
+func Test_Bus(t *testing.T) {
 	t.Run("should accepts registration of all message kind", func(t *testing.T) {
-		local := memory.NewBus()
+		local := embedded.NewBus()
 
 		bus.Register(local, addCommandHandler)
 		bus.Register(local, getQueryHandler)
@@ -27,14 +27,14 @@ func TestBus(t *testing.T) {
 			}
 		}()
 
-		local := memory.NewBus()
+		local := embedded.NewBus()
 
 		bus.Register(local, addCommandHandler)
 		bus.Register(local, addCommandHandler)
 	})
 
 	t.Run("should returns an error if no handler is registered for a given request", func(t *testing.T) {
-		local := memory.NewBus()
+		local := embedded.NewBus()
 
 		_, err := bus.Send(local, context.Background(), &addCommand{})
 
@@ -42,7 +42,7 @@ func TestBus(t *testing.T) {
 	})
 
 	t.Run("should returns the request handler error back if any", func(t *testing.T) {
-		local := memory.NewBus()
+		local := embedded.NewBus()
 		expectedErr := errors.New("handler error")
 
 		bus.Register(local, func(ctx context.Context, cmd addCommand) (int, error) {
@@ -55,7 +55,7 @@ func TestBus(t *testing.T) {
 	})
 
 	t.Run("should call the appropriate request handler and returns the result", func(t *testing.T) {
-		local := memory.NewBus()
+		local := embedded.NewBus()
 
 		bus.Register(local, addCommandHandler)
 		bus.Register(local, getQueryHandler)
@@ -74,7 +74,7 @@ func TestBus(t *testing.T) {
 	})
 
 	t.Run("should do nothing if no signal handler is registered for a given signal", func(t *testing.T) {
-		local := memory.NewBus()
+		local := embedded.NewBus()
 
 		err := local.Notify(context.Background(), registeredNotification{})
 
@@ -82,7 +82,7 @@ func TestBus(t *testing.T) {
 	})
 
 	t.Run("should returns a signal handler error back if any", func(t *testing.T) {
-		local := memory.NewBus()
+		local := embedded.NewBus()
 		expectedErr := errors.New("handler error")
 
 		bus.On(local, func(ctx context.Context, notif registeredNotification) error {
@@ -100,7 +100,7 @@ func TestBus(t *testing.T) {
 
 	t.Run("should call every signal handlers registered for the given signal", func(t *testing.T) {
 		var (
-			local           = memory.NewBus()
+			local           = embedded.NewBus()
 			firstOneCalled  = false
 			secondOneCalled = false
 		)
@@ -124,7 +124,7 @@ func TestBus(t *testing.T) {
 	t.Run("should call every middlewares registered", func(t *testing.T) {
 		calls := make([]int, 0)
 
-		local := memory.NewBus(
+		local := embedded.NewBus(
 			func(next bus.NextFunc) bus.NextFunc {
 				return func(ctx context.Context, m bus.Message) (any, error) {
 					calls = append(calls, 1)

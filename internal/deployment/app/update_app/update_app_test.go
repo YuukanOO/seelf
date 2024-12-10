@@ -137,17 +137,45 @@ func Test_UpdateApp(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, string(app.ID()), id)
-		assert.HasLength(t, 2, dispatcher.Signals())
+		assert.HasLength(t, 4, dispatcher.Signals())
 
 		changed := assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.Production, changed.Environment)
 		assert.Equal(t, otherTarget.ID(), changed.Config.Target())
 		assert.False(t, changed.Config.Vars().HasValue())
+		historyChanged := assert.Is[domain.AppHistoryChanged](t, dispatcher.Signals()[1])
+		assert.DeepEqual(t, domain.AppHistoryChanged{
+			ID: app.ID(),
+			History: domain.AppTargetHistory{
+				domain.Production: []domain.TargetID{
+					target.ID(),
+					otherTarget.ID(),
+				},
+				domain.Staging: []domain.TargetID{
+					target.ID(),
+					otherTarget.ID(),
+				},
+			},
+		}, historyChanged)
 
-		changed = assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[1])
+		changed = assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[2])
 		assert.Equal(t, domain.Staging, changed.Environment)
 		assert.Equal(t, otherTarget.ID(), changed.Config.Target())
 		assert.False(t, changed.Config.Vars().HasValue())
+		historyChanged = assert.Is[domain.AppHistoryChanged](t, dispatcher.Signals()[3])
+		assert.DeepEqual(t, domain.AppHistoryChanged{
+			ID: app.ID(),
+			History: domain.AppTargetHistory{
+				domain.Production: []domain.TargetID{
+					target.ID(),
+					otherTarget.ID(),
+				},
+				domain.Staging: []domain.TargetID{
+					target.ID(),
+					otherTarget.ID(),
+				},
+			},
+		}, historyChanged)
 	})
 
 	t.Run("should update an application env variables", func(t *testing.T) {
@@ -243,7 +271,7 @@ func Test_UpdateApp(t *testing.T) {
 				domain.NewEnvironmentConfig(target.ID()),
 			),
 		)
-		app.RequestCleanup(user.ID())
+		assert.Nil(t, app.RequestDelete(user.ID()))
 		handler, ctx, _ := arrange(t,
 			fixture.WithUsers(&user),
 			fixture.WithTargets(&target),

@@ -17,6 +17,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/ostools"
+	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 )
 
@@ -30,13 +31,14 @@ type (
 	}
 
 	Context struct {
-		Config           config.Configuration
-		Context          context.Context // If users has been seeded, will be authenticated as the first one
-		Dispatcher       spy.Dispatcher
-		TargetsStore     deployment.TargetsStore
-		AppsStore        deployment.AppsStore
-		DeploymentsStore deployment.DeploymentsStore
-		RegistriesStore  deployment.RegistriesStore
+		Config            config.Configuration
+		UnitOfWorkFactory storage.UnitOfWorkFactory
+		Context           context.Context // If users has been seeded, will be authenticated as the first one
+		Dispatcher        spy.Dispatcher
+		TargetsStore      deployment.TargetsStore
+		AppsStore         deployment.AppsStore
+		DeploymentsStore  deployment.DeploymentsStore
+		RegistriesStore   deployment.RegistriesStore
 	}
 
 	SeedBuilder func(*seed)
@@ -58,6 +60,8 @@ func PrepareDatabase(t testing.TB, options ...SeedBuilder) *Context {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	result.UnitOfWorkFactory = db
 
 	t.Cleanup(func() {
 		db.Close()

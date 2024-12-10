@@ -53,14 +53,14 @@ func (f *facade) Setup(ctx context.Context, target domain.Target) (domain.Target
 	return provider.Setup(ctx, target)
 }
 
-func (f *facade) RemoveConfiguration(ctx context.Context, target domain.Target) error {
-	provider, err := f.providerForTarget(target)
-
-	if err != nil {
-		return err
+func (f *facade) RemoveConfiguration(ctx context.Context, target domain.TargetID) error {
+	for _, p := range f.providers {
+		if err := p.RemoveConfiguration(ctx, target); err != nil {
+			return err
+		}
 	}
 
-	return provider.RemoveConfiguration(ctx, target)
+	return nil
 }
 
 func (f *facade) CleanupTarget(ctx context.Context, target domain.Target, strategy domain.CleanupStrategy) error {

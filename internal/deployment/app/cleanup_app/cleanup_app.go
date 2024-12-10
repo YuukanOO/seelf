@@ -9,13 +9,14 @@ import (
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	shared "github.com/YuukanOO/seelf/pkg/domain"
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 // Check if the cleanup is needed for a specific app, environment and a specific target.
 // It will be skipped if the target is being deleted or if no successful deployment has been made
 // in the interval represented by the `From` and `To` parameters.
 type Command struct {
-	bus.Command[bus.UnitType]
+	bus.AsyncCommand
 
 	AppID       string    `json:"app_id"`
 	TargetID    string    `json:"target_id"`
@@ -24,23 +25,26 @@ type Command struct {
 	To          time.Time `json:"to"`
 }
 
-func (Command) Name_() string        { return "deployment.command.cleanup_app" }
-func (c Command) ResourceID() string { return c.AppID }
+func (Command) Name_() string   { return "deployment.command.cleanup_app" }
+func (c Command) Group() string { return bus.Group(c.AppID, c.Environment, c.TargetID) }
 
 func Handler(
 	reader domain.TargetsReader,
 	deploymentsReader domain.DeploymentsReader,
+	appsReader domain.AppsReader,
+	appsWriter domain.AppsWriter,
 	provider domain.Provider,
-) bus.RequestHandler[bus.UnitType, Command] {
-	return func(ctx context.Context, cmd Command) (bus.UnitType, error) {
-		target, err := reader.GetByID(ctx, domain.TargetID(cmd.TargetID))
+	uow storage.UnitOfWorkFactory,
+) bus.RequestHandler[bus.AsyncResult, Command] {
+	return func(ctx context.Context, cmd Command) (result bus.AsyncResult, finalErr error) {
+		target, finalErr := reader.GetByID(ctx, domain.TargetID(cmd.TargetID))
 
-		if err != nil {
-			if errors.Is(err, apperr.ErrNotFound) {
-				return bus.Unit, nil
+		if finalErr != nil {
+			if errors.Is(finalErr, apperr.ErrNotFound) {
+				finalErr = nil
 			}
 
-			return bus.Unit, err
+			return
 		}
 
 		var (
@@ -51,20 +55,50 @@ func Handler(
 			successful       domain.HasSuccessfulDeploymentsOnAppTargetEnv
 		)
 
-		if interval, err = shared.NewTimeInterval(cmd.From, cmd.To); err != nil {
-			return bus.Unit, err
+		if interval, finalErr = shared.NewTimeInterval(cmd.From, cmd.To); finalErr != nil {
+			return
 		}
 
-		if runningOrPending, successful, err = deploymentsReader.HasDeploymentsOnAppTargetEnv(ctx, appid, target.ID(), env, interval); err != nil {
-			return bus.Unit, err
+		if runningOrPending, successful, finalErr = deploymentsReader.HasDeploymentsOnAppTargetEnv(ctx, appid, target.ID(), env, interval); finalErr != nil {
+			return
 		}
 
-		strategy, err := target.AppCleanupStrategy(runningOrPending, successful)
+		strategy, finalErr := target.CanAppBeCleaned(runningOrPending, successful)
 
-		if err != nil {
-			return bus.Unit, err
+		if finalErr != nil {
+			if errors.Is(finalErr, domain.ErrTargetConfigurationInProgress) ||
+				errors.Is(finalErr, domain.ErrRunningOrPendingDeployments) {
+				finalErr = nil
+				result = bus.AsyncResultDelay
+			}
+
+			return
 		}
 
-		return bus.Unit, provider.Cleanup(ctx, appid, target, env, strategy)
+		defer func() {
+			if finalErr != nil {
+				return
+			}
+
+			finalErr = uow.Create(ctx, func(ctx context.Context) error {
+				app, err := appsReader.GetByID(ctx, appid)
+
+				if err != nil {
+					// Application does not exist anymore, nothing specific to do
+					if errors.Is(err, apperr.ErrNotFound) {
+						return nil
+					}
+
+					return err
+				}
+
+				app.CleanedUp(env, target.ID())
+
+				return appsWriter.Write(ctx, &app)
+			})
+		}()
+
+		finalErr = provider.Cleanup(ctx, appid, target, env, strategy)
+		return
 	}
 }

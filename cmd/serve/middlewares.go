@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/YuukanOO/seelf/internal/auth/app/api_login"
 	"github.com/YuukanOO/seelf/internal/auth/domain"
+	"github.com/YuukanOO/seelf/pkg/bus"
 	httputils "github.com/YuukanOO/seelf/pkg/http"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -25,8 +27,8 @@ var errUnauthorized = errors.New("unauthorized")
 func (s *server) authenticate(withApiAccess bool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// First, try to find a user id in the encrypted session cookie
-		sess := sessions.Default(ctx)
-		uid, ok := sess.Get(userSessionKey).(string)
+		userSession := sessions.Default(ctx)
+		uid, ok := userSession.Get(userSessionKey).(string)
 		failed := !ok || uid == ""
 
 		// If it failed and api access is not allowed, return early
@@ -50,15 +52,17 @@ func (s *server) authenticate(withApiAccess bool) gin.HandlerFunc {
 			return
 		}
 
-		id, err := s.usersReader.GetIDFromAPIKey(ctx.Request.Context(), domain.APIKey(authHeader[apiAuthPrefixLength:]))
+		id, err := bus.Send(s.bus, ctx.Request.Context(), api_login.Query{
+			Key: authHeader[apiAuthPrefixLength:],
+		})
 
 		if err != nil {
 			_ = ctx.AbortWithError(http.StatusUnauthorized, errUnauthorized)
 			return
 		}
 
-		// Attach the user id to the context passed down in every usecases.
-		ctx.Request = ctx.Request.WithContext(domain.WithUserID(ctx.Request.Context(), id))
+		// Attach the user id to the context passed down in every use cases.
+		ctx.Request = ctx.Request.WithContext(domain.WithUserID(ctx.Request.Context(), domain.UserID(id)))
 
 		ctx.Next()
 	}

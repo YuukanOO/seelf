@@ -22,7 +22,7 @@ func Test_Deployment(t *testing.T) {
 
 	t.Run("should require an app without cleanup requested", func(t *testing.T) {
 		app := fixture.App()
-		app.RequestCleanup("uid")
+		assert.Nil(t, app.RequestDelete("uid"))
 
 		_, err := app.NewDeployment(1, fixture.SourceData(), domain.Production, "uid")
 

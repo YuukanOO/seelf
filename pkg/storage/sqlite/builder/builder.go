@@ -36,6 +36,8 @@ type (
 
 	// Query builder result used to interact with the database.
 	QueryBuilder[T any] interface {
+		Builder
+
 		// F for format, append a raw SQL statement to the builder with the optional arguments.
 		F(string, ...any) QueryBuilder[T]
 		// S for Statement, apply one or multiple statements to this builder.
@@ -57,6 +59,8 @@ type (
 
 		// Executes the query without scanning the result.
 		Exec(Executor, context.Context) error
+		// Executes the query but fail with a concurrency error if no rows are updated.
+		MustExec(Executor, context.Context) error
 	}
 )
 
@@ -285,6 +289,26 @@ func (q *queryBuilder[T]) Extract(ex Executor, ctx context.Context) (T, error) {
 
 func (q *queryBuilder[T]) ExtractAll(ex Executor, ctx context.Context) ([]T, error) {
 	return q.All(ex, ctx, valueMapper[T])
+}
+
+func (q *queryBuilder[T]) MustExec(ex Executor, ctx context.Context) error {
+	result, err := ex.ExecContext(ctx, q.String(), q.arguments...)
+
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return storage.ErrConcurrencyUpdate
+	}
+
+	return nil
 }
 
 func (q *queryBuilder[T]) Exec(ex Executor, ctx context.Context) error {

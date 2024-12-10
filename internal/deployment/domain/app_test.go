@@ -81,6 +81,10 @@ func Test_App(t *testing.T) {
 			Created:    shared.ActionFrom(uid, assert.NotZero(t, evt.Created.At())),
 			Production: production,
 			Staging:    staging,
+			History: domain.AppTargetHistory{
+				domain.Production: []domain.TargetID{production.Target()},
+				domain.Staging:    []domain.TargetID{staging.Target()},
+			},
 		}, evt)
 	})
 
@@ -139,7 +143,7 @@ func Test_App(t *testing.T) {
 
 	t.Run("does not allow to modify the vcs config if the app is marked for deletion", func(t *testing.T) {
 		app := fixture.App()
-		app.RequestCleanup("uid")
+		assert.Nil(t, app.RequestDelete("uid"))
 
 		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.UseVersionControl(
 			domain.NewVersionControl(must.Panic(domain.UrlFrom("http://somewhere.com")))))
@@ -195,84 +199,149 @@ func Test_App(t *testing.T) {
 		assert.Nil(t, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true)))
 		assert.Nil(t, app.HasStagingConfig(domain.NewEnvironmentConfigRequirement(newConfig, true, true)))
 
-		assert.HasNEvents(t, 3, &app, "new configs should trigger new events")
+		assert.HasNEvents(t, 5, &app, "new configs should trigger new events")
 		changed := assert.EventIs[domain.AppEnvChanged](t, &app, 1)
-
 		assert.DeepEqual(t, domain.AppEnvChanged{
 			ID:          app.ID(),
 			Environment: domain.Production,
 			Config:      newConfig,
 			OldConfig:   production,
 		}, changed)
+		historyChanged := assert.EventIs[domain.AppHistoryChanged](t, &app, 2)
+		assert.DeepEqual(t, domain.AppHistoryChanged{
+			ID: app.ID(),
+			History: domain.AppTargetHistory{
+				domain.Production: []domain.TargetID{
+					production.Target(),
+					newConfig.Target(),
+				},
+				domain.Staging: []domain.TargetID{
+					staging.Target(),
+					newConfig.Target(),
+				},
+			},
+		}, historyChanged)
 
-		changed = assert.EventIs[domain.AppEnvChanged](t, &app, 2)
-
+		changed = assert.EventIs[domain.AppEnvChanged](t, &app, 3)
 		assert.DeepEqual(t, domain.AppEnvChanged{
 			ID:          app.ID(),
 			Environment: domain.Staging,
 			Config:      newConfig,
 			OldConfig:   staging,
 		}, changed)
+		historyChanged = assert.EventIs[domain.AppHistoryChanged](t, &app, 4)
+		assert.DeepEqual(t, domain.AppHistoryChanged{
+			ID: app.ID(),
+			History: domain.AppTargetHistory{
+				domain.Production: []domain.TargetID{
+					production.Target(),
+					newConfig.Target(),
+				},
+				domain.Staging: []domain.TargetID{
+					staging.Target(),
+					newConfig.Target(),
+				},
+			},
+		}, historyChanged)
 	})
 
 	t.Run("does not allow to modify the environment config if the app is marked for deletion", func(t *testing.T) {
 		app := fixture.App()
-		app.RequestCleanup("uid")
+		assert.Nil(t, app.RequestDelete("uid"))
 
 		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("another-target"), true, true)))
 		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.HasStagingConfig(domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("another-target"), true, true)))
 	})
 
-	t.Run("could be marked for deletion only if not already the case", func(t *testing.T) {
+	t.Run("could be marked has deleting", func(t *testing.T) {
 		production := domain.NewEnvironmentConfig("production-target")
 		staging := domain.NewEnvironmentConfig("staging-target")
 		app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
 
-		app.RequestCleanup("uid")
-		app.RequestCleanup("uid")
+		err := app.RequestDelete("uid")
 
-		assert.HasNEvents(t, 2, &app, "should raise the event once")
-		evt := assert.EventIs[domain.AppCleanupRequested](t, &app, 1)
-
+		assert.Nil(t, err)
+		assert.HasNEvents(t, 2, &app)
+		requested := assert.EventIs[domain.AppCleanupRequested](t, &app, 1)
 		assert.DeepEqual(t, domain.AppCleanupRequested{
 			ID:               app.ID(),
 			ProductionConfig: production,
 			StagingConfig:    staging,
-			Requested:        shared.ActionFrom[auth.UserID]("uid", evt.Requested.At()),
-		}, evt)
+			Requested:        shared.ActionFrom[auth.UserID]("uid", requested.Requested.At()),
+		}, requested)
 	})
 
-	t.Run("should not allow a deletion if app resources have not been cleaned up", func(t *testing.T) {
-		app := fixture.App()
-		app.RequestCleanup("uid")
+	t.Run("should returns an error if already marked as being deleted", func(t *testing.T) {
+		production := domain.NewEnvironmentConfig("production-target")
+		staging := domain.NewEnvironmentConfig("staging-target")
+		app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
+		assert.Nil(t, app.RequestDelete("uid"))
 
-		err := app.Delete(false)
+		assert.ErrorIs(t, domain.ErrAppCleanupRequested, app.RequestDelete("uid"))
 
-		assert.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
-		assert.HasNEvents(t, 2, &app)
+		assert.HasNEvents(t, 2, &app, "should raise the event once")
+		requested := assert.EventIs[domain.AppCleanupRequested](t, &app, 1)
+		assert.DeepEqual(t, domain.AppCleanupRequested{
+			ID:               app.ID(),
+			ProductionConfig: production,
+			StagingConfig:    staging,
+			Requested:        shared.ActionFrom[auth.UserID]("uid", requested.Requested.At()),
+		}, requested)
 	})
 
-	t.Run("raise an error if delete is called for a non cleaned up app", func(t *testing.T) {
-		app := fixture.App()
+	t.Run("should be able to mark resources as being cleanup on specific env and target", func(t *testing.T) {
+		t.Run("should not raise the app delete if the application is not being deleted", func(t *testing.T) {
+			production := domain.NewEnvironmentConfig("production-target")
+			staging := domain.NewEnvironmentConfig("staging-target")
+			app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
 
-		err := app.Delete(false)
+			app.CleanedUp(domain.Production, production.Target())
+			app.CleanedUp(domain.Staging, staging.Target())
 
-		assert.ErrorIs(t, domain.ErrAppCleanupNeeded, err)
-	})
+			assert.HasNEvents(t, 3, &app)
+			historyChanged := assert.EventIs[domain.AppHistoryChanged](t, &app, 1)
+			assert.DeepEqual(t, domain.AppHistoryChanged{
+				ID:      app.ID(),
+				History: domain.AppTargetHistory{},
+			}, historyChanged)
+			historyChanged = assert.EventIs[domain.AppHistoryChanged](t, &app, 2)
+			assert.DeepEqual(t, domain.AppHistoryChanged{
+				ID:      app.ID(),
+				History: domain.AppTargetHistory{},
+			}, historyChanged)
+		})
 
-	t.Run("could be deleted", func(t *testing.T) {
-		app := fixture.App()
-		app.RequestCleanup("uid")
+		t.Run("should not raise the history changed event if the target was not existing", func(t *testing.T) {
+			app := fixture.App()
+			assert.Nil(t, app.RequestDelete("uid"))
 
-		err := app.Delete(true)
+			app.CleanedUp(domain.Production, "non-existing-target")
 
-		assert.Nil(t, err)
-		assert.HasNEvents(t, 3, &app)
-		evt := assert.EventIs[domain.AppDeleted](t, &app, 2)
+			assert.HasNEvents(t, 2, &app)
+		})
 
-		assert.Equal(t, domain.AppDeleted{
-			ID: app.ID(),
-		}, evt)
+		t.Run("should delete the app if being requested and all resources cleaned up", func(t *testing.T) {
+			production := domain.NewEnvironmentConfig("production-target")
+			staging := domain.NewEnvironmentConfig("staging-target")
+			app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
+			assert.Nil(t, app.HasProductionConfig(domain.NewEnvironmentConfigRequirement(domain.NewEnvironmentConfig("another-target"), true, true)))
+			assert.Nil(t, app.RequestDelete("uid"))
+
+			app.CleanedUp(domain.Production, production.Target())
+			app.CleanedUp(domain.Staging, staging.Target())
+			app.CleanedUp(domain.Production, "another-target")
+
+			assert.HasNEvents(t, 8, &app)
+			historyChanged := assert.EventIs[domain.AppHistoryChanged](t, &app, 6)
+			assert.DeepEqual(t, domain.AppHistoryChanged{
+				ID:      app.ID(),
+				History: domain.AppTargetHistory{},
+			}, historyChanged)
+			deleted := assert.EventIs[domain.AppDeleted](t, &app, 7)
+			assert.DeepEqual(t, domain.AppDeleted{
+				ID: app.ID(),
+			}, deleted)
+		})
 	})
 }
 

@@ -2,6 +2,7 @@ package event_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
@@ -26,25 +27,38 @@ func (domainEventA) Name_() string { return "domain_event_a" }
 func (domainEventB) Name_() string { return "domain_event_b" }
 
 func Test_Emitter(t *testing.T) {
+	t.Run("version should be zero by default", func(t *testing.T) {
+		ent := domainEntity{}
+
+		version, events := event.Unwrap(&ent)
+
+		assert.Zero(t, version)
+		assert.HasLength(t, 0, events)
+	})
+
+	t.Run("could be hydrated and remove events when doing so", func(t *testing.T) {
+		ent := domainEntity{}
+		event.Store(&ent, domainEventA{}, domainEventB{})
+		newVersion := time.Now().UTC()
+		event.Hydrate(&ent, newVersion)
+
+		version, events := event.Unwrap(&ent)
+
+		assert.Equal(t, newVersion, version)
+		assert.HasLength(t, 0, events)
+	})
+
 	t.Run("should be able to store and retrieve events from an Emitter", func(t *testing.T) {
 		ent := domainEntity{}
 		evt1 := domainEventA{}
 		evt2 := domainEventB{}
 		event.Store(&ent, evt1, evt2)
 
-		evts := event.Unwrap(&ent)
+		version, events := event.Unwrap(&ent)
 
-		assert.HasLength(t, 2, evts)
-		assert.Equal(t, evt1, evts[0].(domainEventA))
-		assert.Equal(t, evt2, evts[1].(domainEventB))
+		assert.HasLength(t, 2, events)
+		assert.Zero(t, version)
+		assert.Equal(t, evt1, events[0].(domainEventA))
+		assert.Equal(t, evt2, events[1].(domainEventB))
 	})
-
-	// t.Run("should be able to clear all events from an Emitter", func(t *testing.T) {
-	// 	ent := domainEntity{}
-	// 	Store(&ent, domainEventA{}, domainEventB{})
-
-	// 	Clear(&ent)
-
-	// 	testutil.HasLength(t, Unwrap(&ent), 0)
-	// })
 }

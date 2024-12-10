@@ -9,7 +9,6 @@ import (
 	"github.com/YuukanOO/seelf/internal/auth/app/login"
 	"github.com/YuukanOO/seelf/internal/auth/app/refresh_api_key"
 	"github.com/YuukanOO/seelf/internal/auth/app/update_user"
-	"github.com/YuukanOO/seelf/internal/auth/domain"
 	"github.com/YuukanOO/seelf/internal/auth/infra/crypto"
 	authsqlite "github.com/YuukanOO/seelf/internal/auth/infra/sqlite"
 )
@@ -19,9 +18,9 @@ func Setup(
 	logger log.Logger,
 	db *sqlite.Database,
 	b bus.Bus,
-) (domain.UsersReader, error) {
+) error {
 	usersStore := authsqlite.NewUsersStore(db)
-	authQueryHandler := authsqlite.NewGateway(db)
+	gateway := authsqlite.NewGateway(db)
 
 	passwordHasher := crypto.NewBCryptHasher()
 	keyGenerator := crypto.NewKeyGenerator()
@@ -30,7 +29,8 @@ func Setup(
 	bus.Register(b, create_first_account.Handler(usersStore, usersStore, passwordHasher, keyGenerator))
 	bus.Register(b, update_user.Handler(usersStore, usersStore, passwordHasher))
 	bus.Register(b, refresh_api_key.Handler(usersStore, usersStore, keyGenerator))
-	bus.Register(b, authQueryHandler.GetProfile)
+	bus.Register(b, gateway.GetIDFromAPIKey)
+	bus.Register(b, gateway.GetProfile)
 
-	return usersStore, db.Migrate(authsqlite.Migrations)
+	return db.Migrate(authsqlite.Migrations)
 }

@@ -9,24 +9,20 @@ SET
 -- And schedule it
 INSERT INTO scheduled_jobs (
     id
-    ,resource_id
     ,[group]
     ,message_name
     ,message_data
     ,queued_at
     ,not_before
-    ,policy
     ,retrieved
 )
 SELECT
     id
-    , id
     , 'deployment.target.configure.' || id
     , 'deployment.command.configure_target'
     , '{"id":"' || id || '","version":"2024-05-19T00:00:00Z"}'
     , DATETIME()
     , DATETIME()
-    , 8
     , false
 FROM targets;
 
@@ -37,6 +33,7 @@ CREATE TRIGGER IF NOT EXISTS on_deployment_failed_cleanup_jobs AFTER UPDATE ON d
 BEGIN
     DELETE FROM scheduled_jobs
     WHERE
-        resource_id = NEW.app_id || '-' || NEW.deployment_number
+        message_data ->> '$.app_id' = NEW.app_id
+        AND message_data ->> '$.deployment_number' = NEW.deployment_number
         AND retrieved = 0;
 END

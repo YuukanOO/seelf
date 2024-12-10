@@ -28,7 +28,7 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		app.RequestCleanup(auth.CurrentUser(ctx).MustGet())
+		app.RequestDelete(auth.CurrentUser(ctx).MustGet())
 
 		return bus.Unit, writer.Write(ctx, &app)
 	}

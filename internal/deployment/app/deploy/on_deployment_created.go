@@ -3,7 +3,6 @@ package deploy
 import (
 	"context"
 
-	"github.com/YuukanOO/seelf/internal/deployment/app"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/bus"
 )
@@ -14,6 +13,8 @@ func OnDeploymentCreatedHandler(scheduler bus.Scheduler) bus.SignalHandler[domai
 		return scheduler.Queue(ctx, Command{
 			AppID:            string(evt.ID.AppID()),
 			DeploymentNumber: int(evt.ID.DeploymentNumber()),
-		}, bus.WithGroup(app.DeploymentGroup(evt.Config)), bus.WithPolicy(bus.JobPolicyRetryPreserveOrder))
+			Environment:      string(evt.Config.Environment()),
+			TargetID:         string(evt.Config.Target()),
+		})
 	}
 }

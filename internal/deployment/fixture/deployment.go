@@ -15,7 +15,7 @@ import (
 type (
 	deploymentOption struct {
 		uid         auth.UserID
-		environment domain.Environment
+		environment domain.EnvironmentName
 		source      domain.SourceData
 		app         domain.App
 	}
@@ -56,7 +56,7 @@ func WithDeploymentRequestedBy(uid auth.UserID) DeploymentOptionBuilder {
 	}
 }
 
-func ForEnvironment(environment domain.Environment) DeploymentOptionBuilder {
+func ForEnvironment(environment domain.EnvironmentName) DeploymentOptionBuilder {
 	return func(o *deploymentOption) {
 		o.environment = environment
 	}

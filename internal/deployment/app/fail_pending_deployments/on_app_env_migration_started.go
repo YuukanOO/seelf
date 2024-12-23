@@ -8,17 +8,14 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
-func OnAppEnvChangedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.AppEnvChanged] {
-	return func(ctx context.Context, evt domain.AppEnvChanged) error {
-		if !evt.TargetHasChanged() {
-			return nil
-		}
-
+// When an application environment migration has started, just fail the old deployment right now.
+func OnAppEnvMigrationStartedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.AppEnvMigrationStarted] {
+	return func(ctx context.Context, evt domain.AppEnvMigrationStarted) error {
 		return writer.FailDeployments(ctx, domain.ErrAppTargetChanged, domain.FailCriteria{
 			Status:      monad.Value(domain.DeploymentStatusPending),
 			App:         monad.Value(evt.ID),
 			Environment: monad.Value(evt.Environment),
-			Target:      monad.Value(evt.OldConfig.Target()),
+			Target:      monad.Value(evt.Migration.Target()),
 		})
 	}
 }

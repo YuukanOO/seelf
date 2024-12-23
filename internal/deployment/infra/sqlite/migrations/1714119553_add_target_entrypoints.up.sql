@@ -7,7 +7,7 @@ SET
     , state_status = 0;
 
 -- And schedule it
-INSERT INTO scheduled_jobs (
+INSERT INTO [scheduler.scheduled_jobs] (
     id
     ,[group]
     ,message_name
@@ -31,7 +31,7 @@ FROM targets;
 CREATE TRIGGER IF NOT EXISTS on_deployment_failed_cleanup_jobs AFTER UPDATE ON deployments
     WHEN OLD.state_status != NEW.state_status AND NEW.state_status = 2 -- Only when the deployment goes to the failed state
 BEGIN
-    DELETE FROM scheduled_jobs
+    DELETE FROM [scheduler.scheduled_jobs]
     WHERE
         message_data ->> '$.app_id' = NEW.app_id
         AND message_data ->> '$.deployment_number' = NEW.deployment_number

@@ -63,10 +63,10 @@ func Test_RequestAppCleanup(t *testing.T) {
 		assert.HasLength(t, 1, dispatcher.Signals())
 		requested := assert.Is[domain.AppCleanupRequested](t, dispatcher.Signals()[0])
 		assert.DeepEqual(t, domain.AppCleanupRequested{
-			ID:               app.ID(),
-			ProductionConfig: requested.ProductionConfig,
-			StagingConfig:    requested.StagingConfig,
-			Requested:        shared.ActionFrom(user.ID(), assert.NotZero(t, requested.Requested.At())),
+			ID:         app.ID(),
+			Production: requested.Production,
+			Staging:    requested.Staging,
+			Requested:  shared.ActionFrom(user.ID(), assert.NotZero(t, requested.Requested.At())),
 		}, requested)
 	})
 }

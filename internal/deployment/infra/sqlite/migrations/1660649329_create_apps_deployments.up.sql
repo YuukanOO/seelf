@@ -12,8 +12,8 @@ CREATE TABLE apps (
 
     CONSTRAINT pk_apps PRIMARY KEY(id),
     CONSTRAINT unique_apps_name UNIQUE(name),
-    CONSTRAINT fk_apps_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_apps_cleanup_requested_by FOREIGN KEY(cleanup_requested_by) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_apps_created_by FOREIGN KEY(created_by) REFERENCES [auth.users](id) ON DELETE CASCADE,
+    CONSTRAINT fk_apps_cleanup_requested_by FOREIGN KEY(cleanup_requested_by) REFERENCES [auth.users](id) ON DELETE CASCADE
 );
 
 CREATE TABLE deployments (
@@ -36,5 +36,5 @@ CREATE TABLE deployments (
 
     CONSTRAINT pk_deployments PRIMARY KEY(app_id, deployment_number),
     CONSTRAINT fk_deployments_app_id FOREIGN KEY(app_id) REFERENCES apps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_deployments_requested_by FOREIGN KEY(requested_by) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_deployments_requested_by FOREIGN KEY(requested_by) REFERENCES [auth.users](id) ON DELETE CASCADE
 );

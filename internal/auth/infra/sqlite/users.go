@@ -34,7 +34,7 @@ func (s *usersStore) GetAdminUser(ctx context.Context) (domain.User, error) {
 			,api_key
 			,registered_at
 			,version
-		FROM users
+		FROM [auth.users]
 		ORDER BY registered_at ASC
 		LIMIT 1`).
 		One(s.db, ctx, domain.UserFrom)
@@ -42,7 +42,7 @@ func (s *usersStore) GetAdminUser(ctx context.Context) (domain.User, error) {
 
 func (s *usersStore) CheckEmailAvailability(ctx context.Context, email domain.Email, excluded ...domain.UserID) (domain.EmailRequirement, error) {
 	unique, err := builder.
-		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM users WHERE email = ?", email).
+		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM [auth.users] WHERE email = ?", email).
 		S(builder.Array("AND id NOT IN", excluded)).
 		F(")").
 		Extract(s.db, ctx)
@@ -60,7 +60,7 @@ func (s *usersStore) GetByID(ctx context.Context, id domain.UserID) (u domain.Us
 				,api_key
 				,registered_at
 				,version
-			FROM users
+			FROM [auth.users]
 			WHERE id = ?`, id).
 		One(s.db, ctx, domain.UserFrom)
 }
@@ -75,14 +75,14 @@ func (s *usersStore) GetByEmail(ctx context.Context, email domain.Email) (u doma
 				,api_key
 				,registered_at
 				,version
-			FROM users
+			FROM [auth.users]
 			WHERE email = ?`, email).
 		One(s.db, ctx, domain.UserFrom)
 }
 
 func (s *usersStore) Write(c context.Context, users ...*domain.User) error {
 	return sqlite.WriteEvents(s.db, c, users,
-		"users",
+		"[auth.users]",
 		func(u *domain.User) sqlite.Key {
 			return sqlite.Key{
 				"id": u.ID(),

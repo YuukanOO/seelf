@@ -42,7 +42,8 @@ const (
 )
 
 type (
-	// Configuration used to configure seelf commands.
+	// Configuration used to configure seelf commands exposed through an interface to prevent
+	// direct access to internal configuration structure.
 	Configuration interface {
 		serve.Options
 
@@ -126,7 +127,7 @@ func Default(builders ...ConfigurationBuilder) Configuration {
 		builder(conf)
 	}
 
-	if err := conf.PostLoad(); err != nil {
+	if err := conf.validate(); err != nil {
 		panic(err) // Should never happen since the default config is managed by us
 	}
 
@@ -137,6 +138,10 @@ func (c *configuration) Initialize(logger log.ConfigurableLogger, path string) e
 	exists, err := config.Load(path, c)
 
 	if err != nil {
+		return err
+	}
+
+	if err = c.validate(); err != nil {
 		return err
 	}
 
@@ -204,7 +209,7 @@ func (c *configuration) ListenAddress() string {
 	return c.Http.Host + ":" + strconv.Itoa(c.Http.Port)
 }
 
-func (c *configuration) PostLoad() error {
+func (c *configuration) validate() error {
 	return validate.Struct(validate.Of{
 		"log.level":                    validate.Value(c.Log.Level, &c.logLevel, log.ParseLevel),
 		"log.format":                   validate.Value(c.Log.Format, &c.logFormat, log.ParseFormat),

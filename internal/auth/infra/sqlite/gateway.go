@@ -26,14 +26,14 @@ func (s *Gateway) GetProfile(ctx context.Context, q get_profile.Query) (get_prof
 				,email
 				,registered_at
 				,api_key
-			FROM users
+			FROM [auth.users]
 			WHERE id = ?`, q.ID).
 		One(s.db, ctx, profileMapper)
 }
 
 func (s *Gateway) GetIDFromAPIKey(ctx context.Context, c api_login.Query) (string, error) {
 	return builder.
-		Query[string]("SELECT id FROM users WHERE api_key = ?", c.Key).
+		Query[string]("SELECT id FROM [auth.users] WHERE api_key = ?", c.Key).
 		Extract(s.db, ctx)
 }
 

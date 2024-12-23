@@ -141,41 +141,13 @@ func Test_UpdateApp(t *testing.T) {
 
 		changed := assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.Production, changed.Environment)
-		assert.Equal(t, otherTarget.ID(), changed.Config.Target())
-		assert.False(t, changed.Config.Vars().HasValue())
-		historyChanged := assert.Is[domain.AppHistoryChanged](t, dispatcher.Signals()[1])
-		assert.DeepEqual(t, domain.AppHistoryChanged{
-			ID: app.ID(),
-			History: domain.AppTargetHistory{
-				domain.Production: []domain.TargetID{
-					target.ID(),
-					otherTarget.ID(),
-				},
-				domain.Staging: []domain.TargetID{
-					target.ID(),
-					otherTarget.ID(),
-				},
-			},
-		}, historyChanged)
+		assert.Equal(t, otherTarget.ID(), changed.Config.Config().Target())
+		assert.False(t, changed.Config.Config().Vars().HasValue())
 
 		changed = assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[2])
 		assert.Equal(t, domain.Staging, changed.Environment)
-		assert.Equal(t, otherTarget.ID(), changed.Config.Target())
-		assert.False(t, changed.Config.Vars().HasValue())
-		historyChanged = assert.Is[domain.AppHistoryChanged](t, dispatcher.Signals()[3])
-		assert.DeepEqual(t, domain.AppHistoryChanged{
-			ID: app.ID(),
-			History: domain.AppTargetHistory{
-				domain.Production: []domain.TargetID{
-					target.ID(),
-					otherTarget.ID(),
-				},
-				domain.Staging: []domain.TargetID{
-					target.ID(),
-					otherTarget.ID(),
-				},
-			},
-		}, historyChanged)
+		assert.Equal(t, otherTarget.ID(), changed.Config.Config().Target())
+		assert.False(t, changed.Config.Config().Vars().HasValue())
 	})
 
 	t.Run("should update an application env variables", func(t *testing.T) {
@@ -220,17 +192,17 @@ func Test_UpdateApp(t *testing.T) {
 
 		changed := assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, domain.Production, changed.Environment)
-		assert.Equal(t, target.ID(), changed.Config.Target())
+		assert.Equal(t, target.ID(), changed.Config.Config().Target())
 		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"OTHER": "value"},
-		}, changed.Config.Vars().MustGet())
+		}, changed.Config.Config().Vars().MustGet())
 
 		changed = assert.Is[domain.AppEnvChanged](t, dispatcher.Signals()[1])
 		assert.Equal(t, domain.Staging, changed.Environment)
-		assert.Equal(t, target.ID(), changed.Config.Target())
+		assert.Equal(t, target.ID(), changed.Config.Config().Target())
 		assert.DeepEqual(t, domain.ServicesEnv{
 			"app": {"SOMETHING": "else"},
-		}, changed.Config.Vars().MustGet())
+		}, changed.Config.Config().Vars().MustGet())
 	})
 
 	t.Run("should require valid vcs inputs", func(t *testing.T) {
@@ -339,8 +311,8 @@ func Test_UpdateApp(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, string(app.ID()), id)
 		assert.HasLength(t, 1, dispatcher.Signals())
-		removed := assert.Is[domain.AppVersionControlRemoved](t, dispatcher.Signals()[0])
-		assert.Equal(t, domain.AppVersionControlRemoved{
+		removed := assert.Is[domain.AppVersionControlChanged](t, dispatcher.Signals()[0])
+		assert.Equal(t, domain.AppVersionControlChanged{
 			ID: app.ID(),
 		}, removed)
 	})
@@ -374,10 +346,10 @@ func Test_UpdateApp(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, string(app.ID()), id)
 		assert.HasLength(t, 1, dispatcher.Signals())
-		configured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[0])
+		configured := assert.Is[domain.AppVersionControlChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, app.ID(), configured.ID)
-		assert.Equal(t, "https://some.other.url", configured.Config.Url().String())
-		assert.Equal(t, "a token", configured.Config.Token().MustGet())
+		assert.Equal(t, "https://some.other.url", configured.Config.MustGet().Url().String())
+		assert.Equal(t, "a token", configured.Config.MustGet().Token().MustGet())
 	})
 
 	t.Run("should remove the vcs token", func(t *testing.T) {
@@ -411,10 +383,10 @@ func Test_UpdateApp(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, string(app.ID()), id)
 		assert.HasLength(t, 1, dispatcher.Signals())
-		configured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[0])
+		configured := assert.Is[domain.AppVersionControlChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, app.ID(), configured.ID)
-		assert.Equal(t, url, configured.Config.Url())
-		assert.False(t, configured.Config.Token().HasValue())
+		assert.Equal(t, url, configured.Config.MustGet().Url())
+		assert.False(t, configured.Config.MustGet().Token().HasValue())
 	})
 
 	t.Run("should update the vcs token", func(t *testing.T) {
@@ -448,9 +420,9 @@ func Test_UpdateApp(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, string(app.ID()), id)
 		assert.HasLength(t, 1, dispatcher.Signals())
-		configured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[0])
+		configured := assert.Is[domain.AppVersionControlChanged](t, dispatcher.Signals()[0])
 		assert.Equal(t, app.ID(), configured.ID)
-		assert.Equal(t, url, configured.Config.Url())
-		assert.Equal(t, "new token", configured.Config.Token().Get(""))
+		assert.Equal(t, url, configured.Config.MustGet().Url())
+		assert.Equal(t, "new token", configured.Config.MustGet().Token().Get(""))
 	})
 }

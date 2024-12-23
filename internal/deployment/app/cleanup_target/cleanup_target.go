@@ -75,7 +75,6 @@ func Handler(
 
 				return writer.Write(ctx, &target)
 			})
-
 		}()
 
 		finalErr = provider.CleanupTarget(ctx, target, strategy)

@@ -46,6 +46,9 @@ Cette action est IRRÉVERSIBLE et supprimera TOUTES LES DONNÉES associées sur 
 		'app.environment.production': 'Paramètres de production',
 		'app.environment.staging': 'Paramètres de staging',
 		'app.environment.target': 'Cible de déploiement',
+		'app.environment.target.migrating': 'Migration en cours',
+		'app.environment.target.migrating.description': (from: string) =>
+			`L'application est en cours de migration depuis la cible <strong>${from}</strong>. Vous ne pouvez pas mettre à jour la cible tant que la migration n'est pas terminée, consultez la <a href="${routes.jobs}">page des tâches</a> pour suivre son avancement.`,
 		'app.environment.target.changed': 'Cible mise à jour',
 		'app.environment.target.changed.description': (name: string) =>
 			`Si vous changez de cible, toutes les ressources liées à cette application déployées par seelf sur <strong>${name}</strong> seront <strong>SUPPRIMÉES</strong> et un déploiement sur la nouvelle cible sera programmé si possible. Si vous devez sauvegarder quelque chose, faites le avant de changer la cible.`,

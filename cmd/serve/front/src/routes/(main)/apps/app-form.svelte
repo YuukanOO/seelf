@@ -17,8 +17,9 @@
 	} from '$lib/resources/apps';
 	import type { Target } from '$lib/resources/targets';
 	import l from '$lib/localization';
-	import Dropdown, { type DropdownOption } from '$components/dropdown.svelte';
+	import type { DropdownOption } from '$components/dropdown.svelte';
 	import ServiceUrl from './service-url.svelte';
+	import EnvironmentConfigSection from './environment-config-section.svelte';
 
 	export let handler: (data: any) => Promise<unknown>;
 	export let targets: Target[];
@@ -231,70 +232,27 @@
 				</Stack>
 			</FormSection>
 
-			<FormSection title="app.environment.production">
-				<Stack direction="column">
-					<Dropdown
-						label="app.environment.target"
-						options={targetsOptions}
-						bind:value={production.target}
-						remoteError={errors?.['production.target']}
-					/>
-
-					{#if initialData && initialData.production.target.id !== production.target}
-						<Panel title="app.environment.target.changed" variant="warning">
-							<p>
-								{@html l.translate('app.environment.target.changed.description', [
-									initialData.production.target.name
-								])}
-							</p>
-						</Panel>
-					{/if}
-				</Stack>
-			</FormSection>
-
-			<FormEnvVars
-				class="env-vars-container"
+			<EnvironmentConfigSection
+				environment="production"
+				config={initialData?.production}
+				{targetsOptions}
+				bind:target={production.target}
+				bind:variables={production.vars}
 				latestServiceNames={initialData?.latest_deployments.production?.state.services?.map(
 					(s) => s.name
 				)}
-				bind:values={production.vars}
 			/>
 
-			<FormSection title="app.environment.staging">
-				<Stack direction="column">
-					<Dropdown
-						label="app.environment.target"
-						options={targetsOptions}
-						bind:value={staging.target}
-						remoteError={errors?.['staging.target']}
-					/>
-
-					{#if initialData && initialData.staging.target.id !== staging.target}
-						<Panel title="app.environment.target.changed" variant="warning">
-							<p>
-								{@html l.translate('app.environment.target.changed.description', [
-									initialData.production.target.name
-								])}
-							</p>
-						</Panel>
-					{/if}
-				</Stack>
-			</FormSection>
-
-			<FormEnvVars
-				class="env-vars-container"
+			<EnvironmentConfigSection
+				environment="staging"
+				config={initialData?.staging}
+				{targetsOptions}
+				bind:target={staging.target}
+				bind:variables={staging.vars}
 				latestServiceNames={initialData?.latest_deployments.staging?.state.services?.map(
 					(s) => s.name
 				)}
-				bind:values={staging.vars}
 			/>
 		</div>
 	</Stack>
 </Form>
-
-<style module>
-	.env-vars-container {
-		margin-block-start: var(--sp-4);
-		margin-block-end: var(--sp-6);
-	}
-</style>

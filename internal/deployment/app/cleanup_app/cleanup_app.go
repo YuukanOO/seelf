@@ -39,17 +39,20 @@ func Handler(
 	return func(ctx context.Context, cmd Command) (result bus.AsyncResult, finalErr error) {
 		target, finalErr := reader.GetByID(ctx, domain.TargetID(cmd.TargetID))
 
+		var (
+			appid = domain.AppID(cmd.AppID)
+			env   = domain.EnvironmentName(cmd.Environment)
+		)
+
 		if finalErr != nil {
 			if errors.Is(finalErr, apperr.ErrNotFound) {
-				finalErr = nil
+				finalErr = markAppCleanedUp(ctx, uow, appsReader, appsWriter, appid, target.ID(), env)
 			}
 
 			return
 		}
 
 		var (
-			appid            = domain.AppID(cmd.AppID)
-			env              = domain.Environment(cmd.Environment)
 			interval         shared.TimeInterval
 			runningOrPending domain.HasRunningOrPendingDeploymentsOnAppTargetEnv
 			successful       domain.HasSuccessfulDeploymentsOnAppTargetEnv
@@ -80,25 +83,39 @@ func Handler(
 				return
 			}
 
-			finalErr = uow.Create(ctx, func(ctx context.Context) error {
-				app, err := appsReader.GetByID(ctx, appid)
-
-				if err != nil {
-					// Application does not exist anymore, nothing specific to do
-					if errors.Is(err, apperr.ErrNotFound) {
-						return nil
-					}
-
-					return err
-				}
-
-				app.CleanedUp(env, target.ID())
-
-				return appsWriter.Write(ctx, &app)
-			})
+			finalErr = markAppCleanedUp(ctx, uow, appsReader, appsWriter, appid, target.ID(), env)
 		}()
 
 		finalErr = provider.Cleanup(ctx, appid, target, env, strategy)
 		return
 	}
+}
+
+func markAppCleanedUp(
+	ctx context.Context,
+	uow storage.UnitOfWorkFactory,
+	appsReader domain.AppsReader,
+	appsWriter domain.AppsWriter,
+	appid domain.AppID,
+	target domain.TargetID,
+	env domain.EnvironmentName,
+) error {
+	return uow.Create(ctx, func(ctx context.Context) error {
+		app, err := appsReader.GetByID(ctx, appid)
+
+		if err != nil {
+			// Application does not exist anymore, nothing specific to do
+			if errors.Is(err, apperr.ErrNotFound) {
+				return nil
+			}
+
+			return err
+		}
+
+		if err = app.CleanedUp(env, target); err != nil {
+			return err
+		}
+
+		return appsWriter.Write(ctx, &app)
+	})
 }

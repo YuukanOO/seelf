@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-	"database/sql/driver"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/domain"
@@ -12,13 +11,13 @@ import (
 	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/monad"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 var (
 	ErrAppNameAlreadyTaken         = apperr.New("app_name_already_taken")
 	ErrVersionControlNotConfigured = apperr.New("version_control_not_configured")
-	ErrAppCleanupNeeded            = apperr.New("app_cleanup_needed")
 	ErrAppCleanupRequested         = apperr.New("app_cleanup_requested")
 	ErrAppTargetChanged            = apperr.New("app_target_changed")
 )
@@ -33,9 +32,8 @@ type (
 		id               AppID
 		name             AppName
 		versionControl   monad.Maybe[VersionControl]
-		history          AppTargetHistory
-		production       EnvironmentConfig
-		staging          EnvironmentConfig
+		production       Environment
+		staging          Environment
 		cleanupRequested monad.Maybe[shared.Action[domain.UserID]]
 		created          shared.Action[domain.UserID]
 	}
@@ -69,9 +67,8 @@ type (
 
 		ID         AppID
 		Name       AppName
-		Production EnvironmentConfig
-		Staging    EnvironmentConfig
-		History    AppTargetHistory
+		Production Environment
+		Staging    Environment
 		Created    shared.Action[domain.UserID]
 	}
 
@@ -79,38 +76,41 @@ type (
 		bus.Notification
 
 		ID          AppID
-		Environment Environment
-		Config      EnvironmentConfig
-		OldConfig   EnvironmentConfig // Old configuration, used to ease the cleanup handling
+		Environment EnvironmentName
+		Config      Environment
 	}
 
-	AppVersionControlConfigured struct {
+	AppEnvMigrationStarted struct {
+		bus.Notification
+
+		ID          AppID
+		Environment EnvironmentName
+		Migration   EnvironmentMigration
+	}
+
+	AppEnvCleanedUp struct {
+		bus.Notification
+
+		ID          AppID
+		Environment EnvironmentName
+		Target      TargetID
+		Config      Environment
+	}
+
+	AppVersionControlChanged struct {
 		bus.Notification
 
 		ID     AppID
-		Config VersionControl
-	}
-
-	AppVersionControlRemoved struct {
-		bus.Notification
-
-		ID AppID
+		Config monad.Maybe[VersionControl]
 	}
 
 	AppCleanupRequested struct {
 		bus.Notification
 
-		ID               AppID
-		ProductionConfig EnvironmentConfig
-		StagingConfig    EnvironmentConfig
-		Requested        shared.Action[domain.UserID]
-	}
-
-	AppHistoryChanged struct {
-		bus.Notification
-
-		ID      AppID
-		History AppTargetHistory
+		ID         AppID
+		Production Environment
+		Staging    Environment
+		Requested  shared.Action[domain.UserID]
 	}
 
 	AppDeleted struct {
@@ -120,17 +120,15 @@ type (
 	}
 )
 
-func (AppCreated) Name_() string    { return "deployment.event.app_created" }
-func (AppEnvChanged) Name_() string { return "deployment.event.app_env_changed" }
-func (AppVersionControlConfigured) Name_() string {
-	return "deployment.event.app_version_control_configured"
+func (AppCreated) Name_() string             { return "deployment.event.app_created" }
+func (AppEnvChanged) Name_() string          { return "deployment.event.app_env_changed" }
+func (AppEnvMigrationStarted) Name_() string { return "deployment.event.app_env_migration_started" }
+func (AppEnvCleanedUp) Name_() string        { return "deployment.event.app_env_cleaned_up" }
+func (AppVersionControlChanged) Name_() string {
+	return "deployment.event.app_version_control_changed"
 }
-func (AppVersionControlRemoved) Name_() string { return "deployment.event.app_version_control_removed" }
-func (AppCleanupRequested) Name_() string      { return "deployment.event.app_cleanup_requested" }
-func (AppHistoryChanged) Name_() string        { return "deployment.event.app_history_changed" }
-func (AppDeleted) Name_() string               { return "deployment.event.app_deleted" }
-
-func (e AppEnvChanged) TargetHasChanged() bool { return e.Config.target != e.OldConfig.target }
+func (AppCleanupRequested) Name_() string { return "deployment.event.app_cleanup_requested" }
+func (AppDeleted) Name_() string          { return "deployment.event.app_deleted" }
 
 // Instantiates a new App.
 func NewApp(
@@ -154,13 +152,9 @@ func NewApp(
 	app.apply(AppCreated{
 		ID:         id.New[AppID](),
 		Name:       name,
-		Production: production,
-		Staging:    staging,
-		History: AppTargetHistory{
-			Production: []TargetID{production.target},
-			Staging:    []TargetID{staging.target},
-		},
-		Created: shared.NewAction(createdBy),
+		Production: newEnvironment(production),
+		Staging:    newEnvironment(staging),
+		Created:    shared.NewAction(createdBy),
 	})
 
 	return app, nil
@@ -176,28 +170,41 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		createdBy          domain.UserID
 		cleanupRequestedAt monad.Maybe[time.Time]
 		cleanupRequestedBy monad.Maybe[string]
+
+		productionMigrationTarget monad.Maybe[string]
+		productionMigrationFrom   monad.Maybe[time.Time]
+		productionMigrationTo     monad.Maybe[time.Time]
+
+		stagingMigrationTarget monad.Maybe[string]
+		stagingMigrationFrom   monad.Maybe[time.Time]
+		stagingMigrationTo     monad.Maybe[time.Time]
 	)
 
-	err = scanner.Scan(
+	if err = scanner.Scan(
 		&a.id,
 		&a.name,
 		&url,
 		&token,
-		&a.production.target,
-		&a.production.version,
-		&a.production.vars,
-		&a.staging.target,
-		&a.staging.version,
-		&a.staging.vars,
-		&cleanupRequestedAt,
-		&cleanupRequestedBy,
-		&a.history,
+		&productionMigrationTarget,
+		&productionMigrationFrom,
+		&productionMigrationTo,
+		&a.production.since,
+		&a.production.cleaned,
+		&a.production.config.target,
+		&a.production.config.vars,
+		&stagingMigrationTarget,
+		&stagingMigrationFrom,
+		&stagingMigrationTo,
+		&a.staging.since,
+		&a.staging.cleaned,
+		&a.staging.config.target,
+		&a.staging.config.vars,
 		&createdAt,
 		&createdBy,
+		&cleanupRequestedAt,
+		&cleanupRequestedBy,
 		&version,
-	)
-
-	if err != nil {
+	); err != nil {
 		return a, err
 	}
 
@@ -211,15 +218,26 @@ func AppFrom(scanner storage.Scanner) (a App, err error) {
 		)
 	}
 
+	if prodMigrationTarget, hasProdMigration := productionMigrationTarget.TryGet(); hasProdMigration {
+		a.production.migration.Set(EnvironmentMigration{
+			target:   TargetID(prodMigrationTarget),
+			interval: must.Panic(shared.NewTimeInterval(productionMigrationFrom.MustGet(), productionMigrationTo.MustGet())),
+		})
+	}
+
+	if stagingMigrationTarget, hasStagingMigration := stagingMigrationTarget.TryGet(); hasStagingMigration {
+		a.staging.migration.Set(EnvironmentMigration{
+			target:   TargetID(stagingMigrationTarget),
+			interval: must.Panic(shared.NewTimeInterval(stagingMigrationFrom.MustGet(), stagingMigrationTo.MustGet())),
+		})
+	}
+
 	// vcs url has been set, reconstitute the vcs config
 	if u, isSet := url.TryGet(); isSet {
-		vcs := NewVersionControl(u)
-
-		if tok, isSet := token.TryGet(); isSet {
-			vcs.Authenticated(tok)
-		}
-
-		a.versionControl.Set(vcs)
+		a.versionControl.Set(VersionControl{
+			url:   u,
+			token: token,
+		})
 	}
 
 	return a, err
@@ -235,9 +253,9 @@ func (a *App) UseVersionControl(config VersionControl) error {
 		return nil
 	}
 
-	a.apply(AppVersionControlConfigured{
+	a.apply(AppVersionControlChanged{
 		ID:     a.id,
-		Config: config,
+		Config: monad.Value(config),
 	})
 
 	return nil
@@ -253,7 +271,7 @@ func (a *App) RemoveVersionControl() error {
 		return nil
 	}
 
-	a.apply(AppVersionControlRemoved{
+	a.apply(AppVersionControlChanged{
 		ID: a.id,
 	})
 
@@ -278,37 +296,60 @@ func (a *App) RequestDelete(requestedBy domain.UserID) error {
 	}
 
 	a.apply(AppCleanupRequested{
-		ID:               a.id,
-		ProductionConfig: a.production,
-		StagingConfig:    a.staging,
-		Requested:        shared.NewAction(requestedBy),
+		ID:         a.id,
+		Production: a.production,
+		Staging:    a.staging,
+		Requested:  shared.NewAction(requestedBy),
 	})
 
 	return nil
 }
 
 // Marks the application has being cleaned for a specific environment and a specific target.
-func (a *App) CleanedUp(environment Environment, target TargetID) {
-	if a.history.remove(environment, target) {
-		a.apply(AppHistoryChanged{
-			ID:      a.id,
-			History: a.history,
-		})
+func (a *App) CleanedUp(environment EnvironmentName, target TargetID) error {
+	env, err := a.environmentFor(environment)
+
+	if err != nil {
+		return err
 	}
 
-	if a.history.isEmpty() && a.cleanupRequested.HasValue() {
+	if err := env.clean(target, a.cleanupRequested.HasValue()); err != nil {
+		return err
+	}
+
+	a.apply(AppEnvCleanedUp{
+		ID:          a.id,
+		Environment: environment,
+		Target:      target,
+		Config:      env,
+	})
+
+	if a.production.isFullyCleaned() && a.staging.isFullyCleaned() {
 		a.apply(AppDeleted{
 			ID: a.id,
 		})
 	}
+
+	return nil
 }
 
 func (a *App) ID() AppID                                   { return a.id }
 func (a *App) VersionControl() monad.Maybe[VersionControl] { return a.versionControl }
 
+func (a *App) environmentFor(name EnvironmentName) (Environment, error) {
+	switch name {
+	case Production:
+		return a.production, nil
+	case Staging:
+		return a.staging, nil
+	default:
+		return Environment{}, ErrInvalidEnvironmentName
+	}
+}
+
 func (a *App) tryUpdateEnvironmentConfig(
-	env Environment,
-	existingConfig EnvironmentConfig,
+	name EnvironmentName,
+	environment Environment,
 	updatedConfigRequirement EnvironmentConfigRequirement,
 ) error {
 	if a.cleanupRequested.HasValue() {
@@ -321,30 +362,36 @@ func (a *App) tryUpdateEnvironmentConfig(
 		return err
 	}
 
-	// Same configuration, returns
-	if updatedConfig.Equals(existingConfig) {
-		return nil
-	}
+	migration, updated, err := environment.update(updatedConfig)
 
-	targetChanged := updatedConfig.consolidate(existingConfig)
+	if err != nil || !updated {
+		return err
+	}
 
 	a.apply(AppEnvChanged{
 		ID:          a.id,
-		Environment: env,
-		Config:      updatedConfig,
-		OldConfig:   existingConfig,
+		Environment: name,
+		Config:      environment,
 	})
 
-	if targetChanged {
-		a.history.push(env, updatedConfig.target)
-
-		a.apply(AppHistoryChanged{
-			ID:      a.id,
-			History: a.history,
+	if m, migrationNeeded := migration.TryGet(); migrationNeeded {
+		a.apply(AppEnvMigrationStarted{
+			ID:          a.id,
+			Environment: name,
+			Migration:   m,
 		})
 	}
 
 	return nil
+}
+
+func (a *App) setEnvironmentFor(name EnvironmentName, config Environment) {
+	switch name {
+	case Production:
+		a.production = config
+	case Staging:
+		a.staging = config
+	}
 }
 
 func (a *App) apply(e event.Event) {
@@ -355,67 +402,15 @@ func (a *App) apply(e event.Event) {
 		a.production = evt.Production
 		a.staging = evt.Staging
 		a.created = evt.Created
-		a.history = evt.History
 	case AppEnvChanged:
-		switch evt.Environment {
-		case Production:
-			a.production = evt.Config
-		case Staging:
-			a.staging = evt.Config
-		}
-	case AppVersionControlConfigured:
-		a.versionControl.Set(evt.Config)
-	case AppVersionControlRemoved:
-		a.versionControl.Unset()
+		a.setEnvironmentFor(evt.Environment, evt.Config)
+	case AppEnvCleanedUp:
+		a.setEnvironmentFor(evt.Environment, evt.Config)
+	case AppVersionControlChanged:
+		a.versionControl = evt.Config
 	case AppCleanupRequested:
 		a.cleanupRequested.Set(evt.Requested)
-	case AppHistoryChanged:
-		a.history = evt.History
 	}
 
 	event.Store(a, e)
 }
-
-// Represents the list of targets per env where the application could have been deployed
-// and where resources should be cleaned up.
-// You should never update it directly and maybe I should embed the map in a struct
-// to make it more explicit.
-type AppTargetHistory map[Environment][]TargetID
-
-func (a AppTargetHistory) push(environment Environment, target TargetID) {
-	targets, exists := a[environment]
-
-	if !exists {
-		a[environment] = []TargetID{target}
-		return
-	}
-
-	a[environment] = append(targets, target)
-}
-
-// Remove the given target and environment history and returns true if the history has been
-// modified.
-func (a AppTargetHistory) remove(environment Environment, target TargetID) bool {
-	targets, exists := a[environment]
-
-	if !exists {
-		return false
-	}
-
-	for i, existingTarget := range targets {
-		if existingTarget == target {
-			a[environment] = append(targets[:i], targets[i+1:]...)
-			if len(a[environment]) == 0 {
-				delete(a, environment)
-			}
-			return true
-		}
-	}
-
-	return false
-}
-
-func (a AppTargetHistory) isEmpty() bool { return len(a) == 0 }
-
-func (a AppTargetHistory) Value() (driver.Value, error) { return storage.ValueJSON(a) }
-func (a *AppTargetHistory) Scan(value any) error        { return storage.ScanJSON(value, a) }

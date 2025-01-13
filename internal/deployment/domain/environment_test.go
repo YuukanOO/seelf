@@ -8,7 +8,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/assert"
 )
 
-func Test_Environment(t *testing.T) {
+func Test_EnvironmentName(t *testing.T) {
 	t.Run("should validates input string", func(t *testing.T) {
 		tests := []struct {
 			input string
@@ -22,10 +22,10 @@ func Test_Environment(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(test.input, func(t *testing.T) {
-				r, err := domain.EnvironmentFrom(test.input)
+				r, err := domain.EnvironmentNameFrom(test.input)
 
 				if test.valid {
-					assert.Equal(t, domain.Environment(test.input), r)
+					assert.Equal(t, domain.EnvironmentName(test.input), r)
 					assert.Nil(t, err)
 				} else {
 					assert.ErrorIs(t, domain.ErrInvalidEnvironmentName, err)
@@ -37,7 +37,7 @@ func Test_Environment(t *testing.T) {
 
 	t.Run("should expose a method to check if an env is the production one", func(t *testing.T) {
 		tests := []struct {
-			input      domain.Environment
+			input      domain.EnvironmentName
 			production bool
 		}{
 			{"staging", false},

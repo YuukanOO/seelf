@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/YuukanOO/seelf/cmd/startup"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/gin-contrib/sessions"
@@ -45,14 +44,14 @@ type (
 	}
 )
 
-func newHttpServer(options ServerOptions, root startup.ServerRoot) *server {
+func newHttpServer(options ServerOptions, bus bus.Dispatcher, logger log.Logger) *server {
 	gin.SetMode(gin.ReleaseMode)
 
 	s := &server{
 		options: options,
 		router:  gin.New(),
-		bus:     root.Bus(),
-		logger:  root.Logger(),
+		bus:     bus,
+		logger:  logger,
 	}
 
 	_ = s.router.SetTrustedProxies(nil)

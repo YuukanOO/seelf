@@ -1,8 +1,8 @@
-import { RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS, POLLING_INTERVAL_MS } from '$lib/config';
-import type { Paginated } from '$lib/pagination';
+import { POLLING_INTERVAL_MS, RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS } from '$lib/config';
 import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
-import type { ByUserData } from '$lib/resources/users';
+import type { Paginated } from '$lib/pagination';
 import type { TargetStatus } from '$lib/resources/targets';
+import type { ByUserData } from '$lib/resources/users';
 
 export enum DeploymentStatus {
 	Pending = 0,
@@ -50,7 +50,7 @@ export type StateWithServices = State & {
 	services: Service[];
 };
 
-export type Environment = 'production' | 'staging';
+export type EnvironmentName = 'production' | 'staging';
 
 export type TargetSummary = {
 	id: string;
@@ -62,7 +62,7 @@ export type TargetSummary = {
 export type Deployment = {
 	app_id: string;
 	deployment_number: number;
-	environment: Environment;
+	environment: EnvironmentName;
 	target: TargetSummary;
 	source: SourceData;
 	state: State;
@@ -77,12 +77,12 @@ export type DeploymentDetail = Omit<Deployment, 'state'> & {
 export type QueueDeployment =
 	| FormData
 	| ({
-			environment: Environment;
+			environment: EnvironmentName;
 	  } & ({ raw: string } | { git: { branch: string; hash?: string } }));
 
 export type QueryDeploymentsFilters = {
 	page?: number;
-	environment?: Environment;
+	environment?: EnvironmentName;
 };
 
 export interface DeploymentsService {

@@ -14,7 +14,7 @@
 	import { buildFormData } from '$lib/form';
 	import routes from '$lib/path';
 	import service, {
-		type Environment,
+		type EnvironmentName,
 		type SourceDataDiscriminator,
 		type QueueDeployment
 	} from '$lib/resources/deployments';
@@ -23,14 +23,14 @@
 
 	export let data;
 
-	let environment: Environment = 'production';
+	let environment: EnvironmentName = 'production';
 	let kind: SourceDataDiscriminator = data.app.version_control ? 'git' : 'raw';
 	let raw = '';
 	let archive: Maybe<FileList> = undefined;
 	let branch = '';
 	let hash: Maybe<string> = undefined;
 
-	const options: Environment[] = ['production', 'staging'];
+	const options: EnvironmentName[] = ['production', 'staging'];
 	const kindOptions = (
 		[
 			{ label: l.translate('deployment.payload.raw'), value: 'raw' },

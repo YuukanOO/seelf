@@ -28,10 +28,10 @@ func Handler(
 	source domain.Source,
 ) bus.RequestHandler[int, Command] {
 	return func(ctx context.Context, cmd Command) (int, error) {
-		var env domain.Environment
+		var env domain.EnvironmentName
 
 		if err := validate.Struct(validate.Of{
-			"environment": validate.Value(cmd.Environment, &env, domain.EnvironmentFrom),
+			"environment": validate.Value(cmd.Environment, &env, domain.EnvironmentNameFrom),
 		}); err != nil {
 			return 0, err
 		}

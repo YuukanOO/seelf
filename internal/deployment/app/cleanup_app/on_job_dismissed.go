@@ -32,7 +32,7 @@ func OnJobDismissedHandler(
 			return err
 		}
 
-		app.CleanedUp(domain.Environment(cmd.Environment), domain.TargetID(cmd.TargetID))
+		_ = app.CleanedUp(domain.EnvironmentName(cmd.Environment), domain.TargetID(cmd.TargetID))
 
 		return writer.Write(ctx, &app)
 	}

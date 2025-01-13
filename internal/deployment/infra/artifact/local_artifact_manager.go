@@ -39,7 +39,7 @@ type (
 
 	deploymentTemplateData struct {
 		Number      domain.DeploymentNumber
-		Environment domain.Environment
+		Environment domain.EnvironmentName
 	}
 )
 

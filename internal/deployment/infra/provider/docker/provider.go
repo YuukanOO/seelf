@@ -321,7 +321,7 @@ func (d *docker) CleanupTarget(ctx context.Context, target domain.Target, strate
 	))
 }
 
-func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.Environment, strategy domain.CleanupStrategy) error {
+func (d *docker) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.EnvironmentName, strategy domain.CleanupStrategy) error {
 	if strategy == domain.CleanupStrategySkip {
 		return nil
 	}

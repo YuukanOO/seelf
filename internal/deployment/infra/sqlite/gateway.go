@@ -31,25 +31,25 @@ func (s *Gateway) GetAllApps(ctx context.Context, cmd get_apps.Query) ([]get_app
 	return builder.
 		Query[get_apps.App](`
 			SELECT
-				apps.id
-				,apps.name
-				,apps.cleanup_requested_at
-				,cusers.id
-				,cusers.email
-				,apps.created_at
-				,users.id
-				,users.email
+				app.id
+				,app.name
+				,app.cleanup_requested_at
+				,cleaner.id
+				,cleaner.email
+				,app.created_at
+				,creator.id
+				,creator.email
 				,production_target.id
 				,production_target.name
 				,production_target.url
 				,staging_target.id
 				,staging_target.name
 				,staging_target.url
-			FROM apps
-			INNER JOIN users ON users.id = apps.created_by
-			INNER JOIN targets AS production_target ON production_target.id = apps.production_target
-			INNER JOIN targets AS staging_target ON staging_target.id = apps.staging_target
-			LEFT JOIN users cusers ON cusers.id = apps.cleanup_requested_by`).
+			FROM [deployment.apps] app
+			INNER JOIN [auth.users] creator ON creator.id = app.created_by
+			INNER JOIN [deployment.targets] AS production_target ON production_target.id = app.production_config_target
+			INNER JOIN [deployment.targets] AS staging_target ON staging_target.id = app.staging_config_target
+			LEFT JOIN [auth.users] cleaner ON cleaner.id = app.cleanup_requested_by`).
 		All(s.db, ctx, appDataMapper, getDeploymentDataloader)
 }
 
@@ -57,60 +57,68 @@ func (s *Gateway) GetAppByID(ctx context.Context, cmd get_app_detail.Query) (get
 	return builder.
 		Query[get_app_detail.App](`
 			SELECT
-				apps.id
-				,apps.name
-				,apps.version_control_url
-				,apps.version_control_token
+				app.id
+				,app.name
+				,app.version_control_url
+				,app.version_control_token
 				,production_target.id
 				,production_target.name
 				,production_target.url
-				,apps.production_vars
+				,production_migration_target.id
+				,production_migration_target.name
+				,production_migration_target.url
+				,app.production_config_vars
 				,staging_target.id
 				,staging_target.name
 				,staging_target.url
-				,apps.staging_vars
-				,apps.cleanup_requested_at
-				,cusers.id
-				,cusers.email
-				,apps.created_at
-				,users.id
-				,users.email
-			FROM apps
-			INNER JOIN users ON users.id = apps.created_by
-			INNER JOIN targets production_target ON production_target.id = apps.production_target
-			INNER JOIN targets staging_target ON staging_target.id = apps.staging_target
-			LEFT JOIN users cusers ON cusers.id = apps.cleanup_requested_by
-			WHERE apps.id = ?`, cmd.ID).
+				,staging_migration_target.id
+				,staging_migration_target.name
+				,staging_migration_target.url
+				,app.staging_config_vars
+				,app.cleanup_requested_at
+				,cleaner.id
+				,cleaner.email
+				,app.created_at
+				,creator.id
+				,creator.email
+			FROM [deployment.apps] app
+			INNER JOIN [auth.users] creator ON creator.id = app.created_by
+			INNER JOIN [deployment.targets] production_target ON production_target.id = app.production_config_target
+			LEFT JOIN [deployment.targets] production_migration_target ON production_migration_target.id = app.production_migration_target
+			INNER JOIN [deployment.targets] staging_target ON staging_target.id = app.staging_config_target
+			LEFT JOIN [deployment.targets] staging_migration_target ON staging_migration_target.id = app.staging_migration_target
+			LEFT JOIN [auth.users] cleaner ON cleaner.id = app.cleanup_requested_by
+			WHERE app.id = ?`, cmd.ID).
 		One(s.db, ctx, appDetailDataMapper, getDeploymentDetailDataloader)
 }
 
 func (s *Gateway) GetAllDeploymentsByApp(ctx context.Context, cmd get_app_deployments.Query) (storage.Paginated[get_app_deployments.Deployment], error) {
 	return builder.
 		Select[get_app_deployments.Deployment](`
-			deployments.app_id
-			,deployments.deployment_number
-			,deployments.config_environment
-			,deployments.config_target
-			,targets.name
-			,targets.url
-			,targets.state_status
-			,deployments.source_discriminator
-			,deployments.source
-			,deployments.state_status
-			,deployments.state_errcode
-			,deployments.state_started_at
-			,deployments.state_finished_at
-			,deployments.requested_at
-			,users.id
-			,users.email
+			deployment.app_id
+			,deployment.deployment_number
+			,deployment.config_environment
+			,deployment.config_target
+			,target.name
+			,target.url
+			,target.state_status
+			,deployment.source_discriminator
+			,deployment.source
+			,deployment.state_status
+			,deployment.state_errcode
+			,deployment.state_started_at
+			,deployment.state_finished_at
+			,deployment.requested_at
+			,requester.id
+			,requester.email
 			,'' -- only to use the same mapper as the latest deployments`).
 		F(`
-			FROM deployments
-			INNER JOIN users ON users.id = deployments.requested_by
-			LEFT JOIN targets ON targets.id = deployments.config_target
-			WHERE deployments.app_id = ?`, cmd.AppID).
-		S(builder.MaybeValue(cmd.Environment, "AND deployments.config_environment = ?")).
-		F("ORDER BY deployments.deployment_number DESC").
+			FROM [deployment.deployments] deployment
+			INNER JOIN [auth.users] requester ON requester.id = deployment.requested_by
+			LEFT JOIN [deployment.targets] target ON target.id = deployment.config_target
+			WHERE deployment.app_id = ?`, cmd.AppID).
+		S(builder.MaybeValue(cmd.Environment, "AND deployment.config_environment = ?")).
+		F("ORDER BY deployment.deployment_number DESC").
 		Paginate(s.db, ctx, deploymentMapper(nil), cmd.Page.Get(1), 5)
 }
 
@@ -118,29 +126,29 @@ func (s *Gateway) GetDeploymentByID(ctx context.Context, cmd get_deployment.Quer
 	return builder.
 		Query[get_deployment.Deployment](`
 		SELECT
-			deployments.app_id
-			,deployments.deployment_number
-			,deployments.config_environment
-			,deployments.config_target
-			,targets.name
-			,targets.url
-			,targets.state_status
-			,targets.entrypoints
-			,deployments.source_discriminator
-			,deployments.source
-			,deployments.state_status
-			,deployments.state_errcode
-			,deployments.state_services
-			,deployments.state_started_at
-			,deployments.state_finished_at
-			,deployments.requested_at
-			,users.id
-			,users.email
+			deployment.app_id
+			,deployment.deployment_number
+			,deployment.config_environment
+			,deployment.config_target
+			,target.name
+			,target.url
+			,target.state_status
+			,target.entrypoints
+			,deployment.source_discriminator
+			,deployment.source
+			,deployment.state_status
+			,deployment.state_errcode
+			,deployment.state_services
+			,deployment.state_started_at
+			,deployment.state_finished_at
+			,deployment.requested_at
+			,requester.id
+			,requester.email
 			,'' -- only to use the same mapper as the latest deployments
-		FROM deployments
-		INNER JOIN users ON users.id = deployments.requested_by
-		LEFT JOIN targets ON targets.id = deployments.config_target
-		WHERE deployments.app_id = ? AND deployments.deployment_number = ?`, cmd.AppID, cmd.DeploymentNumber).
+		FROM [deployment.deployments] deployment
+		INNER JOIN [auth.users] requester ON requester.id = deployment.requested_by
+		LEFT JOIN [deployment.targets] target ON target.id = deployment.config_target
+		WHERE deployment.app_id = ? AND deployment.deployment_number = ?`, cmd.AppID, cmd.DeploymentNumber).
 		One(s.db, ctx, deploymentDetailMapper(nil))
 }
 
@@ -148,26 +156,26 @@ func (s *Gateway) GetAllTargets(ctx context.Context, cmd get_targets.Query) ([]g
 	return builder.
 		Query[get_target.Target](`
 		SELECT
-			targets.id
-			,targets.name
-			,targets.url
-			,targets.provider_kind
-			,targets.provider
-			,targets.state_status
-			,targets.state_errcode
-			,targets.state_last_ready_version
-			,targets.cleanup_requested_at
-			,cusers.id
-			,cusers.email
-			,targets.created_at
-			,users.id
-			,users.email
-		FROM targets
-		INNER JOIN users ON users.id = targets.created_by
-		LEFT JOIN users cusers ON cusers.id = targets.cleanup_requested_by
+			target.id
+			,target.name
+			,target.url
+			,target.provider_kind
+			,target.provider
+			,target.state_status
+			,target.state_errcode
+			,target.state_last_ready_version
+			,target.cleanup_requested_at
+			,cleaner.id
+			,cleaner.email
+			,target.created_at
+			,creator.id
+			,creator.email
+		FROM [deployment.targets] target
+		INNER JOIN [auth.users] creator ON creator.id = target.created_by
+		LEFT JOIN [auth.users] cleaner ON cleaner.id = target.cleanup_requested_by
 		WHERE TRUE
 		`).
-		S(builder.If(cmd.ActiveOnly, "AND targets.cleanup_requested_at IS NULL")).
+		S(builder.If(cmd.ActiveOnly, "AND target.cleanup_requested_at IS NULL")).
 		All(s.db, ctx, targetMapper)
 }
 
@@ -175,24 +183,24 @@ func (s *Gateway) GetTargetByID(ctx context.Context, cmd get_target.Query) (get_
 	return builder.
 		Query[get_target.Target](`
 		SELECT
-			targets.id
-			,targets.name
-			,targets.url
-			,targets.provider_kind
-			,targets.provider
-			,targets.state_status
-			,targets.state_errcode
-			,targets.state_last_ready_version
-			,targets.cleanup_requested_at
-			,cusers.id
-			,cusers.email
-			,targets.created_at
-			,users.id
-			,users.email
-		FROM targets
-		INNER JOIN users ON users.id = targets.created_by
-		LEFT JOIN users cusers ON cusers.id = targets.cleanup_requested_by
-		WHERE targets.id = ?`, cmd.ID).
+			target.id
+			,target.name
+			,target.url
+			,target.provider_kind
+			,target.provider
+			,target.state_status
+			,target.state_errcode
+			,target.state_last_ready_version
+			,target.cleanup_requested_at
+			,cleaner.id
+			,cleaner.email
+			,target.created_at
+			,creator.id
+			,creator.email
+		FROM [deployment.targets] target
+		INNER JOIN [auth.users] creator ON creator.id = target.created_by
+		LEFT JOIN [auth.users] cleaner ON cleaner.id = target.cleanup_requested_by
+		WHERE target.id = ?`, cmd.ID).
 		One(s.db, ctx, targetMapper)
 }
 
@@ -200,16 +208,16 @@ func (s *Gateway) GetRegistries(ctx context.Context, cmd get_registries.Query) (
 	return builder.
 		Query[get_registry.Registry](`
 		SELECT
-			registries.id
-			,registries.name
-			,registries.url
-			,registries.credentials_username
-			,registries.credentials_password
-			,registries.created_at
-			,users.id
-			,users.email
-		FROM registries
-		INNER JOIN users ON users.id = registries.created_by`).
+			registry.id
+			,registry.name
+			,registry.url
+			,registry.credentials_username
+			,registry.credentials_password
+			,registry.created_at
+			,creator.id
+			,creator.email
+		FROM [deployment.registries] registry
+		INNER JOIN [auth.users] creator ON creator.id = registry.created_by`).
 		All(s.db, ctx, registryMapper)
 }
 
@@ -217,17 +225,17 @@ func (s *Gateway) GetRegistryByID(ctx context.Context, cmd get_registry.Query) (
 	return builder.
 		Query[get_registry.Registry](`
 		SELECT
-			registries.id
-			,registries.name
-			,registries.url
-			,registries.credentials_username
-			,registries.credentials_password
-			,registries.created_at
-			,users.id
-			,users.email
-		FROM registries
-		INNER JOIN users ON users.id = registries.created_by
-		WHERE registries.id = ?`, cmd.ID).
+			registry.id
+			,registry.name
+			,registry.url
+			,registry.credentials_username
+			,registry.credentials_password
+			,registry.created_at
+			,creator.id
+			,creator.email
+		FROM [deployment.registries] registry
+		INNER JOIN [auth.users] creator ON creator.id = registry.created_by
+		WHERE registry.id = ?`, cmd.ID).
 		One(s.db, ctx, registryMapper)
 }
 
@@ -237,28 +245,28 @@ var getDeploymentDataloader = builder.NewDataloader(
 		_, err := builder.
 			Query[get_app_deployments.Deployment](`
 			SELECT
-				deployments.app_id
-				,deployments.deployment_number
-				,deployments.config_environment
-				,deployments.config_target
-				,targets.name
-				,targets.url
-				,targets.state_status
-				,deployments.source_discriminator
-				,deployments.source
-				,deployments.state_status
-				,deployments.state_errcode
-				,deployments.state_started_at
-				,deployments.state_finished_at
-				,deployments.requested_at
-				,users.id
-				,users.email
-				,MAX(requested_at) AS max_requested_at
-			FROM deployments
-			INNER JOIN users ON users.id = deployments.requested_by
-			LEFT JOIN targets ON targets.id = deployments.config_target`).
-			S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
-			F("GROUP BY deployments.app_id, deployments.config_environment").
+				deployment.app_id
+				,deployment.deployment_number
+				,deployment.config_environment
+				,deployment.config_target
+				,target.name
+				,target.url
+				,target.state_status
+				,deployment.source_discriminator
+				,deployment.source
+				,deployment.state_status
+				,deployment.state_errcode
+				,deployment.state_started_at
+				,deployment.state_finished_at
+				,deployment.requested_at
+				,requester.id
+				,requester.email
+				,MAX(deployment.requested_at) AS max_requested_at
+			FROM [deployment.deployments] deployment
+			INNER JOIN [auth.users] requester ON requester.id = deployment.requested_by
+			LEFT JOIN [deployment.targets] target ON target.id = deployment.config_target`).
+			S(builder.Array("WHERE deployment.app_id IN", kr.Keys())).
+			F("GROUP BY deployment.app_id, deployment.config_environment").
 			All(e, ctx, deploymentMapper(kr))
 
 		return err
@@ -270,30 +278,30 @@ var getDeploymentDetailDataloader = builder.NewDataloader(
 		_, err := builder.
 			Query[get_deployment.Deployment](`
 			SELECT
-				deployments.app_id
-				,deployments.deployment_number
-				,deployments.config_environment
-				,deployments.config_target
-				,targets.name
-				,targets.url
-				,targets.state_status
-				,targets.entrypoints
-				,deployments.source_discriminator
-				,deployments.source
-				,deployments.state_status
-				,deployments.state_errcode
-				,deployments.state_services
-				,deployments.state_started_at
-				,deployments.state_finished_at
-				,deployments.requested_at
-				,users.id
-				,users.email
-				,MAX(requested_at) AS max_requested_at
-			FROM deployments
-			INNER JOIN users ON users.id = deployments.requested_by
-			LEFT JOIN targets ON targets.id = deployments.config_target`).
-			S(builder.Array("WHERE deployments.app_id IN", kr.Keys())).
-			F("GROUP BY deployments.app_id, deployments.config_environment").
+				deployment.app_id
+				,deployment.deployment_number
+				,deployment.config_environment
+				,deployment.config_target
+				,target.name
+				,target.url
+				,target.state_status
+				,target.entrypoints
+				,deployment.source_discriminator
+				,deployment.source
+				,deployment.state_status
+				,deployment.state_errcode
+				,deployment.state_services
+				,deployment.state_started_at
+				,deployment.state_finished_at
+				,deployment.requested_at
+				,requester.id
+				,requester.email
+				,MAX(deployment.requested_at) AS max_requested_at
+			FROM [deployment.deployments] deployment
+			INNER JOIN [auth.users] requester ON requester.id = deployment.requested_by
+			LEFT JOIN [deployment.targets] target ON target.id = deployment.config_target`).
+			S(builder.Array("WHERE deployment.app_id IN", kr.Keys())).
+			F("GROUP BY deployment.app_id, deployment.config_environment").
 			All(e, ctx, deploymentDetailMapper(kr))
 
 		return err
@@ -340,9 +348,17 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 		token                   monad.Maybe[storage.SecretString]
 		cleanupRequestedById    monad.Maybe[string]
 		cleanupRequestedByEmail monad.Maybe[string]
+
+		productionMigrationId   monad.Maybe[string]
+		productionMigrationName monad.Maybe[string]
+		productionMigrationUrl  monad.Maybe[string]
+
+		stagingMigrationId   monad.Maybe[string]
+		stagingMigrationName monad.Maybe[string]
+		stagingMigrationUrl  monad.Maybe[string]
 	)
 
-	err = s.Scan(
+	if err = s.Scan(
 		&a.ID,
 		&a.Name,
 		&url,
@@ -350,10 +366,16 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 		&a.Production.Target.ID,
 		&a.Production.Target.Name,
 		&a.Production.Target.Url,
+		&productionMigrationId,
+		&productionMigrationName,
+		&productionMigrationUrl,
 		&a.Production.Vars,
 		&a.Staging.Target.ID,
 		&a.Staging.Target.Name,
 		&a.Staging.Target.Url,
+		&stagingMigrationId,
+		&stagingMigrationName,
+		&stagingMigrationUrl,
 		&a.Staging.Vars,
 		&a.CleanupRequestedAt,
 		&cleanupRequestedById,
@@ -361,7 +383,25 @@ func appDetailDataMapper(s storage.Scanner) (a get_app_detail.App, err error) {
 		&a.CreatedAt,
 		&a.CreatedBy.ID,
 		&a.CreatedBy.Email,
-	)
+	); err != nil {
+		return a, err
+	}
+
+	if productionMigrationTarget, isSet := productionMigrationId.TryGet(); isSet {
+		a.Production.Migration.Set(app.TargetSummary{
+			ID:   productionMigrationTarget,
+			Name: productionMigrationName.MustGet(),
+			Url:  productionMigrationUrl,
+		})
+	}
+
+	if stagingMigrationTarget, isSet := stagingMigrationId.TryGet(); isSet {
+		a.Staging.Migration.Set(app.TargetSummary{
+			ID:   stagingMigrationTarget,
+			Name: stagingMigrationName.MustGet(),
+			Url:  stagingMigrationUrl,
+		})
+	}
 
 	if u, isSet := url.TryGet(); isSet {
 		a.VersionControl.Set(get_app_detail.VersionControl{
@@ -388,7 +428,7 @@ func deploymentMapper(kr storage.KeyedResult[get_apps.App]) storage.Mapper[get_a
 			targetStatus   *uint8
 		)
 
-		err = scanner.Scan(
+		if err = scanner.Scan(
 			&d.AppID,
 			&d.DeploymentNumber,
 			&d.Environment,
@@ -406,9 +446,7 @@ func deploymentMapper(kr storage.KeyedResult[get_apps.App]) storage.Mapper[get_a
 			&d.RequestedBy.ID,
 			&d.RequestedBy.Email,
 			&maxRequestedAt,
-		)
-
-		if err != nil {
+		); err != nil {
 			return d, err
 		}
 
@@ -421,7 +459,7 @@ func deploymentMapper(kr storage.KeyedResult[get_apps.App]) storage.Mapper[get_a
 
 		if kr != nil {
 			kr.Update(d.AppID, func(a get_apps.App) get_apps.App {
-				switch domain.Environment(d.Environment) {
+				switch domain.EnvironmentName(d.Environment) {
 				case domain.Production:
 					a.LatestDeployments.Production.Set(d)
 				case domain.Staging:
@@ -443,7 +481,7 @@ func deploymentDetailMapper(kr storage.KeyedResult[get_app_detail.App]) storage.
 			targetStatus   *uint8
 		)
 
-		err = scanner.Scan(
+		if err = scanner.Scan(
 			&d.AppID,
 			&d.DeploymentNumber,
 			&d.Environment,
@@ -463,9 +501,7 @@ func deploymentDetailMapper(kr storage.KeyedResult[get_app_detail.App]) storage.
 			&d.RequestedBy.ID,
 			&d.RequestedBy.Email,
 			&maxRequestedAt,
-		)
-
-		if err != nil {
+		); err != nil {
 			return d, err
 		}
 
@@ -480,7 +516,7 @@ func deploymentDetailMapper(kr storage.KeyedResult[get_app_detail.App]) storage.
 
 		if kr != nil {
 			kr.Update(d.AppID, func(a get_app_detail.App) get_app_detail.App {
-				switch domain.Environment(d.Environment) {
+				switch domain.EnvironmentName(d.Environment) {
 				case domain.Production:
 					a.LatestDeployments.Production.Set(d)
 				case domain.Staging:
@@ -501,7 +537,7 @@ func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
 		cleanupRequestedByEmail monad.Maybe[string]
 	)
 
-	err = scanner.Scan(
+	if err = scanner.Scan(
 		&t.ID,
 		&t.Name,
 		&t.Url,
@@ -516,9 +552,7 @@ func targetMapper(scanner storage.Scanner) (t get_target.Target, err error) {
 		&t.CreatedAt,
 		&t.CreatedBy.ID,
 		&t.CreatedBy.Email,
-	)
-
-	if err != nil {
+	); err != nil {
 		return t, err
 	}
 
@@ -540,7 +574,7 @@ func registryMapper(scanner storage.Scanner) (r get_registry.Registry, err error
 		credentialsPassword monad.Maybe[storage.SecretString]
 	)
 
-	err = scanner.Scan(
+	if err = scanner.Scan(
 		&r.ID,
 		&r.Name,
 		&r.Url,
@@ -549,9 +583,7 @@ func registryMapper(scanner storage.Scanner) (r get_registry.Registry, err error
 		&r.CreatedAt,
 		&r.CreatedBy.ID,
 		&r.CreatedBy.Email,
-	)
-
-	if err != nil {
+	); err != nil {
 		return r, err
 	}
 

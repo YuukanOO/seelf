@@ -102,20 +102,19 @@ func Setup(
 	bus.On(b, deploy.OnDeploymentCreatedHandler(scheduler))
 	bus.On(b, redeploy.OnAppEnvChangedHandler(appsStore, deploymentsStore, deploymentsStore))
 	bus.On(b, cleanup_app.OnAppDeletedHandler(artifactManager))
-	bus.On(b, cleanup_app.OnAppEnvChangedHandler(scheduler))
+	bus.On(b, cleanup_app.OnAppEnvMigrationStartedHandler(scheduler))
 	bus.On(b, cleanup_app.OnAppCleanupRequestedHandler(scheduler))
 	bus.On(b, cleanup_app.OnJobDismissedHandler(appsStore, appsStore))
 	bus.On(b, fail_pending_deployments.OnTargetCleanupRequestedHandler(deploymentsStore))
 	bus.On(b, fail_pending_deployments.OnAppCleanupRequestedHandler(deploymentsStore))
-	bus.On(b, fail_pending_deployments.OnAppEnvChangedHandler(deploymentsStore))
+	bus.On(b, fail_pending_deployments.OnAppEnvMigrationStartedHandler(deploymentsStore))
 	bus.On(b, cleanup_target.OnTargetCleanupRequestedHandler(scheduler))
 	bus.On(b, cleanup_target.OnTargetDeletedHandler((providerFacade)))
 	bus.On(b, cleanup_target.OnJobDismissedHandler(targetsStore, targetsStore))
 	bus.On(b, configure_target.OnTargetCreatedHandler(scheduler))
 	bus.On(b, configure_target.OnTargetStateChangedHandler(scheduler))
 	bus.On(b, configure_target.OnDeploymentStateChangedHandler(targetsStore, targetsStore))
-	bus.On(b, configure_target.OnAppEnvChangedHandler(targetsStore, targetsStore))
-	bus.On(b, configure_target.OnAppCleanupRequestedHandler(targetsStore, targetsStore))
+	bus.On(b, configure_target.OnAppEnvCleanedUpHandler(targetsStore, targetsStore))
 
 	if err := db.Migrate(deploymentsqlite.Migrations); err != nil {
 		return err

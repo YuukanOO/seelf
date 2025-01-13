@@ -109,7 +109,7 @@ func Test_CleanupApp(t *testing.T) {
 		user := authfixture.User()
 		target := fixture.Target(fixture.WithTargetCreatedBy(user.ID()))
 		assert.Nil(t, target.Configured(target.CurrentVersion(), nil, nil))
-		assert.Nil(t, target.RequestDelete(false, "uid"))
+		assert.Nil(t, target.RequestDelete(false, user.ID()))
 
 		handler, ctx := arrange(t, &provider,
 			fixture.WithUsers(&user),
@@ -192,6 +192,7 @@ func Test_CleanupApp(t *testing.T) {
 			fixture.WithDeploymentRequestedBy(user.ID()))
 		assert.Nil(t, deployment.HasStarted())
 		assert.Nil(t, deployment.HasEnded(domain.Services{}, nil))
+		assert.Nil(t, app.RequestDelete(user.ID()))
 
 		handler, ctx := arrange(t, &provider,
 			fixture.WithUsers(&user),
@@ -218,7 +219,7 @@ type mockProvider struct {
 	called bool
 }
 
-func (d *mockProvider) Cleanup(_ context.Context, _ domain.AppID, _ domain.Target, _ domain.Environment, s domain.CleanupStrategy) error {
+func (d *mockProvider) Cleanup(_ context.Context, _ domain.AppID, _ domain.Target, _ domain.EnvironmentName, s domain.CleanupStrategy) error {
 	d.called = s != domain.CleanupStrategySkip
 	return nil
 }

@@ -26,8 +26,8 @@ type (
 		CreatedAt          time.Time                                        `json:"created_at"`
 		CreatedBy          app.UserSummary                                  `json:"created_by"`
 		LatestDeployments  app.LatestDeployments[get_deployment.Deployment] `json:"latest_deployments"`
-		Production         EnvironmentConfig                                `json:"production"`
-		Staging            EnvironmentConfig                                `json:"staging"`
+		Production         Environment                                      `json:"production"`
+		Staging            Environment                                      `json:"staging"`
 		VersionControl     monad.Maybe[VersionControl]                      `json:"version_control"`
 	}
 
@@ -36,9 +36,10 @@ type (
 		Token monad.Maybe[storage.SecretString] `json:"token"`
 	}
 
-	EnvironmentConfig struct {
-		Target app.TargetSummary        `json:"target"`
-		Vars   monad.Maybe[ServicesEnv] `json:"vars"`
+	Environment struct {
+		Target    app.TargetSummary              `json:"target"`
+		Migration monad.Maybe[app.TargetSummary] `json:"migration"`
+		Vars      monad.Maybe[ServicesEnv]       `json:"vars"`
 	}
 
 	ServicesEnv map[string]map[string]string

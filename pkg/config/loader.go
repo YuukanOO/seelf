@@ -14,12 +14,6 @@ import (
 
 var dotenvFilenames = []string{".env", ".env.local"}
 
-// Processable is an interface that can be implemented by the target of the Load function to
-// do any stuff after a config has been loaded.
-type Processable interface {
-	PostLoad() error
-}
-
 // Load the configuration into the target from a yaml file and environment variables.
 //
 // The boolean returned is true if the config file has been found, false otherwise.
@@ -36,17 +30,7 @@ func Load(configFilePath string, target any, dotenvFiles ...string) (exists bool
 		dotenvFiles = dotenvFilenames
 	}
 
-	if err = loadFromEnvironment(dotenvFiles, target); err != nil {
-		return
-	}
-
-	postProcessable, ok := target.(Processable)
-
-	if !ok {
-		return
-	}
-
-	err = postProcessable.PostLoad()
+	err = loadFromEnvironment(dotenvFiles, target)
 
 	return
 }

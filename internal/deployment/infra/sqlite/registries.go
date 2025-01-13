@@ -26,7 +26,7 @@ func NewRegistriesStore(db *sqlite.Database) RegistriesStore {
 
 func (s *registriesStore) CheckUrlAvailability(ctx context.Context, url domain.Url, excluded ...domain.RegistryID) (domain.RegistryUrlRequirement, error) {
 	unique, err := builder.
-		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM registries WHERE url = ?", url).
+		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM [deployment.registries] WHERE url = ?", url).
 		S(builder.Array("AND id NOT IN", excluded)).
 		F(")").
 		Extract(s.db, ctx)
@@ -46,7 +46,7 @@ func (s *registriesStore) GetByID(ctx context.Context, id domain.RegistryID) (do
 			,created_at
 			,created_by
 			,version
-		FROM registries
+		FROM [deployment.registries]
 		WHERE id = ?`, id).
 		One(s.db, ctx, domain.RegistryFrom)
 }
@@ -63,13 +63,13 @@ func (s *registriesStore) GetAll(ctx context.Context) ([]domain.Registry, error)
 			,created_at
 			,created_by
 			,version
-		FROM registries`).
+		FROM [deployment.registries]`).
 		All(s.db, ctx, domain.RegistryFrom)
 }
 
 func (s *registriesStore) Write(ctx context.Context, registries ...*domain.Registry) error {
 	return sqlite.WriteEvents(s.db, ctx, registries,
-		"registries",
+		"[deployment.registries]",
 		func(r *domain.Registry) sqlite.Key {
 			return sqlite.Key{
 				"id": r.ID(),

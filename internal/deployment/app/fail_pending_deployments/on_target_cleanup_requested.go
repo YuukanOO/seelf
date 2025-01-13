@@ -8,6 +8,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 )
 
+// When a target is being cleaned up, fail all deployments related right now.
 func OnTargetCleanupRequestedHandler(writer domain.DeploymentsWriter) bus.SignalHandler[domain.TargetCleanupRequested] {
 	return func(ctx context.Context, evt domain.TargetCleanupRequested) error {
 		return writer.FailDeployments(ctx, domain.ErrTargetCleanupRequested, domain.FailCriteria{

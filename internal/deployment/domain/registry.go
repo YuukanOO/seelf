@@ -125,7 +125,7 @@ func RegistryFrom(scanner storage.Scanner) (r Registry, err error) {
 		createdBy auth.UserID
 	)
 
-	err = scanner.Scan(
+	if err = scanner.Scan(
 		&r.id,
 		&r.name,
 		&r.url,
@@ -134,9 +134,7 @@ func RegistryFrom(scanner storage.Scanner) (r Registry, err error) {
 		&createdAt,
 		&createdBy,
 		&version,
-	)
-
-	if err != nil {
+	); err != nil {
 		return r, err
 	}
 

@@ -17,7 +17,7 @@ CREATE TABLE targets (
     created_by TEXT NOT NULL,
 
     CONSTRAINT pk_targets PRIMARY KEY(id),
-    CONSTRAINT fk_targets_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_targets_created_by FOREIGN KEY(created_by) REFERENCES [auth.users](id) ON DELETE CASCADE,
     CONSTRAINT unique_targets_domain UNIQUE(url), -- unique url among all targets
     CONSTRAINT unique_targets_provider_fingerprint UNIQUE(provider_fingerprint) -- unique provider fingerprint
 );
@@ -45,11 +45,11 @@ SELECT
     ,0
     ,'2024-01-23T10:07:30Z'
     ,DATETIME()
-    ,(SELECT id FROM users LIMIT 1)
+    ,(SELECT id FROM [auth.users] LIMIT 1)
 FROM apps LIMIT 1;
 
 -- Schedule a target configuration if a target was created above
-INSERT INTO scheduled_jobs (
+INSERT INTO [scheduler.scheduled_jobs] (
     id
     ,[group]
     ,message_name
@@ -99,8 +99,8 @@ CREATE TABLE apps (
     CONSTRAINT unique_apps_name_staging_target UNIQUE(name, staging_target),    
     CONSTRAINT fk_apps_production_target FOREIGN KEY(production_target) REFERENCES targets(id) ON DELETE RESTRICT,
     CONSTRAINT fk_apps_staging_target FOREIGN KEY(staging_target) REFERENCES targets(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_apps_created_by FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_apps_cleanup_requested_by FOREIGN KEY (cleanup_requested_by) REFERENCES users (id) ON DELETE CASCADE
+    CONSTRAINT fk_apps_created_by FOREIGN KEY(created_by) REFERENCES [auth.users](id) ON DELETE CASCADE,
+    CONSTRAINT fk_apps_cleanup_requested_by FOREIGN KEY (cleanup_requested_by) REFERENCES [auth.users](id) ON DELETE CASCADE
 );
 
 -- Transfer old apps data into the new structure, trying to retrieve old configuration in the meantime
@@ -167,7 +167,7 @@ CREATE TABLE deployments
 
     CONSTRAINT pk_deployments PRIMARY KEY(app_id, deployment_number),
     CONSTRAINT fk_deployments_app_id FOREIGN KEY(app_id) REFERENCES apps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_deployments_requested_by FOREIGN KEY(requested_by) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_deployments_requested_by FOREIGN KEY(requested_by) REFERENCES [auth.users](id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_deployments_target ON deployments(config_target);

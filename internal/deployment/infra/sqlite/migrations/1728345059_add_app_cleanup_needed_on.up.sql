@@ -5,7 +5,7 @@ DROP TRIGGER IF EXISTS on_deployment_failed_cleanup_jobs;
 CREATE TRIGGER IF NOT EXISTS on_deployment_failed_cleanup_jobs AFTER UPDATE ON deployments
     WHEN OLD.state_status != NEW.state_status AND NEW.state_status = 2 -- Only when the deployment goes to the failed state
 BEGIN
-    DELETE FROM scheduled_jobs
+    DELETE FROM [scheduler.scheduled_jobs]
     WHERE
         message_name = 'deployment.command.deploy'
         AND message_data ->> '$.app_id' = NEW.app_id
@@ -35,27 +35,27 @@ ALTER TABLE apps ADD history JSON NOT NULL DEFAULT '{}';
 UPDATE apps SET history = '{"production": ["' || production_target || '"], "staging": ["'|| staging_target ||'"]}';
 
 -- Since the group has changed for configure and cleanup, just update those jobs.
-UPDATE scheduled_jobs
+UPDATE [scheduler.scheduled_jobs]
 SET
     [group] = (message_data ->> '$.id')
     ,message_data = '{"target_id": "' || (message_data ->> '$.id') || '"}'
 WHERE message_name = 'deployment.command.cleanup_target';
 
-UPDATE scheduled_jobs
+UPDATE [scheduler.scheduled_jobs]
 SET
     [group] = (message_data ->> '$.id')
     ,message_data = '{"target_id": "' || (message_data ->> '$.id') || '", "version": "' || (message_data ->> '$.version') || '"}'
 WHERE message_name = 'deployment.command.configure_target';
 
 -- Since those messages no longer exists.
-DELETE FROM scheduled_jobs WHERE message_name IN ('deployment.command.delete_target', 'deployment.command.delete_app');
+DELETE FROM [scheduler.scheduled_jobs] WHERE message_name IN ('deployment.command.delete_target', 'deployment.command.delete_app');
 
 -- When a target is configured, no need to keep old configure jobs since they are outdated.
 CREATE TRIGGER IF NOT EXISTS on_target_configure_remove_outdated_jobs
-BEFORE INSERT ON scheduled_jobs
+BEFORE INSERT ON [scheduler.scheduled_jobs]
 WHEN NEW.message_name = 'deployment.command.configure_target'
 BEGIN
-  DELETE FROM scheduled_jobs
+  DELETE FROM [scheduler.scheduled_jobs]
   WHERE
       message_name = 'deployment.command.configure_target'
       AND (message_data ->> '$.target_id') = (NEW.message_data ->> '$.target_id')

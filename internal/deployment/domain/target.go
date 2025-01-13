@@ -33,9 +33,9 @@ const (
 
 type (
 	TargetID                  string
-	CleanupStrategy           uint8                                                          // Strategy to use when deleting a target (on the provider side) based on wether it has been successfully configured or not
-	TargetEntrypoints         map[AppID]map[Environment]map[EntrypointName]monad.Maybe[Port] // Maps every custom entrypoints managed by this target
-	TargetEntrypointsAssigned map[AppID]map[Environment]map[EntrypointName]Port              // Maps every custom entrypoints managed by this target with their assigned port
+	CleanupStrategy           uint8                                                              // Strategy to use when deleting a target (on the provider side) based on wether it has been successfully configured or not
+	TargetEntrypoints         map[AppID]map[EnvironmentName]map[EntrypointName]monad.Maybe[Port] // Maps every custom entrypoints managed by this target
+	TargetEntrypointsAssigned map[AppID]map[EnvironmentName]map[EntrypointName]Port              // Maps every custom entrypoints managed by this target with their assigned port
 
 	// Represents a target where application could be deployed.
 	Target struct {
@@ -177,7 +177,7 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 		providerData          string
 	)
 
-	err = scanner.Scan(
+	if err = scanner.Scan(
 		&t.id,
 		&t.name,
 		&t.url,
@@ -193,9 +193,7 @@ func TargetFrom(scanner storage.Scanner) (t Target, err error) {
 		&createdAt,
 		&createdBy,
 		&version,
-	)
-
-	if err != nil {
+	); err != nil {
 		return t, err
 	}
 
@@ -370,7 +368,7 @@ func (t *Target) Configured(version time.Time, assigned TargetEntrypointsAssigne
 // for the given application environment.
 // Only custom entrypoints will be added to the target.
 // If needed (new or removed entrypoints), a configuration will be triggered.
-func (t *Target) ExposeEntrypoints(app AppID, env Environment, services Services) {
+func (t *Target) ExposeEntrypoints(app AppID, env EnvironmentName, services Services) {
 	// Target is being deleted, no need to reconfigure anything
 	if t.cleanupRequested.HasValue() {
 		return
@@ -386,7 +384,7 @@ func (t *Target) ExposeEntrypoints(app AppID, env Environment, services Services
 // Un-expose entrypoints for the given application and environments. If no environment is given,
 // all entrypoints for the application will be removed.
 // If the entrypoints have changed, a configuration will be triggered.
-func (t *Target) UnExposeEntrypoints(app AppID, envs ...Environment) {
+func (t *Target) UnExposeEntrypoints(app AppID, envs ...EnvironmentName) {
 	if t.cleanupRequested.HasValue() {
 		return
 	}
@@ -617,11 +615,11 @@ func (t TargetState) LastReadyVersion() monad.Maybe[time.Time] { return t.lastRe
 func (e TargetEntrypoints) Value() (driver.Value, error) { return storage.ValueJSON(e) }
 func (e *TargetEntrypoints) Scan(value any) error        { return storage.ScanJSON(value, e) }
 
-func (e TargetEntrypoints) merge(app AppID, env Environment, entrypoints []Entrypoint) (updated bool) {
+func (e TargetEntrypoints) merge(app AppID, env EnvironmentName, entrypoints []Entrypoint) (updated bool) {
 	appEntries, found := e[app]
 
 	if !found {
-		appEntries = make(map[Environment]map[EntrypointName]monad.Maybe[Port])
+		appEntries = make(map[EnvironmentName]map[EntrypointName]monad.Maybe[Port])
 		e[app] = appEntries
 	}
 
@@ -673,7 +671,7 @@ func (e TargetEntrypoints) merge(app AppID, env Environment, entrypoints []Entry
 	return
 }
 
-func (e TargetEntrypoints) remove(app AppID, envs ...Environment) (updated bool) {
+func (e TargetEntrypoints) remove(app AppID, envs ...EnvironmentName) (updated bool) {
 	appEntries, found := e[app]
 
 	if !found {
@@ -725,12 +723,12 @@ func (e TargetEntrypoints) assign(mapping TargetEntrypointsAssigned) (updated bo
 
 // Sets the entrypoint port for the given entrypoint.
 // It will create the needed structure as needed.
-func (e TargetEntrypointsAssigned) Set(app AppID, env Environment, name EntrypointName, port Port) {
+func (e TargetEntrypointsAssigned) Set(app AppID, env EnvironmentName, name EntrypointName, port Port) {
 	// Updates the assigned map to keep track of new ports assigned to this target
 	appEntries, found := e[app]
 
 	if !found {
-		appEntries = make(map[Environment]map[EntrypointName]Port)
+		appEntries = make(map[EnvironmentName]map[EntrypointName]Port)
 		e[app] = appEntries
 	}
 

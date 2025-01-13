@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -31,17 +30,7 @@ type (
 		Domain    string `yaml:"domain" env:"BALANCER_DOMAIN"`
 		AcmeEmail string `yaml:"acme_email" env:"ACME_EMAIL"`
 	}
-
-	configurationWithProcessable struct {
-		configuration
-	}
 )
-
-var errPostLoad = errors.New("post load error")
-
-func (*configurationWithProcessable) PostLoad() error {
-	return errPostLoad
-}
 
 func Test_Load(t *testing.T) {
 	// Since for some tests, the monad has the initial value set to true but the
@@ -165,18 +154,6 @@ HTTP_TWO=true`,
 			assert.DeepEqual(t, tt.expected, conf)
 		})
 	}
-
-	t.Run("should call the PostLoad method if the target implements the Processable interface", func(t *testing.T) {
-		var (
-			conf         configurationWithProcessable
-			confFilename = "test-conf.yml"
-		)
-
-		exists, err := config.Load(confFilename, &conf)
-
-		assert.ErrorIs(t, errPostLoad, err)
-		assert.False(t, exists)
-	})
 }
 
 func Test_Save(t *testing.T) {

@@ -36,19 +36,19 @@ type (
 
 	DeploymentsReader interface {
 		GetByID(context.Context, DeploymentID) (Deployment, error)
-		GetLastDeployment(context.Context, AppID, Environment) (Deployment, error)
+		GetLastDeployment(context.Context, AppID, EnvironmentName) (Deployment, error)
 		GetNextDeploymentNumber(context.Context, AppID) (DeploymentNumber, error)
 		HasRunningOrPendingDeploymentsOnTarget(context.Context, TargetID) (HasRunningOrPendingDeploymentsOnTarget, error)
 		// Retrieve running or pending deployments count for a specific app, target and environment and the successful deployments count
 		// during the specified interval.
-		HasDeploymentsOnAppTargetEnv(context.Context, AppID, TargetID, Environment, shared.TimeInterval) (HasRunningOrPendingDeploymentsOnAppTargetEnv, HasSuccessfulDeploymentsOnAppTargetEnv, error)
+		HasDeploymentsOnAppTargetEnv(context.Context, AppID, TargetID, EnvironmentName, shared.TimeInterval) (HasRunningOrPendingDeploymentsOnAppTargetEnv, HasSuccessfulDeploymentsOnAppTargetEnv, error)
 	}
 
 	FailCriteria struct {
 		Status      monad.Maybe[DeploymentStatus]
 		Target      monad.Maybe[TargetID]
 		App         monad.Maybe[AppID]
-		Environment monad.Maybe[Environment]
+		Environment monad.Maybe[EnvironmentName]
 	}
 
 	DeploymentsWriter interface {
@@ -87,7 +87,7 @@ func (e DeploymentStateChanged) HasSucceeded() bool {
 func (a *App) NewDeployment(
 	deployNumber DeploymentNumber,
 	meta SourceData,
-	env Environment,
+	env EnvironmentName,
 	requestedBy domain.UserID,
 ) (d Deployment, err error) {
 	if a.cleanupRequested.HasValue() {
@@ -123,7 +123,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		sourceMetaData          string
 	)
 
-	err = scanner.Scan(
+	if err = scanner.Scan(
 		&d.id.appID,
 		&d.id.deploymentNumber,
 		&d.config.appid,
@@ -141,9 +141,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&requestedAt,
 		&requestedBy,
 		&version,
-	)
-
-	if err != nil {
+	); err != nil {
 		return d, err
 	}
 

@@ -35,8 +35,8 @@ func Test_App(t *testing.T) {
 		app := fixture.App(fixture.WithEnvironmentConfig(production, staging))
 
 		created := assert.EventIs[domain.AppCreated](t, &app, 0)
-		assert.DeepEqual(t, production, created.Production)
-		assert.DeepEqual(t, staging, created.Staging)
+		assert.DeepEqual(t, production, created.Production.Config())
+		assert.DeepEqual(t, staging, created.Staging.Config())
 	})
 
 	t.Run("should be able to build an app with given production configuration", func(t *testing.T) {
@@ -44,7 +44,7 @@ func Test_App(t *testing.T) {
 		app := fixture.App(fixture.WithProductionConfig(config))
 
 		created := assert.EventIs[domain.AppCreated](t, &app, 0)
-		assert.DeepEqual(t, config, created.Production)
-		assert.NotEqual(t, config.Target(), created.Staging.Target())
+		assert.DeepEqual(t, config, created.Production.Config())
+		assert.NotEqual(t, config.Target(), created.Staging.Config().Target())
 	})
 }

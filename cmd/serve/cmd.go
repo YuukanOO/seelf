@@ -25,7 +25,7 @@ func Root(opts Options, logger log.Logger) *cobra.Command {
 
 			defer root.Cleanup()
 
-			return newHttpServer(opts, root).Listen()
+			return newHttpServer(opts, root.Bus(), root.Logger()).Listen()
 		},
 	}
 

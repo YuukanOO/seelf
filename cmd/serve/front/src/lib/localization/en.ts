@@ -41,6 +41,9 @@ This action is IRREVERSIBLE and will DELETE ALL DATA associated with this applic
 	'app.environment.production': 'Production settings',
 	'app.environment.staging': 'Staging settings',
 	'app.environment.target': 'Deploy target',
+	'app.environment.target.migrating': 'Migration in process',
+	'app.environment.target.migrating.description': (from: string) =>
+		`The application is being migrated from the <strong>${from}</strong> target. You can't update the target until the migration is complete, see the <a href="${routes.jobs}">Jobs page</a> to follow its progress.`,
 	'app.environment.target.changed': 'Target changed',
 	'app.environment.target.changed.description': (name: string) =>
 		`If you change the target, resources related to this application deployed by seelf on <strong>${name}</strong> will be <strong>REMOVED</strong> and a new deployment on the new target will be queued if possible. If you want to backup something, do it before updating the target.`,

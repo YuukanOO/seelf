@@ -73,7 +73,7 @@ func (f *facade) CleanupTarget(ctx context.Context, target domain.Target, strate
 	return provider.CleanupTarget(ctx, target, strategy)
 }
 
-func (f *facade) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.Environment, strategy domain.CleanupStrategy) error {
+func (f *facade) Cleanup(ctx context.Context, app domain.AppID, target domain.Target, env domain.EnvironmentName, strategy domain.CleanupStrategy) error {
 	provider, err := f.providerForTarget(target)
 
 	if err != nil {

@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/app/create_first_account"
-	"github.com/YuukanOO/seelf/internal/auth/domain"
+	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	authinfra "github.com/YuukanOO/seelf/internal/auth/infra"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
 	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/configure_target"
 	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/expose_seelf_container"
-	deploymentdomain "github.com/YuukanOO/seelf/internal/deployment/domain"
+	deployment "github.com/YuukanOO/seelf/internal/deployment/domain"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/embedded"
@@ -23,17 +23,10 @@ import (
 )
 
 type (
-	// Represents a services root containing every services used by a server.
-	ServerRoot interface {
-		Cleanup() error
-		Bus() bus.Dispatcher
-		Logger() log.Logger
-	}
-
 	ServerOptions interface {
 		deploymentinfra.Options
 
-		AppExposedUrl() monad.Maybe[deploymentdomain.Url]
+		AppExposedUrl() monad.Maybe[deployment.Url]
 		DefaultEmail() string
 		DefaultPassword() string
 		RunnersPollInterval() time.Duration
@@ -42,7 +35,7 @@ type (
 		ConnectionString() string
 	}
 
-	serverRoot struct {
+	ServerRoot struct {
 		bus       bus.Bus
 		logger    log.Logger
 		db        *sqlite.Database
@@ -52,8 +45,8 @@ type (
 
 // Instantiate a new server root, registering and initializing every services
 // needed by the server.
-func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
-	s := &serverRoot{
+func Server(options ServerOptions, logger log.Logger) (root *ServerRoot, err error) {
+	s := &ServerRoot{
 		logger: logger,
 	}
 
@@ -62,15 +55,24 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	db, err := sqlite.Open(options.ConnectionString(), s.logger, s.bus)
 
 	if err != nil {
-		return nil, err
+		return
 	}
+
+	// Close the database on error
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		_ = db.Close()
+	}()
 
 	s.db = db
 
 	jobsStore, err := bussqlite.Setup(s.bus, s.db)
 
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	s.scheduler = embedded.NewRunner(jobsStore, s.logger, s.bus, options.RunnersPollInterval(),
@@ -90,7 +92,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 
 	// Setup auth infrastructure
 	if err = authinfra.Setup(s.logger, s.db, s.bus); err != nil {
-		return nil, err
+		return
 	}
 
 	// Setups deployment infrastructure
@@ -101,7 +103,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		s.bus,
 		jobsStore,
 	); err != nil {
-		return nil, err
+		return
 	}
 
 	// Create the first account if needed
@@ -111,7 +113,7 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Create the target needed to expose seelf itself and manage certificates if needed
@@ -121,20 +123,20 @@ func Server(options ServerOptions, logger log.Logger) (ServerRoot, error) {
 		s.logger.Infow("exposing seelf container using the local target, creating it if needed, the container may restart once done",
 			"container", container)
 
-		if _, err := bus.Send(s.bus, domain.WithUserID(context.Background(), domain.UserID(uid)), expose_seelf_container.Command{
+		if _, err = bus.Send(s.bus, auth.WithUserID(context.Background(), auth.UserID(uid)), expose_seelf_container.Command{
 			Container: container,
 			Url:       exposedUrl.WithoutUser().String(),
 		}); err != nil {
-			return nil, err
+			return
 		}
 	}
 
 	s.scheduler.Start()
-
-	return s, nil
+	root = s
+	return
 }
 
-func (s *serverRoot) Cleanup() error {
+func (s *ServerRoot) Cleanup() error {
 	s.logger.Debug("cleaning server services")
 
 	s.scheduler.Stop()
@@ -142,5 +144,5 @@ func (s *serverRoot) Cleanup() error {
 	return s.db.Close()
 }
 
-func (s *serverRoot) Bus() bus.Dispatcher { return s.bus }
-func (s *serverRoot) Logger() log.Logger  { return s.logger }
+func (s *ServerRoot) Bus() bus.Dispatcher { return s.bus }
+func (s *ServerRoot) Logger() log.Logger  { return s.logger }

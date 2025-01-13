@@ -32,9 +32,7 @@ func OnJobDismissedHandler(
 			return err
 		}
 
-		if err = target.CleanedUp(); err != nil {
-			return err
-		}
+		_ = target.CleanedUp()
 
 		return writer.Write(ctx, &target)
 	}

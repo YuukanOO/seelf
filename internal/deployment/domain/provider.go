@@ -36,6 +36,6 @@ type (
 		// Cleanup a target, removing every resources managed by seelf on it.
 		CleanupTarget(context.Context, Target, CleanupStrategy) error
 		// Cleanup an application on the specified target and environment, which means removing every possible stuff related to it
-		Cleanup(context.Context, AppID, Target, Environment, CleanupStrategy) error
+		Cleanup(context.Context, AppID, Target, EnvironmentName, CleanupStrategy) error
 	}
 )

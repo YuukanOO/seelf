@@ -26,7 +26,7 @@ func NewTargetsStore(db *sqlite.Database) TargetsStore {
 
 func (s *targetsStore) CheckUrlAvailability(ctx context.Context, url domain.Url, excluded ...domain.TargetID) (domain.TargetUrlRequirement, error) {
 	unique, err := builder.
-		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM targets WHERE url = ?", url).
+		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM [deployment.targets] WHERE url = ?", url).
 		S(builder.Array("AND id NOT IN", excluded)).
 		F(")").
 		Extract(s.db, ctx)
@@ -36,7 +36,7 @@ func (s *targetsStore) CheckUrlAvailability(ctx context.Context, url domain.Url,
 
 func (s *targetsStore) CheckConfigAvailability(ctx context.Context, config domain.ProviderConfig, excluded ...domain.TargetID) (domain.ProviderConfigRequirement, error) {
 	unique, err := builder.
-		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM targets WHERE provider_fingerprint = ?", config.Fingerprint()).
+		Query[bool]("SELECT NOT EXISTS(SELECT 1 FROM [deployment.targets] WHERE provider_fingerprint = ?", config.Fingerprint()).
 		S(builder.Array("AND id NOT IN", excluded)).
 		F(")").
 		Extract(s.db, ctx)
@@ -63,7 +63,7 @@ func (s *targetsStore) GetLocalTarget(ctx context.Context) (domain.Target, error
 			,created_at
 			,created_by
 			,version
-		FROM targets
+		FROM [deployment.targets]
 		WHERE provider_fingerprint = ''
 		LIMIT 1`).
 		One(s.db, ctx, domain.TargetFrom)
@@ -88,14 +88,14 @@ func (s *targetsStore) GetByID(ctx context.Context, id domain.TargetID) (domain.
 			,created_at
 			,created_by
 			,version
-		FROM targets
+		FROM [deployment.targets]
 		WHERE id = ?`, id).
 		One(s.db, ctx, domain.TargetFrom)
 }
 
 func (s *targetsStore) Write(c context.Context, targets ...*domain.Target) error {
 	return sqlite.WriteEvents(s.db, c, targets,
-		"targets",
+		"[deployment.targets]",
 		func(t *domain.Target) sqlite.Key {
 			return sqlite.Key{
 				"id": t.ID(),

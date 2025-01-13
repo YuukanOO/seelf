@@ -42,7 +42,7 @@ type (
 
 	entrypointDefinition struct {
 		app  domain.AppID
-		env  domain.Environment
+		env  domain.EnvironmentName
 		name domain.EntrypointName
 		key  nat.Port
 	}

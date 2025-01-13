@@ -47,7 +47,7 @@ func NewJobsStore(db *sqlite.Database, dispatcher bus.Dispatcher) *JobsStore {
 
 func (s *JobsStore) ResetRetrievedJobs(ctx context.Context) error {
 	_, err := s.db.ExecContext(context.Background(), `
-		UPDATE scheduled_jobs
+		UPDATE [scheduler.scheduled_jobs]
 		SET retrieved = false
 		WHERE retrieved = true`)
 
@@ -66,13 +66,13 @@ func (s *JobsStore) GetAllJobs(ctx context.Context, query get_jobs.Query) (stora
 			,errcode
 			,retrieved
 		`).
-		F("FROM scheduled_jobs ORDER BY queued_at").
+		F("FROM [scheduler.scheduled_jobs] ORDER BY queued_at").
 		Paginate(s.db, ctx, jobQueryMapper, query.Page.Get(1), 10)
 }
 
 func (s *JobsStore) RetryJob(ctx context.Context, cmd retry_job.Command) (bus.UnitType, error) {
 	result, err := s.db.ExecContext(ctx, `
-		UPDATE scheduled_jobs
+		UPDATE [scheduler.scheduled_jobs]
 		SET errcode = NULL
 		WHERE id = ? AND errcode IS NOT NULL AND retrieved = false
 	`, cmd.ID)
@@ -99,7 +99,7 @@ func (s *JobsStore) DismissJob(ctx context.Context, cmd dismiss_job.Command) (bu
 		Query[embedded.Job](`
 			SELECT
 				id, message_name, message_data
-			FROM scheduled_jobs
+			FROM [scheduler.scheduled_jobs]
 			WHERE id = ? AND errcode IS NOT NULL AND retrieved = false
 		`, cmd.ID).
 		One(s.db, ctx, jobMapper)
@@ -135,7 +135,7 @@ func (s *JobsStore) Queue(
 		}
 
 		if err = builder.
-			Insert("scheduled_jobs", builder.Values{
+			Insert("[scheduler.scheduled_jobs]", builder.Values{
 				"id":           id.New[string](),
 				"[group]":      req.Group(),
 				"message_name": req.Name_(),
@@ -156,15 +156,15 @@ func (s *JobsStore) GetNextPendingJobs(ctx context.Context) ([]embedded.Job, err
 	// This query will lock the database to make sure we can't retrieved the same job twice.
 	return builder.
 		Query[embedded.Job](`
-			UPDATE scheduled_jobs
+			UPDATE [scheduler.scheduled_jobs]
 			SET retrieved = true
 			WHERE id IN (SELECT id FROM (
-				SELECT id, MIN(not_before) FROM scheduled_jobs sj
+				SELECT id, MIN(not_before) FROM [scheduler.scheduled_jobs] sj
 				WHERE 
 					sj.retrieved = false
 					AND sj.errcode IS NULL
 					AND sj.not_before <= DATETIME('now')
-					AND sj.[group] NOT IN (SELECT DISTINCT [group] FROM scheduled_jobs WHERE retrieved = true)
+					AND sj.[group] NOT IN (SELECT DISTINCT [group] FROM [scheduler.scheduled_jobs] WHERE retrieved = true)
 					GROUP BY sj.[group]
 				)
 			)
@@ -174,7 +174,7 @@ func (s *JobsStore) GetNextPendingJobs(ctx context.Context) ([]embedded.Job, err
 
 func (s *JobsStore) Failed(ctx context.Context, job embedded.Job, jobErr error) error {
 	_, err := s.db.ExecContext(ctx, `
-			UPDATE scheduled_jobs
+			UPDATE [scheduler.scheduled_jobs]
 			SET
 				errcode = ?
 				,retrieved = false
@@ -186,7 +186,7 @@ func (s *JobsStore) Failed(ctx context.Context, job embedded.Job, jobErr error) 
 func (s *JobsStore) Delay(ctx context.Context, job embedded.Job) error {
 	// To preserve jobs order inside the same group, every job will be postponed by an amount relative to their ROWID
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE scheduled_jobs
+		UPDATE [scheduler.scheduled_jobs]
 		SET
 			not_before = v.updated_date
 			,retrieved = false
@@ -194,7 +194,7 @@ func (s *JobsStore) Delay(ctx context.Context, job embedded.Job) error {
 			SELECT
 				id
 				,DATETIME('now', '+' || CAST(9 + 1 * ROW_NUMBER() OVER (ORDER BY queued_at) AS TEXT) || ' seconds') AS updated_date
-			FROM scheduled_jobs
+			FROM [scheduler.scheduled_jobs]
 			WHERE errcode IS NULL AND [group] = ?
 		) v
 		WHERE scheduled_jobs.id = v.id`, job.Command().Group())
@@ -202,7 +202,7 @@ func (s *JobsStore) Delay(ctx context.Context, job embedded.Job) error {
 }
 
 func (s *JobsStore) Done(ctx context.Context, job embedded.Job) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM scheduled_jobs WHERE id = ?", job.ID())
+	_, err := s.db.ExecContext(ctx, "DELETE FROM [scheduler.scheduled_jobs] WHERE id = ?", job.ID())
 	return err
 }
 

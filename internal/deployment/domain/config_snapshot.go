@@ -12,39 +12,35 @@ import (
 type ConfigSnapshot struct {
 	appid       AppID
 	appname     AppName
-	environment Environment
+	environment EnvironmentName
 	target      TargetID
 	vars        monad.Maybe[ServicesEnv]
 }
 
 // Builds a new config snapshot for the given environment.
-func (a *App) configSnapshotFor(env Environment) (ConfigSnapshot, error) {
-	var (
-		conf     EnvironmentConfig
-		snapshot ConfigSnapshot
-	)
+func (a *App) configSnapshotFor(env EnvironmentName) (ConfigSnapshot, error) {
+	environment, err := a.environmentFor(env)
 
-	switch env {
-	case Production:
-		conf = a.production
-	case Staging:
-		conf = a.staging
-	default:
-		return snapshot, ErrInvalidEnvironmentName
+	if err != nil {
+		return ConfigSnapshot{}, err
 	}
 
-	snapshot.appid = a.id
-	snapshot.appname = a.name
-	snapshot.environment = env
-	snapshot.target = conf.Target()
-	snapshot.vars = conf.Vars()
+	conf := environment.config
+
+	snapshot := ConfigSnapshot{
+		appid:       a.id,
+		appname:     a.name,
+		environment: env,
+		target:      conf.target,
+		vars:        conf.vars,
+	}
 
 	return snapshot, nil
 }
 
 func (c ConfigSnapshot) AppID() AppID                   { return c.appid }
 func (c ConfigSnapshot) AppName() AppName               { return c.appname }
-func (c ConfigSnapshot) Environment() Environment       { return c.environment }
+func (c ConfigSnapshot) Environment() EnvironmentName   { return c.environment }
 func (c ConfigSnapshot) Target() TargetID               { return c.target }
 func (c ConfigSnapshot) Vars() monad.Maybe[ServicesEnv] { return c.vars } // FIXME: If I want to follow my mantra, it should returns a readonly map
 

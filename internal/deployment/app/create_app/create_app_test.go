@@ -128,17 +128,13 @@ func Test_CreateApp(t *testing.T) {
 			Production: created.Production,
 			Staging:    created.Staging,
 			Created:    shared.ActionFrom(user.ID(), assert.NotZero(t, created.Created.At())),
-			History: domain.AppTargetHistory{
-				domain.Production: []domain.TargetID{created.Production.Target()},
-				domain.Staging:    []domain.TargetID{created.Staging.Target()},
-			},
 		}, created)
-		assert.Equal(t, target.ID(), created.Production.Target())
-		assert.Equal(t, target.ID(), created.Staging.Target())
+		assert.Equal(t, target.ID(), created.Production.Config().Target())
+		assert.Equal(t, target.ID(), created.Staging.Config().Target())
 
-		versionControlConfigured := assert.Is[domain.AppVersionControlConfigured](t, dispatcher.Signals()[1])
+		versionControlConfigured := assert.Is[domain.AppVersionControlChanged](t, dispatcher.Signals()[1])
 		assert.Equal(t, created.ID, versionControlConfigured.ID)
-		assert.Equal(t, "https://somewhere.git", versionControlConfigured.Config.Url().String())
-		assert.Equal(t, "some-token", versionControlConfigured.Config.Token().Get(""))
+		assert.Equal(t, "https://somewhere.git", versionControlConfigured.Config.MustGet().Url().String())
+		assert.Equal(t, "some-token", versionControlConfigured.Config.MustGet().Token().Get(""))
 	})
 }

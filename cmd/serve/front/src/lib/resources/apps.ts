@@ -1,7 +1,7 @@
-import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import { POLLING_INTERVAL_MS } from '$lib/config';
-import type { ByUserData } from '$lib/resources/users';
+import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
 import type { Deployment, DeploymentDetail } from '$lib/resources/deployments';
+import type { ByUserData } from '$lib/resources/users';
 
 export type App = {
 	id: string;
@@ -36,12 +36,13 @@ export type AppDetail = {
 	created_by: ByUserData;
 	latest_deployments: LatestDeployments<DeploymentDetail>;
 	version_control?: VersionControl;
-	production: EnvironmentConfig;
-	staging: EnvironmentConfig;
+	production: Environment;
+	staging: Environment;
 };
 
-export type EnvironmentConfig = {
+export type Environment = {
 	target: TargetSummary;
+	migration?: TargetSummary;
 	vars?: EnvironmentVariablesPerService;
 };
 

@@ -17,15 +17,15 @@ func OnAppCleanupRequestedHandler(scheduler bus.Scheduler) bus.SignalHandler[dom
 			Command{
 				AppID:       string(evt.ID),
 				Environment: string(domain.Production),
-				TargetID:    string(evt.ProductionConfig.Target()),
-				From:        evt.ProductionConfig.Version(),
+				TargetID:    string(evt.Production.Config().Target()),
+				From:        evt.Production.Since(),
 				To:          now,
 			},
 			Command{
 				AppID:       string(evt.ID),
 				Environment: string(domain.Staging),
-				TargetID:    string(evt.StagingConfig.Target()),
-				From:        evt.StagingConfig.Version(),
+				TargetID:    string(evt.Staging.Config().Target()),
+				From:        evt.Staging.Since(),
 				To:          now,
 			},
 		)

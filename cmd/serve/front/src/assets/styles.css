@@ -95,6 +95,11 @@ abbr {
 	filter: grayscale();
 }
 
+select:disabled,
+input:not([type='checkbox']):not([type='radio']):disabled {
+	opacity: 0.6;
+}
+
 label:has(*[disabled]),
 label:has(*[aria-disabled='true']) {
 	pointer-events: none;

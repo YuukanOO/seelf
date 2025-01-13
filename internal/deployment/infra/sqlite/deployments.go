@@ -48,12 +48,12 @@ func (s *deploymentsStore) GetByID(ctx context.Context, id domain.DeploymentID) 
 			,requested_at
 			,requested_by
 			,version
-		FROM deployments
+		FROM [deployment.deployments]
 		WHERE app_id = ? AND deployment_number = ?`, id.AppID(), id.DeploymentNumber()).
 		One(s.db, ctx, domain.DeploymentFrom)
 }
 
-func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppID, env domain.Environment) (domain.Deployment, error) {
+func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppID, env domain.EnvironmentName) (domain.Deployment, error) {
 	return builder.
 		Query[domain.Deployment](`
 		SELECT
@@ -74,7 +74,7 @@ func (s *deploymentsStore) GetLastDeployment(ctx context.Context, id domain.AppI
 			,requested_at
 			,requested_by
 			,version
-		FROM deployments
+		FROM [deployment.deployments]
 		WHERE app_id = ? AND config_environment = ?
 		ORDER BY deployment_number DESC
 		LIMIT 1`, id, env).
@@ -85,7 +85,7 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID do
 	// FIXME: find a better way, on postgresql, I could have used a seq to increment the sequence to avoid any potential duplication
 	// of a job number but on sqlite, I could not find a way yet.
 	c, err := builder.
-		Query[uint]("SELECT COUNT(*) FROM deployments WHERE app_id = ?", appID).
+		Query[uint]("SELECT COUNT(*) FROM [deployment.deployments] WHERE app_id = ?", appID).
 		Extract(s.db, ctx)
 
 	if err != nil {
@@ -98,14 +98,14 @@ func (s *deploymentsStore) GetNextDeploymentNumber(ctx context.Context, appID do
 func (s *deploymentsStore) HasRunningOrPendingDeploymentsOnTarget(ctx context.Context, target domain.TargetID) (domain.HasRunningOrPendingDeploymentsOnTarget, error) {
 	r, err := builder.
 		Query[bool](`
-		SELECT EXISTS(SELECT 1 FROM deployments WHERE config_target = ? AND state_status IN (?, ?))`,
+		SELECT EXISTS(SELECT 1 FROM [deployment.deployments] WHERE config_target = ? AND state_status IN (?, ?))`,
 		target, domain.DeploymentStatusRunning, domain.DeploymentStatusPending).
 		Extract(s.db, ctx)
 
 	return domain.HasRunningOrPendingDeploymentsOnTarget(r), err
 }
 
-func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app domain.AppID, target domain.TargetID, env domain.Environment, ti shared.TimeInterval) (
+func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app domain.AppID, target domain.TargetID, env domain.EnvironmentName, ti shared.TimeInterval) (
 	domain.HasRunningOrPendingDeploymentsOnAppTargetEnv,
 	domain.HasSuccessfulDeploymentsOnAppTargetEnv,
 	error,
@@ -114,13 +114,13 @@ func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app
 		Query[deploymentsOnAppTargetEnv](`
 		SELECT
 			EXISTS(
-				SELECT 1 FROM deployments
+				SELECT 1 FROM [deployment.deployments]
 				WHERE 
 					app_id = ? AND config_target = ? AND config_environment = ?
 					AND state_status IN (?, ?)
 			) AS runningOrPending
 			,EXISTS(
-				SELECT 1 FROM deployments
+				SELECT 1 FROM [deployment.deployments]
 				WHERE
 					app_id = ? AND config_target = ? AND config_environment = ?
 					AND state_status = ? AND requested_at >= ? AND requested_at <= ?
@@ -129,14 +129,13 @@ func (s *deploymentsStore) HasDeploymentsOnAppTargetEnv(ctx context.Context, app
 		app, target, env, domain.DeploymentStatusSucceeded, ti.From(), ti.To()).
 		One(s.db, ctx, deploymentsOnAppTargetEnvMapper)
 
-	return domain.HasRunningOrPendingDeploymentsOnAppTargetEnv(c.runningOrPending),
-		domain.HasSuccessfulDeploymentsOnAppTargetEnv(c.successful), err
+	return domain.HasRunningOrPendingDeploymentsOnAppTargetEnv(c.runningOrPending), domain.HasSuccessfulDeploymentsOnAppTargetEnv(c.successful), err
 }
 
 func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, criteria domain.FailCriteria) error {
 	now := time.Now().UTC()
 
-	return builder.Update("deployments", builder.Values{
+	return builder.Update("[deployment.deployments]", builder.Values{
 		"state_status":      domain.DeploymentStatusFailed,
 		"state_errcode":     reason.Error(),
 		"state_started_at":  now,
@@ -154,7 +153,7 @@ func (s *deploymentsStore) FailDeployments(ctx context.Context, reason error, cr
 
 func (s *deploymentsStore) Write(c context.Context, deployments ...*domain.Deployment) error {
 	return sqlite.WriteEvents(s.db, c, deployments,
-		"deployments",
+		"[deployment.deployments]",
 		func(d *domain.Deployment) sqlite.Key {
 			return sqlite.Key{
 				"app_id":            d.ID().AppID(),

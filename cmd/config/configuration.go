@@ -10,6 +10,7 @@ import (
 
 	"github.com/YuukanOO/seelf/cmd/serve"
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
+	"github.com/YuukanOO/seelf/pkg/bytesize"
 	"github.com/YuukanOO/seelf/pkg/config"
 	"github.com/YuukanOO/seelf/pkg/crypto"
 	"github.com/YuukanOO/seelf/pkg/id"
@@ -39,6 +40,7 @@ const (
 	defaultCleanupDeploymentCount = 2
 	defaultBalancerDomain         = "http://docker.localhost"
 	defaultDeploymentDirTemplate  = "{{ .Environment }}"
+	defaultSourceArchiveMaxSize   = "32mb"
 )
 
 type (
@@ -56,6 +58,7 @@ type (
 	configuration struct {
 		Log     logConfiguration
 		Data    dataConfiguration
+		Source  sourceConfiguration
 		Http    httpConfiguration
 		Runners runnersConfiguration
 		Private internalConfiguration `yaml:"-"`
@@ -65,6 +68,7 @@ type (
 		deploymentDirTemplate *template.Template
 		logLevel              log.Level
 		logFormat             log.OutputFormat
+		sourceArchiveMaxSize  int64
 	}
 
 	logConfiguration struct {
@@ -83,6 +87,15 @@ type (
 	dataConfiguration struct {
 		Path                  string `env:"DATA_PATH"`
 		DeploymentDirTemplate string `env:"DEPLOYMENT_DIR_TEMPLATE" yaml:"deployment_dir_template"`
+	}
+
+	sourceArchiveConfiguration struct {
+		MaxSize string `env:"SOURCE_ARCHIVE_MAX_SIZE" yaml:"max_size"`
+	}
+
+	// Contains configuration related to deployment sources
+	sourceConfiguration struct {
+		Archive sourceArchiveConfiguration
 	}
 
 	// Configuration related to the async jobs runners.
@@ -110,6 +123,11 @@ func Default(builders ...ConfigurationBuilder) Configuration {
 		Data: dataConfiguration{
 			Path:                  defaultDataDirectory,
 			DeploymentDirTemplate: defaultDeploymentDirTemplate,
+		},
+		Source: sourceConfiguration{
+			Archive: sourceArchiveConfiguration{
+				MaxSize: defaultSourceArchiveMaxSize,
+			},
 		},
 		Http: httpConfiguration{
 			Host:   defaultHost,
@@ -185,6 +203,7 @@ func (c *configuration) RunnersPollInterval() time.Duration        { return c.po
 func (c *configuration) RunnersDeploymentCount() int               { return c.Runners.Deployment }
 func (c *configuration) RunnersCleanupCount() int                  { return c.Runners.Cleanup }
 func (c *configuration) IsDebug() bool                             { return c.logLevel == log.DebugLevel }
+func (c *configuration) MaxDeploymentArchiveFileSize() int64       { return c.sourceArchiveMaxSize }
 
 func (c *configuration) IsSecure() bool {
 	// If secure has been explicitly isSet, returns it
@@ -213,6 +232,7 @@ func (c *configuration) validate() error {
 	return validate.Struct(validate.Of{
 		"log.level":                    validate.Value(c.Log.Level, &c.logLevel, log.ParseLevel),
 		"log.format":                   validate.Value(c.Log.Format, &c.logFormat, log.ParseFormat),
+		"source.archive.max_size":      validate.Value(c.Source.Archive.MaxSize, &c.sourceArchiveMaxSize, bytesize.Parse),
 		"data.deployment_dir_template": validate.Value(c.Data.DeploymentDirTemplate, &c.deploymentDirTemplate, template.New("").Parse),
 		"runners.poll_interval":        validate.Value(c.Runners.PollInterval, &c.pollInterval, time.ParseDuration),
 		"runners.deployment":           validate.Field(c.Runners.Deployment, numbers.Min(1)),

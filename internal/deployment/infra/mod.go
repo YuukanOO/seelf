@@ -41,6 +41,7 @@ import (
 
 type Options interface {
 	artifact.LocalOptions
+	archive.Options
 }
 
 // Setup the deployment module and register everything needed in the given
@@ -62,7 +63,7 @@ func Setup(
 
 	sourceFacade := source.NewFacade(
 		raw.New(),
-		archive.New(),
+		archive.New(opts),
 		git.New(appsStore),
 	)
 

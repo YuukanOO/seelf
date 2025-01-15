@@ -276,6 +276,8 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		invalid_host: 'Hôte invalide',
 		invalid_ssh_key: 'Clé SSH invalide',
 		target_in_use:
-			"La cible est en cours d'utilisation par au moins une application et ne peut pas être supprimée."
+			"La cible est en cours d'utilisation par au moins une application et ne peut pas être supprimée.",
+		max_file_size_exceeded: 'Fichier trop volumineux',
+		invalid_file_type: 'Type de fichier invalide'
 	}
 } as const satisfies Locale<AppTranslations>;

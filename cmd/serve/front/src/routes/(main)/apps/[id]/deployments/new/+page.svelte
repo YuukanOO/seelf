@@ -12,14 +12,14 @@
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
 	import { buildFormData } from '$lib/form';
+	import l from '$lib/localization';
 	import routes from '$lib/path';
 	import service, {
 		type EnvironmentName,
-		type SourceDataDiscriminator,
-		type QueueDeployment
+		type QueueDeployment,
+		type SourceDataDiscriminator
 	} from '$lib/resources/deployments';
 	import select from '$lib/select';
-	import l from '$lib/localization';
 
 	export let data;
 
@@ -153,7 +153,13 @@
 							<p>{l.translate('deployment.payload.vcs.commit.help')}</p>
 						</TextInput>
 					{:else if kind === 'archive'}
-						<InputFile accept="application/gzip" label="file" required bind:files={archive} />
+						<InputFile
+							accept="application/gzip"
+							label="file"
+							required
+							bind:files={archive}
+							remoteError={errors?.['archive.file']}
+						/>
 					{/if}
 				</Stack>
 			</FormSection>

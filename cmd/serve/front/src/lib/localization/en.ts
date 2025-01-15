@@ -268,7 +268,9 @@ You may reconsider and try to make the target reachable before deleting it.`,
 	config_already_taken: 'A target for this host already exists',
 	invalid_host: 'Invalid host',
 	invalid_ssh_key: 'Invalid SSH key',
-	target_in_use: 'Target is used by at least one application and cannot be deleted.'
+	target_in_use: 'Target is used by at least one application and cannot be deleted.',
+	max_file_size_exceeded: 'Max file size exceeded',
+	invalid_file_type: 'Invalid file type'
 } satisfies Translations;
 
 export default {

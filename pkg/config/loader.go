@@ -12,30 +12,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var dotenvFilenames = []string{".env", ".env.local"}
+var ErrNoLoadersGiven = errors.New("no loaders given")
 
-// Load the configuration into the target from a yaml file and environment variables.
-//
-// The boolean returned is true if the config file has been found, false otherwise.
-//
-// It will look for dotenv files in the current directory. If no dotenvFiles are given,
-// default ones will be used: .env and .env.local.
-// target can implement the Processable interface to do any stuff after the config has been loaded.
-func Load(configFilePath string, target any, dotenvFiles ...string) (exists bool, err error) {
-	if exists, err = loadFromYaml(configFilePath, target); err != nil {
-		return
+type Loader func(any) error
+
+// Load the configuration into the target using given loaders.
+func Load(target any, loaders ...Loader) error {
+	if len(loaders) == 0 {
+		return ErrNoLoadersGiven
 	}
 
-	if len(dotenvFiles) == 0 {
-		dotenvFiles = dotenvFilenames
+	for _, loader := range loaders {
+		if err := loader(target); err != nil {
+			return err
+		}
 	}
 
-	err = loadFromEnvironment(dotenvFiles, target)
-
-	return
+	return nil
 }
 
-// Save the given config data in the given file path.
+// Save the given config data in the given yaml file.
 func Save(configFilePath string, data any) error {
 	b, err := yaml.Marshal(data)
 
@@ -46,27 +42,42 @@ func Save(configFilePath string, data any) error {
 	return ostools.WriteFile(configFilePath, b)
 }
 
-func loadFromYaml(path string, target any) (bool, error) {
-	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return false, nil
-	}
+// Load the configuration from the given yaml file.
+// Update the found argument to true if the file was found.
+func FromYAML(path string, found *bool) Loader {
+	return func(target any) error {
+		if _, err := os.Stat(path); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				*found = false
+				return nil
+			}
 
-	data, err := os.ReadFile(path)
-
-	if err != nil {
-		return true, err
-	}
-
-	return true, yaml.Unmarshal(data, target)
-}
-
-func loadFromEnvironment(filenames []string, target any) error {
-	for _, filename := range filenames {
-		if err := godotenv.Load(filename); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-	}
 
-	_, err := nenv.UnmarshalFromEnviron(target)
-	return err
+		*found = true
+
+		data, err := os.ReadFile(path)
+
+		if err != nil {
+			return err
+		}
+
+		return yaml.Unmarshal(data, target)
+	}
+}
+
+// Load the configuration from environment variables, trying to read given
+// .env filenames before.
+func FromEnvironment(dotEnvFilenames ...string) Loader {
+	return func(target any) error {
+		for _, filename := range dotEnvFilenames {
+			if err := godotenv.Load(filename); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+
+		_, err := nenv.UnmarshalFromEnviron(target)
+		return err
+	}
 }

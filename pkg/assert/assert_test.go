@@ -130,6 +130,120 @@ false`)
 	})
 }
 
+func Test_ArrayEqual(t *testing.T) {
+	t.Run("should correctly fail given wrong number of elements", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqual(mock, []int{1, 2, 3}, []int{1, 2}, "with wrong number of elements")
+
+		shouldHaveFailed(t, mock, `should have same length - with wrong number of elements
+	expected:
+3
+
+	got:
+2`)
+	})
+
+	t.Run("should correctly fail given different elements", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqual(mock, []int{1, 2}, []int{3, 4}, "with different elements")
+
+		shouldHaveFailed(t, mock, `should have been equal - with different elements
+	expected:
+[]int{1, 2}
+
+	got:
+[]int{3, 4}`)
+	})
+
+	t.Run("should correctly pass given same elements in different order", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqual(mock, []int{1, 2}, []int{2, 1}, "with same elements in different order")
+
+		shouldHaveSucceeded(t, mock)
+	})
+
+	t.Run("should correctly pass given same elements", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqual(mock, []int{1, 2}, []int{1, 2}, "with same elements")
+
+		shouldHaveSucceeded(t, mock)
+	})
+
+	t.Run("should correctly pass given empty slices", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqual(mock, []int{}, []int{}, "with empty slices")
+
+		shouldHaveSucceeded(t, mock)
+	})
+}
+
+func Test_ArrayEqualFunc(t *testing.T) {
+	type customType struct {
+		value int
+	}
+
+	compareFunc := func(a, b customType) int {
+		return a.value - b.value
+	}
+
+	t.Run("should correctly fail given different length slices", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqualFunc(mock,
+			[]customType{{1}, {2}}, []customType{{1}},
+			compareFunc, "with different lengths")
+
+		shouldHaveFailed(t, mock, `should have same length - with different lengths
+	expected:
+2
+
+	got:
+1`)
+	})
+
+	t.Run("should correctly fail given different slices", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqualFunc(mock, []customType{{1}, {2}}, []customType{{1}, {3}}, compareFunc, "with different values")
+
+		shouldHaveFailed(t, mock, `should have been equal - with different values
+	expected:
+[]assert_test.customType{assert_test.customType{value:1}, assert_test.customType{value:2}}
+
+	got:
+[]assert_test.customType{assert_test.customType{value:1}, assert_test.customType{value:3}}`)
+	})
+
+	t.Run("should correctly pass given same slices in different order", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqualFunc(mock, []customType{{2}, {1}}, []customType{{1}, {2}}, compareFunc, "with same values in different order")
+
+		shouldHaveSucceeded(t, mock)
+	})
+
+	t.Run("should correctly pass given same slices", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqualFunc(mock, []customType{{1}, {2}}, []customType{{1}, {2}}, compareFunc, "with same values")
+
+		shouldHaveSucceeded(t, mock)
+	})
+
+	t.Run("should correctly pass given empty slices", func(t *testing.T) {
+		mock := new(mockT)
+
+		assert.ArrayEqualFunc(mock, []customType{}, []customType{}, compareFunc, "with empty slices")
+
+		shouldHaveSucceeded(t, mock)
+	})
+}
+
 func Test_NotEqual(t *testing.T) {
 	t.Run("should correctly fail given the expected value", func(t *testing.T) {
 		mock := new(mockT)

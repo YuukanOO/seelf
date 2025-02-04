@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -33,127 +34,159 @@ type (
 )
 
 func Test_Load(t *testing.T) {
-	// Since for some tests, the monad has the initial value set to true but the
-	// env removes it (setting the monad hasValue to false but keeping the initial value)
-	unsetMonad := monad.Value(true)
-	unsetMonad.Unset()
+	t.Run("should returns an error if no loaders given", func(t *testing.T) {
+		var configuration configuration
 
-	tests := []struct {
-		name     string
-		conf     string
-		env      string
-		expected configuration
-	}{
-		{
-			name: "configuration-only",
-			conf: `verbose: true
-http:
-  host: 192.168.1.1
-  port: 7777`,
-			expected: configuration{
-				Verbose: true,
-				Http: httpConfiguration{
-					Host: "192.168.1.1",
-					Port: 7777,
-				},
-			},
-		},
-		{
-			name: "configuration-and-env",
-			conf: `verbose: true
-http:
-  host: 192.168.1.1
-  port: 7777`,
-			env: `BALANCER_DOMAIN=https://some.domain
-ACME_EMAIL=admin@example.com
-PORT=9999`,
-			expected: configuration{
-				Verbose: true,
-				Http: httpConfiguration{
-					Host: "192.168.1.1",
-					Port: 9999,
-				},
-				Balancer: balancerConfiguration{
-					Domain:    "https://some.domain",
-					AcmeEmail: "admin@example.com",
-				},
-			},
-		},
-		{
-			name: "env-only",
-			env: `BALANCER_DOMAIN=https://some.domain
-ACME_EMAIL=admin@example.com
-PORT=9999`,
-			expected: configuration{
-				Http: httpConfiguration{
-					Port: 9999,
-				},
-				Balancer: balancerConfiguration{
-					Domain:    "https://some.domain",
-					AcmeEmail: "admin@example.com",
-				},
-			},
-		},
-		{
-			name: "conf-with-maybe",
-			conf: `http:
-  secure: true
-  http_two: false`,
-			expected: configuration{
-				Http: httpConfiguration{Secure: monad.Value(true), HttpTwo: monad.Value(false)},
-			},
-		},
-		{
-			name: "env-with-maybe",
-			env: `HTTP_SECURE=true
-HTTP_TWO=false`,
-			expected: configuration{
-				Http: httpConfiguration{Secure: monad.Value(true), HttpTwo: monad.Value(false)},
-			},
-		},
-		{
-			name: "conf-and-env-with-maybe",
-			conf: `http:
-  secure: true
-  http_two: false`,
-			env: `HTTP_SECURE=
-HTTP_TWO=true`,
-			expected: configuration{
-				Http: httpConfiguration{Secure: unsetMonad, HttpTwo: monad.Value(true)},
-			},
-		},
-	}
+		err := config.Load(&configuration)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			confFilename := fmt.Sprintf("%s.yml", tt.name)
-			envFilename := fmt.Sprintf(".%s.env", tt.name)
+		assert.ErrorIs(t, config.ErrNoLoadersGiven, err)
+	})
 
-			t.Cleanup(func() {
-				os.Remove(envFilename)
-				os.Remove(confFilename)
-			})
+	t.Run("should correctly returns a loader error", func(t *testing.T) {
+		var configuration configuration
+		expectedErr := errors.New("expected error")
 
-			os.Clearenv()
-
-			if tt.conf != "" {
-				err := ostools.WriteFile(confFilename, []byte(tt.conf))
-				assert.Nil(t, err)
-			}
-
-			if tt.env != "" {
-				err := ostools.WriteFile(envFilename, []byte(tt.env))
-				assert.Nil(t, err)
-			}
-
-			var conf configuration
-
-			exists, err := config.Load(confFilename, &conf, envFilename)
-			assert.Nil(t, err)
-			assert.Equal(t, tt.conf != "", exists)
-			assert.DeepEqual(t, tt.expected, conf)
+		err := config.Load(&configuration, func(a any) error {
+			return expectedErr
 		})
-	}
+
+		assert.ErrorIs(t, expectedErr, err)
+	})
+
+	t.Run("should ignore inexistent files from yaml and env loaders", func(t *testing.T) {
+		var (
+			configuration configuration
+			existing      bool
+		)
+
+		err := config.Load(&configuration, config.FromYAML("inexistent.yaml", &existing), config.FromEnvironment("inexistent.env"))
+
+		assert.Nil(t, err)
+		assert.False(t, existing)
+	})
+
+	t.Run("should correctly load the configuration from multiple loaders", func(t *testing.T) {
+		// Since for some tests, the monad has the initial value set to true but the
+		// env removes it (setting the monad hasValue to false but keeping the initial value)
+		unsetMonad := monad.Value(true)
+		unsetMonad.Unset()
+
+		tests := []struct {
+			name     string
+			conf     string
+			env      string
+			expected configuration
+		}{
+			{
+				name: "configuration-only",
+				conf: `verbose: true
+http:
+  host: 192.168.1.1
+  port: 7777`,
+				expected: configuration{
+					Verbose: true,
+					Http: httpConfiguration{
+						Host: "192.168.1.1",
+						Port: 7777,
+					},
+				},
+			},
+			{
+				name: "configuration-and-env",
+				conf: `verbose: true
+http:
+  host: 192.168.1.1
+  port: 7777`,
+				env: `BALANCER_DOMAIN=https://some.domain
+ACME_EMAIL=admin@example.com
+PORT=9999`,
+				expected: configuration{
+					Verbose: true,
+					Http: httpConfiguration{
+						Host: "192.168.1.1",
+						Port: 9999,
+					},
+					Balancer: balancerConfiguration{
+						Domain:    "https://some.domain",
+						AcmeEmail: "admin@example.com",
+					},
+				},
+			},
+			{
+				name: "env-only",
+				env: `BALANCER_DOMAIN=https://some.domain
+ACME_EMAIL=admin@example.com
+PORT=9999`,
+				expected: configuration{
+					Http: httpConfiguration{
+						Port: 9999,
+					},
+					Balancer: balancerConfiguration{
+						Domain:    "https://some.domain",
+						AcmeEmail: "admin@example.com",
+					},
+				},
+			},
+			{
+				name: "conf-with-maybe",
+				conf: `http:
+  secure: true
+  http_two: false`,
+				expected: configuration{
+					Http: httpConfiguration{Secure: monad.Value(true), HttpTwo: monad.Value(false)},
+				},
+			},
+			{
+				name: "env-with-maybe",
+				env: `HTTP_SECURE=true
+HTTP_TWO=false`,
+				expected: configuration{
+					Http: httpConfiguration{Secure: monad.Value(true), HttpTwo: monad.Value(false)},
+				},
+			},
+			{
+				name: "conf-and-env-with-maybe",
+				conf: `http:
+  secure: true
+  http_two: false`,
+				env: `HTTP_SECURE=
+HTTP_TWO=true`,
+				expected: configuration{
+					Http: httpConfiguration{Secure: unsetMonad, HttpTwo: monad.Value(true)},
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				confFilename := fmt.Sprintf("%s.yml", tt.name)
+				envFilename := fmt.Sprintf(".%s.env", tt.name)
+
+				t.Cleanup(func() {
+					os.Remove(envFilename)
+					os.Remove(confFilename)
+				})
+
+				os.Clearenv()
+
+				if tt.conf != "" {
+					assert.Nil(t, ostools.WriteFile(confFilename, []byte(tt.conf)))
+				}
+
+				if tt.env != "" {
+					assert.Nil(t, ostools.WriteFile(envFilename, []byte(tt.env)))
+				}
+
+				var conf configuration
+
+				var exists bool
+				err := config.Load(&conf, config.FromYAML(confFilename, &exists), config.FromEnvironment(envFilename))
+				assert.Nil(t, err)
+				assert.Equal(t, tt.conf != "", exists)
+				assert.DeepEqual(t, tt.expected, conf)
+			})
+		}
+	})
 }
 
 func Test_Save(t *testing.T) {

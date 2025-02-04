@@ -35,7 +35,7 @@ func (e FieldErrors) Flatten() FieldErrors {
 }
 
 // Builds a new validation error with given invalid fields.
-// Wraps the FieldErrors inside the ErrValidationFailed.
+// Wraps the FieldErrors inside the ErrValidationFailed one.
 func NewError(fieldErrs FieldErrors) error {
 	return apperr.Wrap(ErrValidationFailed, fieldErrs)
 }

@@ -49,7 +49,7 @@ func Test_Discriminated(t *testing.T) {
 	})
 
 	t.Run("should return registered keys", func(t *testing.T) {
-		assert.DeepEqual(t, []string{"type1", "type2"}, mapper.Keys())
+		assert.ArrayEqual(t, []string{"type1", "type2"}, mapper.Keys())
 	})
 
 	t.Run("should return the correct type", func(t *testing.T) {

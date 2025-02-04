@@ -23,11 +23,13 @@ import (
 	"github.com/YuukanOO/seelf/pkg/monad"
 	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/ostools"
+	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/validate"
 	"github.com/YuukanOO/seelf/pkg/validate/arrays"
 )
 
 var (
+	dotEnvFilenames          = []string{".env", ".env.local"}
 	userConfigDir            = must.Panic(os.UserConfigDir())
 	generatedSecretKey       = must.Panic(crypto.RandomKey[string](64))
 	defaultDataDirectory     = filepath.Join(userConfigDir, "seelf")
@@ -162,27 +164,30 @@ func Default(builders ...ConfigurationBuilder) Configuration {
 }
 
 func (c *configuration) Initialize(logger log.ConfigurableLogger, path string) error {
-	exists, err := config.Load(path, c)
+	var configFileFound bool
 
-	if err != nil {
+	if err := config.Load(c,
+		config.FromYAML(path, &configFileFound),
+		config.FromEnvironment(dotEnvFilenames...),
+	); err != nil {
 		return err
 	}
 
-	if err = c.validate(); err != nil {
+	if err := c.validate(); err != nil {
 		return err
 	}
 
 	// Make sure the data path exists
-	if err = ostools.MkdirAll(c.Data.Path); err != nil {
+	if err := ostools.MkdirAll(c.Data.Path); err != nil {
 		return err
 	}
 
 	// Update logger based on loaded configuration
-	if err = logger.Configure(c.Log.format, c.Log.level); err != nil {
+	if err := logger.Configure(c.Log.format, c.Log.level); err != nil {
 		return err
 	}
 
-	if exists {
+	if configFileFound {
 		logger.Infow("configuration loaded",
 			"path", path)
 	} else {
@@ -215,9 +220,9 @@ func (c *configuration) MaxDeploymentArchiveFileSize() int64 {
 	return c.Source.Archive.maxSize
 }
 
-func (c *configuration) RunnersDefinitions() ([]embedded.RunnerDefinition, error) {
+func (c *configuration) RunnersDefinitions(mapper *storage.DiscriminatedMapper[bus.AsyncRequest]) ([]embedded.RunnerDefinition, error) {
 	definitions := make([]embedded.RunnerDefinition, len(c.Runners))
-	unhandledMessages := bus.Marshallable.Keys()
+	unhandledMessages := mapper.Keys()
 
 	for i, r := range c.Runners {
 		// No specific messages set, handle all messages not seen already.
@@ -238,10 +243,10 @@ func (c *configuration) RunnersDefinitions() ([]embedded.RunnerDefinition, error
 				unhandledMessages = slices.Delete(unhandledMessages, msgIdx, msgIdx+1)
 			}
 
-			req, err := bus.Marshallable.From(msg, "{}")
+			req, err := mapper.From(msg, "{}")
 
 			if err != nil {
-				return nil, fmt.Errorf("unknown job name: %s, must be one of %s", msg, strings.Join(bus.Marshallable.Keys(), ", "))
+				return nil, fmt.Errorf("unknown job name: %s, must be one of %s", msg, strings.Join(mapper.Keys(), ", "))
 			}
 
 			messages[j] = req

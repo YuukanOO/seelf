@@ -14,6 +14,7 @@ import (
 	bussqlite "github.com/YuukanOO/seelf/pkg/bus/sqlite"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/monad"
+	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 )
 
@@ -25,7 +26,7 @@ type (
 		DefaultEmail() string
 		DefaultPassword() string
 		ConnectionString() string
-		RunnersDefinitions() ([]embedded.RunnerDefinition, error)
+		RunnersDefinitions(*storage.DiscriminatedMapper[bus.AsyncRequest]) ([]embedded.RunnerDefinition, error)
 	}
 
 	ServerRoot struct {
@@ -85,7 +86,7 @@ func Server(options ServerOptions, logger log.Logger) (root *ServerRoot, err err
 	}
 
 	// Build the background jobs orchestrator
-	runners, err := options.RunnersDefinitions()
+	runners, err := options.RunnersDefinitions(bus.Marshallable)
 
 	if err != nil {
 		return

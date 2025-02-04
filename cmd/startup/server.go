@@ -2,15 +2,10 @@ package startup
 
 import (
 	"context"
-	"time"
 
 	"github.com/YuukanOO/seelf/internal/auth/app/create_first_account"
 	auth "github.com/YuukanOO/seelf/internal/auth/domain"
 	authinfra "github.com/YuukanOO/seelf/internal/auth/infra"
-	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_app"
-	"github.com/YuukanOO/seelf/internal/deployment/app/cleanup_target"
-	"github.com/YuukanOO/seelf/internal/deployment/app/configure_target"
-	"github.com/YuukanOO/seelf/internal/deployment/app/deploy"
 	"github.com/YuukanOO/seelf/internal/deployment/app/expose_seelf_container"
 	deployment "github.com/YuukanOO/seelf/internal/deployment/domain"
 	deploymentinfra "github.com/YuukanOO/seelf/internal/deployment/infra"
@@ -29,17 +24,15 @@ type (
 		AppExposedUrl() monad.Maybe[deployment.Url]
 		DefaultEmail() string
 		DefaultPassword() string
-		RunnersPollInterval() time.Duration
-		RunnersDeploymentCount() int
-		RunnersCleanupCount() int
 		ConnectionString() string
+		RunnersDefinitions() ([]embedded.RunnerDefinition, error)
 	}
 
 	ServerRoot struct {
-		bus       bus.Bus
-		logger    log.Logger
-		db        *sqlite.Database
-		scheduler *embedded.Runner
+		bus          bus.Bus
+		logger       log.Logger
+		db           *sqlite.Database
+		orchestrator *embedded.Orchestrator
 	}
 )
 
@@ -75,21 +68,6 @@ func Server(options ServerOptions, logger log.Logger) (root *ServerRoot, err err
 		return
 	}
 
-	s.scheduler = embedded.NewRunner(jobsStore, s.logger, s.bus, options.RunnersPollInterval(),
-		embedded.WorkerGroup{
-			Size:     options.RunnersDeploymentCount(),
-			Requests: []bus.AsyncRequest{deploy.Command{}},
-		},
-		embedded.WorkerGroup{
-			Size: options.RunnersCleanupCount(),
-			Requests: []bus.AsyncRequest{
-				cleanup_app.Command{},
-				cleanup_target.Command{},
-				configure_target.Command{},
-			},
-		},
-	)
-
 	// Setup auth infrastructure
 	if err = authinfra.Setup(s.logger, s.db, s.bus); err != nil {
 		return
@@ -105,6 +83,15 @@ func Server(options ServerOptions, logger log.Logger) (root *ServerRoot, err err
 	); err != nil {
 		return
 	}
+
+	// Build the background jobs orchestrator
+	runners, err := options.RunnersDefinitions()
+
+	if err != nil {
+		return
+	}
+
+	s.orchestrator = embedded.NewOrchestrator(jobsStore, s.bus, s.logger, runners...)
 
 	// Create the first account if needed
 	uid, err := bus.Send(s.bus, context.Background(), create_first_account.Command{
@@ -131,7 +118,7 @@ func Server(options ServerOptions, logger log.Logger) (root *ServerRoot, err err
 		}
 	}
 
-	s.scheduler.Start()
+	s.orchestrator.Start()
 	root = s
 	return
 }
@@ -139,7 +126,7 @@ func Server(options ServerOptions, logger log.Logger) (root *ServerRoot, err err
 func (s *ServerRoot) Cleanup() error {
 	s.logger.Debug("cleaning server services")
 
-	s.scheduler.Stop()
+	s.orchestrator.Stop()
 
 	return s.db.Close()
 }

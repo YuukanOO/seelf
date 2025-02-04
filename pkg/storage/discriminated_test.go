@@ -48,6 +48,10 @@ func Test_Discriminated(t *testing.T) {
 		assert.ErrorIs(t, err, storage.ErrCouldNotUnmarshalGivenType)
 	})
 
+	t.Run("should return registered keys", func(t *testing.T) {
+		assert.DeepEqual(t, []string{"type1", "type2"}, mapper.Keys())
+	})
+
 	t.Run("should return the correct type", func(t *testing.T) {
 		t1, err := mapper.From("type1", "data1")
 

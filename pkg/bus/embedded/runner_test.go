@@ -3,6 +3,7 @@ package embedded_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 
@@ -17,28 +18,28 @@ import (
 func Test_Runner(t *testing.T) {
 	logger := must.Panic(log.NewLogger())
 	b := embedded.NewBus()
-	// Register an handler which will just return the inner cmd error to test how the scheduler behave.
+	// Register an handler which will just return the inner cmd error to test how runners behave.
 	bus.Register(b, func(_ context.Context, cmd returnCommand) (bus.AsyncResult, error) {
 		return cmd.result, cmd.err
 	})
 
-	t.Run("should fail the job if no handler is registered", func(t *testing.T) {
+	t.Run("should handle all jobs if no message types are given", func(t *testing.T) {
 		var (
 			adapter adapter
 			cmd     bus.AsyncRequest = unhandledCommand{}
 		)
 
-		runner := embedded.NewRunner(&adapter, logger, b, 0, embedded.WorkerGroup{
-			Requests: []bus.AsyncRequest{returnCommand{}},
+		assert.Nil(t, adapter.Queue(context.Background(), cmd))
+
+		runner := embedded.NewOrchestrator(&adapter, b, logger, embedded.RunnerDefinition{
+			PollInterval: 0,
+			WorkersCount: 1,
 		})
 
 		runner.Start()
 		defer runner.Stop()
 
-		assert.Nil(t, adapter.Queue(context.Background(), cmd))
-
 		adapter.wait()
-
 		assert.HasLength(t, 0, adapter.done)
 		assert.HasLength(t, 0, adapter.delayed)
 		assert.HasLength(t, 1, adapter.failed)
@@ -53,14 +54,16 @@ func Test_Runner(t *testing.T) {
 			cmd     bus.AsyncRequest = returnCommand{err: jobErr}
 		)
 
-		runner := embedded.NewRunner(&adapter, logger, b, 0, embedded.WorkerGroup{
-			Requests: []bus.AsyncRequest{returnCommand{}},
+		assert.Nil(t, adapter.Queue(context.Background(), cmd))
+
+		runner := embedded.NewOrchestrator(&adapter, b, logger, embedded.RunnerDefinition{
+			PollInterval: 0,
+			WorkersCount: 1,
+			Messages:     []bus.AsyncRequest{returnCommand{}},
 		})
 
 		runner.Start()
 		defer runner.Stop()
-
-		assert.Nil(t, adapter.Queue(context.Background(), cmd))
 
 		adapter.wait()
 
@@ -77,17 +80,18 @@ func Test_Runner(t *testing.T) {
 			cmd     bus.AsyncRequest = returnCommand{result: bus.AsyncResultDelay}
 		)
 
-		runner := embedded.NewRunner(&adapter, logger, b, 0, embedded.WorkerGroup{
-			Requests: []bus.AsyncRequest{returnCommand{}},
+		assert.Nil(t, adapter.Queue(context.Background(), cmd))
+
+		runner := embedded.NewOrchestrator(&adapter, b, logger, embedded.RunnerDefinition{
+			PollInterval: 0,
+			WorkersCount: 1,
+			Messages:     []bus.AsyncRequest{returnCommand{}},
 		})
 
 		runner.Start()
 		defer runner.Stop()
 
-		assert.Nil(t, adapter.Queue(context.Background(), cmd))
-
 		adapter.wait()
-
 		assert.HasLength(t, 0, adapter.done)
 		assert.HasLength(t, 1, adapter.delayed)
 		assert.HasLength(t, 0, adapter.failed)
@@ -101,17 +105,18 @@ func Test_Runner(t *testing.T) {
 			cmd     bus.AsyncRequest = returnCommand{}
 		)
 
-		runner := embedded.NewRunner(&adapter, logger, b, 0, embedded.WorkerGroup{
-			Requests: []bus.AsyncRequest{returnCommand{}},
+		assert.Nil(t, adapter.Queue(context.Background(), cmd))
+
+		runner := embedded.NewOrchestrator(&adapter, b, logger, embedded.RunnerDefinition{
+			PollInterval: 0,
+			WorkersCount: 1,
+			Messages:     []bus.AsyncRequest{returnCommand{}},
 		})
 
 		runner.Start()
 		defer runner.Stop()
 
-		assert.Nil(t, adapter.Queue(context.Background(), cmd))
-
 		adapter.wait()
-
 		assert.HasLength(t, 1, adapter.done)
 		assert.HasLength(t, 0, adapter.delayed)
 		assert.HasLength(t, 0, adapter.failed)
@@ -188,14 +193,18 @@ func (a *adapter) Failed(ctx context.Context, j embedded.Job, jobErr error) erro
 	return nil
 }
 
-func (a *adapter) GetNextPendingJobs(context.Context) ([]embedded.Job, error) {
-	j := make([]embedded.Job, len(a.jobs))
+func (a *adapter) GetNextPendingJobs(_ context.Context, messageNames ...string) ([]embedded.Job, error) {
+	var j []embedded.Job
 
-	for i, job := range a.jobs {
-		j[i] = job
+	for i := 0; i < len(a.jobs); i++ {
+		if len(messageNames) > 0 && !slices.Contains(messageNames, a.jobs[i].Command().Name_()) {
+			continue
+		}
+
+		j = append(j, a.jobs[i])
+		a.jobs = append(a.jobs[:i], a.jobs[i+1:]...)
+		i--
 	}
-
-	a.jobs = nil
 
 	return j, nil
 }

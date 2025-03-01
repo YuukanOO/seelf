@@ -11,7 +11,7 @@ https://github.com/YuukanOO/seelf/assets/939842/0fb8c833-1dba-4a75-87d5-94b92155
 Got an already working docker compose file for your project? Just send it to your [seelf](https://github.com/YuukanOO/seelf) instance and _boom_, that's live on your own infrastructure with all services correctly deployed and exposed on nice urls as needed! See [the documentation](https://yuukanoo.github.io/seelf/guide/quickstart.html) for more information.
 
 > [!NOTE]
-> Although Docker is the only backend supported at the moment, I would like to investigate to enable other ones too. Remote Docker or Podman for example, see [the roadmap](https://github.com/YuukanOO/seelf/milestone/1) .
+> Although Docker is the only backend supported at the moment, I would like to investigate to enable other ones too, see [the roadmap](https://github.com/YuukanOO/seelf/milestone/1) .
 
 ## Getting started
 

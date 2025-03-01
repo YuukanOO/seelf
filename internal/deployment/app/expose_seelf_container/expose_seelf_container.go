@@ -92,6 +92,10 @@ func Handler(
 
 		assigned, err := provider.Setup(ctx, target)
 
+		if err != nil {
+			return bus.Unit, err
+		}
+
 		target.Configured(target.CurrentVersion(), assigned, err)
 
 		if err := writer.Write(ctx, &target); err != nil {

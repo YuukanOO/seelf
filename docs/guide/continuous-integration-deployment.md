@@ -14,7 +14,7 @@ Check its [README](https://github.com/YuukanOO/seelf-deploy-action?tab=readme-ov
 
 Another way to trigger a deployment is to directly use the [seelf API](/reference/api) with a program like cURL.
 
-On the **New deployment** page, you can copy the `curl` command associated with the payload represented by the form. You just have to embed this command in your CI job, update it according to your needs (filling the git branch from the environment for example and retrieve the API Key from a secret) and you're good to go.
+On the **New deployment** page, you can show the `curl` command associated with the payload represented by the form. You just have to embed this command in your CI job, update it according to your needs (filling the git branch from the environment for example and retrieve the API Key from a secret) and you're good to go.
 
 Here is an example for the [Drone CI software](https://www.drone.io/):
 

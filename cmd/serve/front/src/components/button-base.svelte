@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Loader from '$components/loader.svelte';
 	import l, { type AppTranslationsString } from '$lib/localization';
-
 	type ButtonType = 'button' | 'submit' | 'reset';
 
 	/** If set, render the button as an anchor */
@@ -13,6 +12,9 @@
 	export let variant: 'primary' | 'outlined' | 'danger' = 'primary';
 	export let loading: boolean = false;
 
+	export let ariaExpanded = false;
+	export let ariaControls: Maybe<string> = undefined;
+
 	const outlined = variant === 'outlined';
 	const danger = variant === 'danger';
 </script>
@@ -21,6 +23,8 @@
 	<a
 		class="button"
 		aria-disabled={disabled}
+		aria-expanded={ariaExpanded}
+		aria-controls={ariaControls}
 		class:outlined
 		class:danger
 		{href}
@@ -38,6 +42,8 @@
 		on:click
 		{type}
 		aria-label={title && l.translate(title)}
+		aria-expanded={ariaExpanded}
+		aria-controls={ariaControls}
 	>
 		{#if loading}
 			<Loader />

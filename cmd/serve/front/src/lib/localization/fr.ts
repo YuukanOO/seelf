@@ -160,7 +160,7 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'profile.integration': 'Intégration',
 		'profile.integration.title': 'Intégration Continue',
 		'profile.integration.description':
-			"Si vous souhaitez déclencher un déploiement pour une application, vous aurez besoin de ce jeton. Vous pouvez également cliquer sur le bouton <strong>Copier la commande cURL</strong> depuis la page de déploiement et l'utiliser dans votre pipeline car il inclut le jeton dans l'en-tête approprié.",
+			"Si vous souhaitez déclencher un déploiement pour une application, vous aurez besoin de ce jeton. Vous pouvez également <strong>Afficher la commande cURL</strong> depuis la page de déploiement et l'utiliser dans votre pipeline car il inclut le jeton dans l'en-tête approprié.",
 		'profile.key': 'Clé API',
 		'profile.key.help':
 			"Passez ce jeton dans l'entête <code>Authorization: Bearer</code> pour communiquer avec l'API seelf. <strong>Vous devez le garder secret !</strong>",
@@ -184,7 +184,7 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 			)}">en créer un !</a>`,
 		'deployment.environment': 'Environnement',
 		'deployment.payload': 'Charge utile',
-		'deployment.payload.copy_curl': 'Copier la commande cURL',
+		'deployment.payload.toggle_curl_command': 'Afficher / Masquer la commande cURL',
 		'deployment.payload.kind': 'Type',
 		'deployment.payload.raw': 'fichier compose',
 		'deployment.payload.raw.content': 'Contenu',
@@ -242,6 +242,8 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		'footer.documentation': 'Docs',
 		'footer.donate': '❤️ Donner',
 		// Shared
+		'console.copy_to_clipboard': 'Copier dans le presse-papiers',
+		'console.select_all': 'Tout sélectionner',
 		'panel.hint': 'Afficher / Masquer',
 		'datatable.no_data': 'Aucune donnée à afficher',
 		'datatable.toggle': 'Afficher / masquer les détails',
@@ -251,6 +253,7 @@ Vous devriez probablement essayer de rendre la cible accessible avant de la supp
 		},
 		page_n_of_m: (n: number, m: number) => `Page ${n} de ${m}`,
 		file: 'Fichier',
+		command: 'Commande',
 		previous: 'Précédent',
 		next: 'Suivant',
 		and: 'et',

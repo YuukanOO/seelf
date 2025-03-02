@@ -3,6 +3,7 @@
 	import Breadcrumb from '$components/breadcrumb.svelte';
 	import Button from '$components/button.svelte';
 	import CleanupNotice from '$components/cleanup-notice.svelte';
+	import Console from '$components/console.svelte';
 	import Dropdown, { type DropdownOption } from '$components/dropdown.svelte';
 	import FormErrors from '$components/form-errors.svelte';
 	import FormSection from '$components/form-section.svelte';
@@ -11,15 +12,16 @@
 	import Stack from '$components/stack.svelte';
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
+	import { buildCommand, type CurlPayload } from '$lib/curl';
 	import { buildFormData } from '$lib/form';
+	import l from '$lib/localization';
 	import routes from '$lib/path';
 	import service, {
 		type Environment,
-		type SourceDataDiscriminator,
-		type QueueDeployment
+		type QueueDeployment,
+		type SourceDataDiscriminator
 	} from '$lib/resources/deployments';
 	import select from '$lib/select';
-	import l from '$lib/localization';
 
 	export let data;
 
@@ -29,6 +31,7 @@
 	let archive: Maybe<FileList> = undefined;
 	let branch = '';
 	let hash: Maybe<string> = undefined;
+	let curlPanelVisible = false;
 
 	const options: Environment[] = ['production', 'staging'];
 	const kindOptions = (
@@ -67,30 +70,23 @@
 		await goto(routes.deployment(data.app.id, deployment_number));
 	}
 
-	function copyCurlCommand() {
-		const payload = select(kind, {
-			git: `-H "Content-Type: application/json" -d "{ \\"environment\\":\\"${environment}\\",\\"git\\":{ \\"branch\\": \\"${branch}\\"${
-				hash ? `, \\"hash\\":\\"${hash}\\"` : ''
-			} } }" `,
-			raw: `-H "Content-Type: application/json" -d "{ \\"environment\\":\\"${environment}\\", \\"raw\\":\\"${JSON.stringify(
-				raw
-			)
-				.replaceAll('\\"', '"')
-				.substring(1)
-				.slice(0, -1)}\\"}"`,
-			archive: `-F environment=${environment} -F archive=@${
-				archive?.[0]?.name ?? '<path_to_a_tar_gz_archive>'
-			}`
-		});
-
-		if (!payload) {
-			return;
-		}
-
-		navigator.clipboard.writeText(
-			`curl -i -X POST -H "Authorization: Bearer ${data.user.api_key}" ${payload} ${location.origin}/api/v1/apps/${data.app.id}/deployments`
-		);
+	function toggleCurlPanel() {
+		curlPanelVisible = !curlPanelVisible;
 	}
+
+	$: curlCommand = curlPanelVisible // Only build the command if the panel is visible
+		? buildCommand({
+				apiKey: data.user.api_key,
+				appId: data.app.id,
+				environment,
+				origin: location.origin,
+				...select<SourceDataDiscriminator, CurlPayload>(kind, {
+					raw: { kind: 'raw', raw },
+					git: { kind: 'git', branch, hash },
+					archive: { kind: 'archive', filename: archive?.[0]?.name }
+				})!
+		  })
+		: undefined;
 </script>
 
 <Form handler={submit} let:submitting let:errors>
@@ -120,12 +116,25 @@
 				<svelte:fragment slot="actions">
 					<Button
 						variant="outlined"
-						on:click={copyCurlCommand}
-						text="deployment.payload.copy_curl"
+						on:click={toggleCurlPanel}
+						ariaExpanded={curlPanelVisible}
+						ariaControls="curl-command-panel"
+						text="deployment.payload.toggle_curl_command"
 					/>
 				</svelte:fragment>
 
 				<Stack direction="column">
+					{#if curlPanelVisible}
+						<Console
+							id="curl-command-panel"
+							title="command"
+							titleElement="h3"
+							copyToClipboardEnabled
+							selectAllEnabled
+							data={curlCommand}
+						/>
+					{/if}
+
 					<Dropdown label="deployment.payload.kind" options={kindOptions} bind:value={kind} />
 					{#if kind === 'raw'}
 						<TextArea

@@ -12,6 +12,7 @@
 	import Stack from '$components/stack.svelte';
 	import TextArea from '$components/text-area.svelte';
 	import TextInput from '$components/text-input.svelte';
+	import { controls } from '$lib/aria.js';
 	import { buildCommand, type CurlPayload } from '$lib/curl';
 	import { buildFormData } from '$lib/form';
 	import l from '$lib/localization';
@@ -117,8 +118,7 @@
 					<Button
 						variant="outlined"
 						on:click={toggleCurlPanel}
-						ariaExpanded={curlPanelVisible}
-						ariaControls="curl-command-panel"
+						use={[controls, { expanded: curlPanelVisible, controls: 'curl-command-panel' }]}
 						text="deployment.payload.toggle_curl_command"
 					/>
 				</svelte:fragment>

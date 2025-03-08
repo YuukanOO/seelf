@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Loader from '$components/loader.svelte';
+	import { type ActionDefinition, useAction } from '$lib/actions';
 	import l, { type AppTranslationsString } from '$lib/localization';
 
 	type ButtonType = 'button' | 'submit' | 'reset';
@@ -12,6 +13,7 @@
 	export let disabled: Maybe<boolean> = undefined;
 	export let variant: 'primary' | 'outlined' | 'danger' = 'primary';
 	export let loading: boolean = false;
+	export let use: Maybe<ActionDefinition> = undefined;
 
 	const outlined = variant === 'outlined';
 	const danger = variant === 'danger';
@@ -21,6 +23,7 @@
 	<a
 		class="button"
 		aria-disabled={disabled}
+		use:useAction={use}
 		class:outlined
 		class:danger
 		{href}
@@ -32,6 +35,7 @@
 	<button
 		class="button"
 		disabled={disabled || loading}
+		use:useAction={use}
 		class:loading
 		class:outlined
 		class:danger

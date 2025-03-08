@@ -1,8 +1,8 @@
-import { RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS, POLLING_INTERVAL_MS } from '$lib/config';
-import type { Paginated } from '$lib/pagination';
+import { POLLING_INTERVAL_MS, RUNNING_DEPLOYMENT_POLLING_INTERVAL_MS } from '$lib/config';
 import fetcher, { type FetchOptions, type FetchService, type QueryResult } from '$lib/fetcher';
-import type { ByUserData } from '$lib/resources/users';
+import type { Paginated } from '$lib/pagination';
 import type { TargetStatus } from '$lib/resources/targets';
+import type { ByUserData } from '$lib/resources/users';
 
 export enum DeploymentStatus {
 	Pending = 0,

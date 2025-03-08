@@ -4,7 +4,7 @@ import { buildCommand } from './curl';
 describe('the buildCommand function', () => {
 	test('should returns an empty string if the kind is not supported', () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		expect(buildCommand({ kind: 'not-supported' } as any)).toEqual('');
+		expect(buildCommand({ payload: { kind: 'not-supported' } } as any)).toEqual('');
 	});
 
 	test('should return a valid command for raw payload', () => {
@@ -13,8 +13,10 @@ describe('the buildCommand function', () => {
 			environment: 'production',
 			apiKey: 'some-api-key',
 			origin: 'http://localhost:1234',
-			kind: 'raw',
-			raw: 'some content'
+			payload: {
+				kind: 'raw',
+				raw: 'some content'
+			}
 		});
 
 		expect(cmd).toEqual(
@@ -28,9 +30,10 @@ describe('the buildCommand function', () => {
 			environment: 'production',
 			apiKey: 'some-api-key',
 			origin: 'http://localhost:1234',
-			kind: 'archive',
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			filename: 'multiple-ports.tar.gz'
+			payload: {
+				kind: 'archive',
+				filename: 'multiple-ports.tar.gz'
+			}
 		});
 
 		expect(cmd).toEqual(
@@ -44,8 +47,10 @@ describe('the buildCommand function', () => {
 			environment: 'production',
 			apiKey: 'some-api-key',
 			origin: 'http://localhost:1234',
-			kind: 'git',
-			branch: 'main'
+			payload: {
+				kind: 'git',
+				branch: 'main'
+			}
 		});
 
 		expect(cmd).toEqual(
@@ -59,9 +64,11 @@ describe('the buildCommand function', () => {
 			environment: 'production',
 			apiKey: 'some-api-key',
 			origin: 'http://localhost:1234',
-			kind: 'git',
-			branch: 'main',
-			hash: 'some-hash'
+			payload: {
+				kind: 'git',
+				branch: 'main',
+				hash: 'some-hash'
+			}
 		});
 
 		expect(cmd).toEqual(

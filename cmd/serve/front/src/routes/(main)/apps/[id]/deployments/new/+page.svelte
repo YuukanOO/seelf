@@ -81,7 +81,7 @@
 				appId: data.app.id,
 				environment,
 				origin: location.origin,
-				...select<SourceDataDiscriminator, CurlPayload>(kind, {
+				payload:select<SourceDataDiscriminator, CurlPayload>(kind, {
 					raw: { kind: 'raw', raw },
 					git: { kind: 'git', branch, hash },
 					archive: { kind: 'archive', filename: archive?.[0]?.name }

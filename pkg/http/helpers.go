@@ -8,6 +8,7 @@ import (
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/log"
+	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,7 +26,7 @@ func Bind[TIn any](s Server, handler func(*gin.Context, TIn) error) gin.HandlerF
 		var cmd TIn
 
 		if err := ctx.ShouldBind(&cmd); err != nil {
-			ctx.AbortWithError(http.StatusUnprocessableEntity, err)
+			_ = ctx.AbortWithError(http.StatusUnprocessableEntity, err)
 			return
 		}
 
@@ -86,7 +87,9 @@ func HandleError(s Server, ctx *gin.Context, err error) {
 	)
 
 	// Translates the error type to the appropriate HTTP status code
-	if _, isAppErr := apperr.As[apperr.Error](err); isAppErr {
+	if errors.Is(err, storage.ErrConcurrencyUpdate) {
+		status = http.StatusConflict
+	} else if _, isAppErr := apperr.As[apperr.Error](err); isAppErr {
 		status = http.StatusBadRequest // Default to HTTP 400
 		data = err
 
@@ -97,7 +100,7 @@ func HandleError(s Server, ctx *gin.Context, err error) {
 		s.Logger().Errorw(err.Error(), "error", err)
 	}
 
-	ctx.Error(err)
+	_ = ctx.Error(err)
 	ctx.AbortWithStatusJSON(status, data)
 }
 

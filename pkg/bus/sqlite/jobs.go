@@ -152,7 +152,7 @@ func (s *JobsStore) Queue(
 	return nil
 }
 
-func (s *JobsStore) GetNextPendingJobs(ctx context.Context) ([]embedded.Job, error) {
+func (s *JobsStore) GetNextPendingJobs(ctx context.Context, messageNames ...string) ([]embedded.Job, error) {
 	// This query will lock the database to make sure we can't retrieved the same job twice.
 	return builder.
 		Query[embedded.Job](`
@@ -161,7 +161,9 @@ func (s *JobsStore) GetNextPendingJobs(ctx context.Context) ([]embedded.Job, err
 			WHERE id IN (SELECT id FROM (
 				SELECT id, MIN(not_before) FROM [scheduler.scheduled_jobs] sj
 				WHERE 
-					sj.retrieved = false
+					sj.retrieved = false`).
+		S(builder.Array("AND sj.message_name IN", messageNames)).
+		F(`
 					AND sj.errcode IS NULL
 					AND sj.not_before <= DATETIME('now')
 					AND sj.[group] NOT IN (SELECT DISTINCT [group] FROM [scheduler.scheduled_jobs] WHERE retrieved = true)

@@ -1,5 +1,10 @@
 package storage
 
+import (
+	"maps"
+	"slices"
+)
+
 type (
 	// Function used to map from a raw value to a discriminated type.
 	DiscriminatedMapperFunc[T any] func(string) (T, error)
@@ -53,3 +58,6 @@ func (m *DiscriminatedMapper[T]) From(discriminator, value string) (T, error) {
 
 	return mapper(value)
 }
+
+// Retrieve the list of known keys available to the mapper.
+func (m *DiscriminatedMapper[T]) Keys() []string { return slices.Collect(maps.Keys(m.known)) }

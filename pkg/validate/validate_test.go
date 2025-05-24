@@ -119,6 +119,33 @@ func Test_Struct(t *testing.T) {
 	})
 }
 
+func Test_Array(t *testing.T) {
+	t.Run("collects validation errors and returns field errors", func(t *testing.T) {
+		err := validate.Array([]string{"john", "doe"}, func(value string, index int) error {
+			if value == "doe" {
+				return errAlwaysFail
+			}
+
+			return nil
+		})
+
+		validationErr, ok := apperr.As[validate.FieldErrors](err)
+
+		assert.True(t, ok)
+		assert.DeepEqual(t, validate.FieldErrors{
+			"1": errAlwaysFail,
+		}, validationErr)
+	})
+
+	t.Run("returns nil if no error exists", func(t *testing.T) {
+		err := validate.Array([]string{"john", "doe"}, func(value string, index int) error {
+			return nil
+		})
+
+		assert.Nil(t, err)
+	})
+}
+
 func Test_If(t *testing.T) {
 	t.Run("return the validation error only if expression is true", func(t *testing.T) {
 		err := validate.Struct(validate.Of{

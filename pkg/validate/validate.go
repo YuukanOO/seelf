@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/apperr"
@@ -34,7 +35,7 @@ func (e FieldErrors) Flatten() FieldErrors {
 }
 
 // Builds a new validation error with given invalid fields.
-// Wraps the FieldErrors inside the ErrValidationFailed.
+// Wraps the FieldErrors inside the ErrValidationFailed one.
 func NewError(fieldErrs FieldErrors) error {
 	return apperr.Wrap(ErrValidationFailed, fieldErrs)
 }
@@ -77,6 +78,23 @@ func Field[T any](value T, validators ...Validator[T]) error {
 		if err := validator(value); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// Validates an array of values using the given function.
+func Array[T any](values []T, fn func(T, int) error) error {
+	fieldErrs := make(FieldErrors)
+
+	for i, value := range values {
+		if err := fn(value, i); err != nil {
+			fieldErrs[strconv.Itoa(i)] = err
+		}
+	}
+
+	if len(fieldErrs) > 0 {
+		return fieldErrs
 	}
 
 	return nil

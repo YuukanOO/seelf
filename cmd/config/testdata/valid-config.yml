@@ -1,0 +1,21 @@
+log:
+  level: debug
+  format: json
+data:
+  path: "testdata"
+  deployment_dir_template: "{{ .Environment }}"
+source:
+  archive:
+    max_size: 10mb
+http:
+  host: localhost
+  port: 5000
+  secret: top_secret
+  secure: true
+runners:
+  - poll_interval: 5s
+    count: 4
+    jobs:
+      - deployment.command.deploy
+  - poll_interval: 10s
+    count: 5

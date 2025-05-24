@@ -560,7 +560,7 @@ type (
 		status           TargetStatus
 		version          time.Time
 		errCode          monad.Maybe[string]
-		lastReadyVersion monad.Maybe[time.Time] // Hold down the last time the target was marked as ready
+		lastReadyVersion monad.Maybe[time.Time] // Hold the last time the target was marked as ready
 	}
 )
 

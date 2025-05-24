@@ -60,12 +60,14 @@ type (
 	}
 
 	// Async request which extend the MutateRequest with additional information.
-	// When implementing an AsyncRequest handler, you must make it idempotent since a job
-	// can be retried under certain conditions.
+	// When implementing an AsyncRequest handler, you MUST take care of only returning
+	// an error if that's an infrastructure one. Every other state MUST be attached
+	// to an aggregate.
 	AsyncRequest interface {
 		MutateRequest
 		TypedRequest[AsyncResult]
-		Group() string // Work group for this request, at most one job per group is processed at any given time
+		Topic_() string // Work group for this request, at most one job per group is processed at any given time
+		Key_() JobKey   // Key to uniquely identify the scheduled job
 	}
 
 	// Request to query the system.

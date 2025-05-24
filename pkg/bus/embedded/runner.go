@@ -2,10 +2,12 @@ package embedded
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
 type (
@@ -119,35 +121,43 @@ func (s *runner) startWorkers() {
 	}
 }
 
-func (s *runner) handleJobReturn(ctx context.Context, job Job, result bus.AsyncResult, err error) {
-	var storeErr error
+func (s *runner) handleJobReturn(ctx context.Context, job Job, result bus.AsyncResult, jobErr error) {
+	var (
+		err error
+		cmd = job.Command()
+	)
 
 	defer func() {
-		if storeErr == nil {
+		if err == nil {
 			return
 		}
 
-		s.orchestrator.logger.Errorw("error while updating job status",
-			"job", job.ID(),
-			"name", job.Command().Name_(),
-			"error", storeErr,
+		s.orchestrator.logger.Errorw("error while updating job",
+			"job", cmd.Key_(),
+			"name", cmd.Name_(),
+			"error", err,
 		)
 	}()
 
+	if result == bus.AsyncResultDelay && jobErr == nil {
+		err = job.Delay()
+	} else {
+		err = job.HasEnded(jobErr)
+
+		if jobErr != nil {
+			s.orchestrator.logger.Errorw("error while processing job, retrying later",
+				"job", cmd.Key_(),
+				"name", cmd.Name_(),
+				"error", jobErr,
+			)
+		}
+	}
+
 	if err != nil {
-		storeErr = s.orchestrator.store.Failed(ctx, job, err)
-		s.orchestrator.logger.Errorw("error while processing job",
-			"job", job.ID(),
-			"name", job.Command().Name_(),
-			"error", err,
-		)
 		return
 	}
 
-	if result == bus.AsyncResultDelay {
-		storeErr = s.orchestrator.store.Delay(ctx, job)
-		return
+	if err = s.orchestrator.store.Write(ctx, &job); errors.Is(err, storage.ErrConcurrencyUpdate) {
+		err = s.orchestrator.store.MarkAsPending(ctx, job.Key())
 	}
-
-	storeErr = s.orchestrator.store.Done(ctx, job)
 }

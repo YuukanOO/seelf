@@ -1,7 +1,6 @@
 package embedded
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -10,26 +9,6 @@ import (
 )
 
 type (
-	Job interface {
-		ID() string
-		Command() bus.AsyncRequest
-	}
-
-	// Should be raised by the store when a job has been dismissed by a user.
-	JobDismissed struct {
-		bus.Notification
-
-		ID      string
-		Command bus.AsyncRequest
-	}
-
-	JobsStore interface {
-		GetNextPendingJobs(context.Context, ...string) ([]Job, error)
-		Failed(context.Context, Job, error) error
-		Delay(context.Context, Job) error
-		Done(context.Context, Job) error
-	}
-
 	// Manage multiple embedded runners.
 	Orchestrator struct {
 		started    bool
@@ -45,8 +24,6 @@ type (
 		Messages     []bus.AsyncRequest // List of messages types processed by this runner
 	}
 )
-
-func (JobDismissed) Name_() string { return "bus.event.job_dismissed" }
 
 func NewOrchestrator(
 	store JobsStore,

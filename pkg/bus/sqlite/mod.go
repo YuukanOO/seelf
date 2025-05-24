@@ -22,10 +22,7 @@ func Setup(
 ) (*JobsStore, error) {
 	jobsStore := NewJobsStore(db, b)
 
-	// Register some handlers to operate on jobs if needed.
 	bus.Register(b, jobsStore.GetAllJobs)
-	bus.Register(b, jobsStore.RetryJob)
-	bus.Register(b, jobsStore.DismissJob)
 
 	if err := db.Migrate(Migrations); err != nil {
 		return nil, err

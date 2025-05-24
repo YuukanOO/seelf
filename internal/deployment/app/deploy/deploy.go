@@ -3,11 +3,16 @@ package deploy
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
 	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 )
+
+func jobKey(app string, number int) bus.JobKey {
+	return bus.JobKeyFrom(app, strconv.Itoa(number), "deploy")
+}
 
 // Process a deployment, this is where the magic happen!
 type Command struct {
@@ -19,8 +24,9 @@ type Command struct {
 	TargetID         string `json:"target_id"`
 }
 
-func (Command) Name_() string   { return "deployment.command.deploy" }
-func (c Command) Group() string { return bus.Group(c.AppID, c.Environment, c.TargetID) }
+func (Command) Name_() string      { return "deployment.command.deploy" }
+func (c Command) Topic_() string   { return bus.Topic(c.AppID, c.Environment, c.TargetID) }
+func (c Command) Key_() bus.JobKey { return jobKey(c.AppID, c.DeploymentNumber) }
 
 // Handle the deployment process.
 // If an unexpected error occurs during this process, it uses the bus.PreserveOrder function

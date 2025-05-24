@@ -10,7 +10,7 @@ import (
 	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/embedded"
-	"github.com/YuukanOO/seelf/pkg/id"
+	"github.com/YuukanOO/seelf/pkg/event"
 	"github.com/YuukanOO/seelf/pkg/log"
 	"github.com/YuukanOO/seelf/pkg/must"
 )
@@ -44,7 +44,8 @@ func Test_Runner(t *testing.T) {
 		assert.HasLength(t, 0, adapter.delayed)
 		assert.HasLength(t, 1, adapter.failed)
 		assert.Equal(t, cmd, adapter.failed[0].Command())
-		assert.Equal(t, bus.ErrNoHandlerRegistered, adapter.failed[0].err)
+		changed := assert.EventIs[embedded.JobStateChanged](t, &adapter.failed[0], 2)
+		assert.Equal(t, bus.ErrNoHandlerRegistered.Error(), changed.State.ErrCode().MustGet())
 	})
 
 	t.Run("should fail the job if there was an error", func(t *testing.T) {
@@ -71,7 +72,8 @@ func Test_Runner(t *testing.T) {
 		assert.HasLength(t, 0, adapter.delayed)
 		assert.HasLength(t, 1, adapter.failed)
 		assert.Equal(t, cmd, adapter.failed[0].Command())
-		assert.Equal(t, jobErr, adapter.failed[0].err)
+		changed := assert.EventIs[embedded.JobStateChanged](t, &adapter.failed[0], 2)
+		assert.Equal(t, jobErr.Error(), changed.State.ErrCode().MustGet())
 	})
 
 	t.Run("should delay the job if the handler returns an AsyncResultDelay", func(t *testing.T) {
@@ -96,7 +98,8 @@ func Test_Runner(t *testing.T) {
 		assert.HasLength(t, 1, adapter.delayed)
 		assert.HasLength(t, 0, adapter.failed)
 		assert.Equal(t, cmd, adapter.delayed[0].Command())
-		assert.Nil(t, adapter.delayed[0].err)
+		delayed := assert.EventIs[embedded.JobDelayed](t, &adapter.delayed[0], 2)
+		assert.False(t, delayed.State.ErrCode().HasValue())
 	})
 
 	t.Run("should mark the job as done if there is no error", func(t *testing.T) {
@@ -131,65 +134,72 @@ type returnCommand struct {
 	err    error
 }
 
-func (r returnCommand) Name_() string { return "returnCommand" }
-func (r returnCommand) Group() string { return "" }
+func (r returnCommand) Name_() string    { return "returnCommand" }
+func (r returnCommand) Key_() bus.JobKey { return "returnKey" }
+func (r returnCommand) Topic_() string   { return "" }
 
 type unhandledCommand struct {
 	bus.AsyncCommand
 }
 
-func (u unhandledCommand) Name_() string { return "unhandledCommand" }
-func (u unhandledCommand) Group() string { return "" }
+func (u unhandledCommand) Name_() string    { return "unhandledCommand" }
+func (u unhandledCommand) Key_() bus.JobKey { return "unhandledKey" }
+func (u unhandledCommand) Topic_() string   { return "" }
 
 var (
 	_ embedded.JobsStore = (*adapter)(nil)
 	_ bus.Scheduler      = (*adapter)(nil)
 )
 
-type job struct {
-	id  string
-	cmd bus.AsyncRequest
-	err error
-}
-
-func (j *job) ID() string                { return j.id }
-func (j *job) Command() bus.AsyncRequest { return j.cmd }
-
 type adapter struct {
-	wg      sync.WaitGroup
-	jobs    []*job
-	failed  []*job
-	delayed []*job
-	done    []*job
+	wg              sync.WaitGroup
+	jobs            []embedded.Job
+	failed          []embedded.Job
+	delayed         []embedded.Job
+	done            []embedded.Job
+	markedAsPending []bus.JobKey
 }
 
 func (a *adapter) Queue(ctx context.Context, requests ...bus.AsyncRequest) error {
 	a.wg.Add(1)
 
 	for _, req := range requests {
-		a.jobs = append(a.jobs, &job{id: id.New[string](), cmd: req})
+		a.jobs = append(a.jobs, embedded.NewJob(req))
 	}
 
 	return nil
 }
 
-func (a *adapter) Delay(ctx context.Context, j embedded.Job) error {
-	defer a.wg.Done()
-	a.delayed = append(a.delayed, j.(*job))
+func (a *adapter) Cancel(ctx context.Context, keys ...bus.JobKey) error {
 	return nil
 }
 
-func (a *adapter) Done(ctx context.Context, j embedded.Job) error {
-	defer a.wg.Done()
-	a.done = append(a.done, j.(*job))
+func (a *adapter) Write(_ context.Context, jobs ...*embedded.Job) error {
+	for _, j := range jobs {
+		_, events := event.Unwrap(j)
+
+		// Take the last changed event
+		e := events[len(events)-1]
+
+		switch evt := e.(type) {
+		case embedded.JobDelayed:
+			a.delayed = append(a.delayed, *j)
+		case embedded.JobStateChanged:
+			if evt.State.Status() == embedded.JobStatusDone {
+				a.done = append(a.done, *j)
+			} else if evt.State.ErrCode().HasValue() {
+				a.failed = append(a.failed, *j)
+			}
+		}
+
+		a.wg.Done()
+	}
+
 	return nil
 }
 
-func (a *adapter) Failed(ctx context.Context, j embedded.Job, jobErr error) error {
-	defer a.wg.Done()
-	jo := j.(*job)
-	jo.err = jobErr
-	a.failed = append(a.failed, jo)
+func (a *adapter) MarkAsPending(_ context.Context, key bus.JobKey) error {
+	a.markedAsPending = append(a.markedAsPending, key)
 	return nil
 }
 
@@ -201,7 +211,10 @@ func (a *adapter) GetNextPendingJobs(_ context.Context, messageNames ...string) 
 			continue
 		}
 
-		j = append(j, a.jobs[i])
+		job := a.jobs[i]
+		_ = job.HasStarted()
+
+		j = append(j, job)
 		a.jobs = append(a.jobs[:i], a.jobs[i+1:]...)
 		i--
 	}

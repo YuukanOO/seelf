@@ -3,6 +3,7 @@ package cleanup_app
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/YuukanOO/seelf/internal/deployment/domain"
@@ -25,8 +26,11 @@ type Command struct {
 	To          time.Time `json:"to"`
 }
 
-func (Command) Name_() string   { return "deployment.command.cleanup_app" }
-func (c Command) Group() string { return bus.Group(c.AppID, c.Environment, c.TargetID) }
+func (Command) Name_() string    { return "deployment.command.cleanup_app" }
+func (c Command) Topic_() string { return bus.Topic(c.AppID, c.Environment, c.TargetID) }
+func (c Command) Key_() bus.JobKey {
+	return bus.JobKeyFrom(c.AppID, c.Environment, c.TargetID, strconv.FormatInt(c.From.UnixMilli(), 10), "cleanup")
+}
 
 func Handler(
 	reader domain.TargetsReader,

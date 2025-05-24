@@ -8,13 +8,14 @@ SET
 
 -- And schedule it
 INSERT INTO [scheduler.scheduled_jobs] (
-    id
-    ,[group]
+    key
+    ,topic
     ,message_name
     ,message_data
     ,queued_at
-    ,not_before
-    ,retrieved
+    ,state_not_before
+    ,state_status
+    ,version
 )
 SELECT
     id
@@ -23,7 +24,8 @@ SELECT
     , '{"id":"' || id || '","version":"2024-05-19T00:00:00Z"}'
     , DATETIME()
     , DATETIME()
-    , false
+    , 0
+    ,'2006-01-02 15:04:05.999999999+00:00'
 FROM targets;
 
 -- When a deployment is marked as failed, remove all pending jobs for that resource.

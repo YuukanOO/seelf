@@ -17,8 +17,9 @@ type Command struct {
 	ID string `json:"target_id"`
 }
 
-func (Command) Name_() string   { return "deployment.command.cleanup_target" }
-func (c Command) Group() string { return c.ID }
+func (Command) Name_() string      { return "deployment.command.cleanup_target" }
+func (c Command) Topic_() string   { return c.ID }
+func (c Command) Key_() bus.JobKey { return bus.JobKeyFrom(c.ID, "cleanup") }
 
 func Handler(
 	reader domain.TargetsReader,

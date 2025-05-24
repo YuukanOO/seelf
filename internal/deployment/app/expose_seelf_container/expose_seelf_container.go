@@ -77,12 +77,10 @@ func Handler(
 			return bus.Unit, err
 		}
 
-		target, err = domain.NewTarget("local",
+		if target, err = domain.NewTarget("local",
 			configRequirement,
 			auth.CurrentUser(ctx).MustGet(),
-		)
-
-		if err != nil {
+		); err != nil {
 			return bus.Unit, err
 		}
 
@@ -92,7 +90,7 @@ func Handler(
 
 		assigned, err := provider.Setup(ctx, target)
 
-		target.Configured(target.CurrentVersion(), assigned, err)
+		_ = target.Configured(target.CurrentVersion(), assigned, err)
 
 		if err := writer.Write(ctx, &target); err != nil {
 			return bus.Unit, err

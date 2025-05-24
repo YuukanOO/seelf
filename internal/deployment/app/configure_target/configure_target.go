@@ -18,8 +18,9 @@ type Command struct {
 	Version time.Time `json:"version"`
 }
 
-func (Command) Name_() string   { return "deployment.command.configure_target" }
-func (c Command) Group() string { return c.ID }
+func (Command) Name_() string      { return "deployment.command.configure_target" }
+func (c Command) Topic_() string   { return c.ID }
+func (c Command) Key_() bus.JobKey { return bus.JobKeyFrom(c.ID, "configure") }
 
 func Handler(
 	reader domain.TargetsReader,

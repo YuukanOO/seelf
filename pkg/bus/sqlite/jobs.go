@@ -4,32 +4,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/YuukanOO/seelf/pkg/apperr"
 	"github.com/YuukanOO/seelf/pkg/bus"
 	"github.com/YuukanOO/seelf/pkg/bus/embedded"
-	"github.com/YuukanOO/seelf/pkg/bus/embedded/dismiss_job"
 	"github.com/YuukanOO/seelf/pkg/bus/embedded/get_jobs"
-	"github.com/YuukanOO/seelf/pkg/bus/embedded/retry_job"
-	"github.com/YuukanOO/seelf/pkg/id"
+	"github.com/YuukanOO/seelf/pkg/event"
+	"github.com/YuukanOO/seelf/pkg/must"
 	"github.com/YuukanOO/seelf/pkg/storage"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite"
 	"github.com/YuukanOO/seelf/pkg/storage/sqlite/builder"
 )
 
 var (
-	_ embedded.Job       = (*job)(nil)
 	_ embedded.JobsStore = (*JobsStore)(nil)
 	_ bus.Scheduler      = (*JobsStore)(nil)
 )
-
-// Inner job representation satisfying the embedded bus.Job interface
-type job struct {
-	id  string
-	msg bus.AsyncRequest
-}
-
-func (j *job) ID() string                { return j.id }
-func (j *job) Command() bus.AsyncRequest { return j.msg }
 
 type JobsStore struct {
 	db         *sqlite.Database
@@ -48,8 +36,8 @@ func NewJobsStore(db *sqlite.Database, dispatcher bus.Dispatcher) *JobsStore {
 func (s *JobsStore) ResetRetrievedJobs(ctx context.Context) error {
 	_, err := s.db.ExecContext(context.Background(), `
 		UPDATE [scheduler.scheduled_jobs]
-		SET retrieved = false
-		WHERE retrieved = true`)
+		SET state_status = ?
+		WHERE state_status = ?`, embedded.JobStatusPending, embedded.JobStatusRunning)
 
 	return err
 }
@@ -57,99 +45,90 @@ func (s *JobsStore) ResetRetrievedJobs(ctx context.Context) error {
 func (s *JobsStore) GetAllJobs(ctx context.Context, query get_jobs.Query) (storage.Paginated[get_jobs.Job], error) {
 	return builder.
 		Select[get_jobs.Job](`
-			id
-			,[group]
+			key
+			,topic
 			,message_name
 			,message_data
 			,queued_at
-			,not_before
-			,errcode
-			,retrieved
+			,state_status
+			,state_not_before
+			,state_errcode
 		`).
 		F("FROM [scheduler.scheduled_jobs] ORDER BY queued_at").
 		Paginate(s.db, ctx, jobQueryMapper, query.Page.Get(1), 10)
 }
 
-func (s *JobsStore) RetryJob(ctx context.Context, cmd retry_job.Command) (bus.UnitType, error) {
-	result, err := s.db.ExecContext(ctx, `
+func (s *JobsStore) MarkAsPending(ctx context.Context, key bus.JobKey) error {
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE [scheduler.scheduled_jobs]
-		SET errcode = NULL
-		WHERE id = ? AND errcode IS NOT NULL AND retrieved = false
-	`, cmd.ID)
+		SET state_status = ?
+		WHERE key = ?`, embedded.JobStatusPending, key)
 
-	if err != nil {
-		return bus.Unit, err
-	}
-
-	affected, err := result.RowsAffected()
-
-	if err != nil {
-		return bus.Unit, err
-	}
-
-	if affected == 0 {
-		return bus.Unit, apperr.ErrNotFound
-	}
-
-	return bus.Unit, err
+	return err
 }
 
-func (s *JobsStore) DismissJob(ctx context.Context, cmd dismiss_job.Command) (bus.UnitType, error) {
-	job, err := builder.
-		Query[embedded.Job](`
-			SELECT
-				id, message_name, message_data
-			FROM [scheduler.scheduled_jobs]
-			WHERE id = ? AND errcode IS NOT NULL AND retrieved = false
-		`, cmd.ID).
-		One(s.db, ctx, jobMapper)
+func (s *JobsStore) Write(ctx context.Context, jobs ...*embedded.Job) error {
+	return sqlite.WriteEventsBis(s.db, ctx, jobs,
+		"[scheduler.scheduled_jobs]",
+		func(job *embedded.Job) sqlite.Key {
+			return sqlite.Key{
+				"key": job.Key(),
+			}
+		},
+		func(e event.Event, c *sqlite.Context) {
+			switch evt := e.(type) {
+			case embedded.JobQueued:
+				c.Values["key"] = evt.Key
+				c.Values["topic"] = evt.Topic
+				c.Values["message_name"] = evt.Command.Name_()
+				c.Values["message_data"] = must.Panic(storage.ValueJSON(evt.Command))
+				c.Values["queued_at"] = evt.QueuedAt
+				c.Values["state_status"] = evt.State.Status()
+				c.Values["state_not_before"] = evt.State.NotBefore()
+				c.Values["state_errcode"] = evt.State.ErrCode()
+			case embedded.JobStateChanged:
+				// No need to keep successful jobs!
+				if evt.State.Status() == embedded.JobStatusDone {
+					c.Delete()
+					return
+				}
 
-	if err != nil {
-		return bus.Unit, err
-	}
-
-	// Mark the job as done in the same transaction as the event dispatching
-	return bus.Unit, s.db.Create(ctx, func(ctx context.Context) error {
-		if err = s.Done(ctx, job); err != nil {
-			return err
-		}
-
-		return s.dispatcher.Notify(ctx, embedded.JobDismissed{
-			ID:      job.ID(),
-			Command: job.Command(),
-		})
-	})
+				c.Values["state_status"] = evt.State.Status()
+				c.Values["state_not_before"] = evt.State.NotBefore()
+				c.Values["state_errcode"] = evt.State.ErrCode()
+			case embedded.JobDelayed:
+				c.Values["state_status"] = evt.State.Status()
+				c.Values["state_not_before"] = evt.State.NotBefore()
+				c.Values["state_errcode"] = evt.State.ErrCode()
+			}
+		},
+		sqlite.UpdateOnConflict("key", "state_status"),
+	)
 }
 
 func (s *JobsStore) Queue(
 	ctx context.Context,
 	requests ...bus.AsyncRequest,
 ) error {
-	now := time.Now().UTC()
+	jobs := make([]*embedded.Job, len(requests))
 
-	for _, req := range requests {
-		cmdData, err := storage.ValueJSON(req)
-
-		if err != nil {
-			return err
-		}
-
-		if err = builder.
-			Insert("[scheduler.scheduled_jobs]", builder.Values{
-				"id":           id.New[string](),
-				"[group]":      req.Group(),
-				"message_name": req.Name_(),
-				"message_data": cmdData,
-				"queued_at":    now,
-				"not_before":   now,
-				"retrieved":    false,
-			}).
-			Exec(s.db, ctx); err != nil {
-			return err
-		}
+	for i, req := range requests {
+		job := embedded.NewJob(req)
+		jobs[i] = &job
 	}
 
-	return nil
+	return s.Write(ctx, jobs...)
+}
+
+func (s *JobsStore) Cancel(ctx context.Context, keys ...bus.JobKey) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	return builder.
+		Command(`DELETE FROM [scheduler.scheduled_jobs]`).
+		S(builder.Array("WHERE key IN", keys)).
+		MustExec(s.db, ctx)
 }
 
 func (s *JobsStore) GetNextPendingJobs(ctx context.Context, messageNames ...string) ([]embedded.Job, error) {
@@ -157,89 +136,32 @@ func (s *JobsStore) GetNextPendingJobs(ctx context.Context, messageNames ...stri
 	return builder.
 		Query[embedded.Job](`
 			UPDATE [scheduler.scheduled_jobs]
-			SET retrieved = true
-			WHERE id IN (SELECT id FROM (
-				SELECT id, MIN(not_before) FROM [scheduler.scheduled_jobs] sj
+			SET state_status = ?
+			WHERE key IN (SELECT key FROM (
+				SELECT key, MIN(state_not_before) FROM [scheduler.scheduled_jobs] sj
 				WHERE 
-					sj.retrieved = false`).
+					sj.state_status = ?`, embedded.JobStatusRunning, embedded.JobStatusPending).
 		S(builder.Array("AND sj.message_name IN", messageNames)).
 		F(`
-					AND sj.errcode IS NULL
-					AND sj.not_before <= DATETIME('now')
-					AND sj.[group] NOT IN (SELECT DISTINCT [group] FROM [scheduler.scheduled_jobs] WHERE retrieved = true)
-					GROUP BY sj.[group]
+					AND sj.state_not_before <= ?
+					AND sj.topic NOT IN (SELECT DISTINCT topic FROM [scheduler.scheduled_jobs] WHERE state_status = ?)
+					GROUP BY sj.topic
 				)
 			)
-			RETURNING id, message_name, message_data`).
-		All(s.db, ctx, jobMapper)
-}
-
-func (s *JobsStore) Failed(ctx context.Context, job embedded.Job, jobErr error) error {
-	_, err := s.db.ExecContext(ctx, `
-			UPDATE [scheduler.scheduled_jobs]
-			SET
-				errcode = ?
-				,retrieved = false
-			WHERE id = ?`, jobErr.Error(), job.ID(),
-	)
-	return err
-}
-
-func (s *JobsStore) Delay(ctx context.Context, job embedded.Job) error {
-	// To preserve jobs order inside the same group, every job will be postponed by an amount relative to their ROWID
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE [scheduler.scheduled_jobs]
-		SET
-			not_before = v.updated_date
-			,retrieved = false
-		FROM (
-			SELECT
-				id
-				,DATETIME('now', '+' || CAST(9 + 1 * ROW_NUMBER() OVER (ORDER BY queued_at) AS TEXT) || ' seconds') AS updated_date
-			FROM [scheduler.scheduled_jobs]
-			WHERE errcode IS NULL AND [group] = ?
-		) v
-		WHERE scheduled_jobs.id = v.id`, job.Command().Group())
-	return err
-}
-
-func (s *JobsStore) Done(ctx context.Context, job embedded.Job) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM [scheduler.scheduled_jobs] WHERE id = ?", job.ID())
-	return err
-}
-
-func jobMapper(scanner storage.Scanner) (embedded.Job, error) {
-	var (
-		j       job
-		msgName string
-		msgData string
-	)
-
-	err := scanner.Scan(
-		&j.id,
-		&msgName,
-		&msgData,
-	)
-
-	if err != nil {
-		return &j, err
-	}
-
-	j.msg, err = bus.Marshallable.From(msgName, msgData)
-
-	return &j, err
+			RETURNING key, topic, message_name, message_data, queued_at, state_status, state_not_before, state_errcode, version`, time.Now().UTC(), embedded.JobStatusRunning).
+		All(s.db, ctx, embedded.JobFrom)
 }
 
 func jobQueryMapper(scanner storage.Scanner) (j get_jobs.Job, err error) {
 	err = scanner.Scan(
-		&j.ID,
-		&j.Group,
+		&j.Key,
+		&j.Topic,
 		&j.MessageName,
 		&j.MessageData,
 		&j.QueuedAt,
-		&j.NotBefore,
-		&j.ErrorCode,
-		&j.Retrieved,
+		&j.State.Status,
+		&j.State.NotBefore,
+		&j.State.ErrorCode,
 	)
 
 	return j, err

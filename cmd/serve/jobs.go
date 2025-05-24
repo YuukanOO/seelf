@@ -2,9 +2,7 @@ package serve
 
 import (
 	"github.com/YuukanOO/seelf/pkg/bus"
-	"github.com/YuukanOO/seelf/pkg/bus/embedded/dismiss_job"
 	"github.com/YuukanOO/seelf/pkg/bus/embedded/get_jobs"
-	"github.com/YuukanOO/seelf/pkg/bus/embedded/retry_job"
 	"github.com/YuukanOO/seelf/pkg/http"
 	"github.com/gin-gonic/gin"
 )
@@ -28,29 +26,5 @@ func (s *server) listJobsHandler() gin.HandlerFunc {
 		}
 
 		return http.Ok(ctx, jobs)
-	})
-}
-
-func (s *server) dismissJobHandler() gin.HandlerFunc {
-	return http.Send(s, func(ctx *gin.Context) error {
-		if _, err := bus.Send(s.bus, ctx.Request.Context(), dismiss_job.Command{
-			ID: ctx.Param("id"),
-		}); err != nil {
-			return err
-		}
-
-		return http.NoContent(ctx)
-	})
-}
-
-func (s *server) retryJobHandler() gin.HandlerFunc {
-	return http.Send(s, func(ctx *gin.Context) error {
-		if _, err := bus.Send(s.bus, ctx.Request.Context(), retry_job.Command{
-			ID: ctx.Param("id"),
-		}); err != nil {
-			return err
-		}
-
-		return http.NoContent(ctx)
 	})
 }

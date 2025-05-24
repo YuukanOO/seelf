@@ -69,9 +69,10 @@ type (
 	DeploymentStateChanged struct {
 		bus.Notification
 
-		ID     DeploymentID
-		Config ConfigSnapshot
-		State  DeploymentState
+		ID          DeploymentID
+		Environment EnvironmentName
+		Target      TargetID
+		State       DeploymentState
 	}
 )
 
@@ -132,7 +133,7 @@ func DeploymentFrom(scanner storage.Scanner) (d Deployment, err error) {
 		&d.config.target,
 		&d.config.vars,
 		&d.state.status,
-		&d.state.errcode,
+		&d.state.errCode,
 		&d.state.services,
 		&d.state.startedAt,
 		&d.state.finishedAt,
@@ -213,9 +214,10 @@ func (d *Deployment) HasEnded(services Services, deploymentErr error) error {
 
 func (d *Deployment) stateChanged() {
 	d.apply(DeploymentStateChanged{
-		ID:     d.id,
-		Config: d.config,
-		State:  d.state,
+		ID:          d.id,
+		Target:      d.config.target,
+		Environment: d.config.environment,
+		State:       d.state,
 	})
 }
 
@@ -254,7 +256,7 @@ type (
 	// The default value represents a pending state.
 	DeploymentState struct {
 		status     DeploymentStatus
-		errcode    monad.Maybe[string]
+		errCode    monad.Maybe[string]
 		services   monad.Maybe[Services]
 		startedAt  monad.Maybe[time.Time]
 		finishedAt monad.Maybe[time.Time]
@@ -281,7 +283,7 @@ func (s *DeploymentState) ended(services Services, err error) error {
 
 	if err != nil {
 		s.status = DeploymentStatusFailed
-		s.errcode.Set(err.Error())
+		s.errCode.Set(err.Error())
 		return nil
 	}
 
@@ -297,7 +299,7 @@ func (s *DeploymentState) ended(services Services, err error) error {
 }
 
 func (s DeploymentState) Status() DeploymentStatus           { return s.status }
-func (s DeploymentState) ErrCode() monad.Maybe[string]       { return s.errcode }
+func (s DeploymentState) ErrCode() monad.Maybe[string]       { return s.errCode }
 func (s DeploymentState) Services() monad.Maybe[Services]    { return s.services }
 func (s DeploymentState) StartedAt() monad.Maybe[time.Time]  { return s.startedAt }
 func (s DeploymentState) FinishedAt() monad.Maybe[time.Time] { return s.finishedAt }

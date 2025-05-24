@@ -10,14 +10,18 @@ import (
 
 type (
 	Job struct {
-		ID          string              `json:"id"`
-		Group       string              `json:"group"`
-		MessageName string              `json:"message_name"`
-		MessageData string              `json:"message_data"`
-		QueuedAt    time.Time           `json:"queued_at"`
-		NotBefore   time.Time           `json:"not_before"`
-		ErrorCode   monad.Maybe[string] `json:"error_code"`
-		Retrieved   bool                `json:"retrieved"`
+		Key         string    `json:"key"`
+		Topic       string    `json:"topic"`
+		MessageName string    `json:"message_name"`
+		MessageData string    `json:"message_data"`
+		QueuedAt    time.Time `json:"queued_at"`
+		State       State     `json:"state"`
+	}
+
+	State struct {
+		Status    uint8
+		NotBefore time.Time
+		ErrorCode monad.Maybe[string]
 	}
 
 	Query struct {
@@ -27,4 +31,4 @@ type (
 	}
 )
 
-func (q Query) Name_() string { return "bus.query.get_jobs" }
+func (q Query) Name_() string { return "embedded.query.get_jobs" }

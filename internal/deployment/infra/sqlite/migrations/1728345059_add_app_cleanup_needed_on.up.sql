@@ -10,7 +10,7 @@ BEGIN
         message_name = 'deployment.command.deploy'
         AND message_data ->> '$.app_id' = NEW.app_id
         AND message_data ->> '$.deployment_number' = NEW.deployment_number
-        AND retrieved = 0;
+        AND state_status = 0;
 END;
 
 -- Since deployment jobs group has changed, just mark all pending deployments as failed
@@ -37,13 +37,13 @@ UPDATE apps SET history = '{"production": ["' || production_target || '"], "stag
 -- Since the group has changed for configure and cleanup, just update those jobs.
 UPDATE [scheduler.scheduled_jobs]
 SET
-    [group] = (message_data ->> '$.id')
+    topic = (message_data ->> '$.id')
     ,message_data = '{"target_id": "' || (message_data ->> '$.id') || '"}'
 WHERE message_name = 'deployment.command.cleanup_target';
 
 UPDATE [scheduler.scheduled_jobs]
 SET
-    [group] = (message_data ->> '$.id')
+    topic = (message_data ->> '$.id')
     ,message_data = '{"target_id": "' || (message_data ->> '$.id') || '", "version": "' || (message_data ->> '$.version') || '"}'
 WHERE message_name = 'deployment.command.configure_target';
 
@@ -59,5 +59,5 @@ BEGIN
   WHERE
       message_name = 'deployment.command.configure_target'
       AND (message_data ->> '$.target_id') = (NEW.message_data ->> '$.target_id')
-      AND retrieved = 0;
+      AND state_status = 0;
 END;

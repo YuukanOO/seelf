@@ -6,6 +6,7 @@ import (
 
 	"github.com/YuukanOO/seelf/pkg/assert"
 	"github.com/YuukanOO/seelf/pkg/bus"
+	"github.com/YuukanOO/seelf/pkg/id"
 	"github.com/YuukanOO/seelf/pkg/storage"
 )
 
@@ -181,8 +182,9 @@ type asyncCommand struct {
 	SomeValue int
 }
 
-func (asyncCommand) Name_() string { return "AsyncCommand" }
-func (asyncCommand) Group() string { return "" }
+func (asyncCommand) Name_() string    { return "AsyncCommand" }
+func (asyncCommand) Key_() bus.JobKey { return id.New[bus.JobKey]() }
+func (asyncCommand) Topic_() string   { return "" }
 
 type getQuery struct {
 	bus.Query[int]

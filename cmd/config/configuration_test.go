@@ -211,7 +211,8 @@ type message struct {
 	name string
 }
 
-func (m message) Name_() string { return m.name }
-func (m message) Group() string { return "" }
+func (m message) Name_() string    { return m.name }
+func (m message) Topic_() string   { return "" }
+func (m message) Key_() bus.JobKey { return bus.JobKey(m.name) }
 
 func compareRequestFunc(a, b bus.AsyncRequest) int { return strings.Compare(a.Name_(), b.Name_()) }

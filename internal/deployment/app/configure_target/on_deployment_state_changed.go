@@ -16,13 +16,13 @@ func OnDeploymentStateChangedHandler(
 			return nil
 		}
 
-		target, err := reader.GetByID(ctx, evt.Config.Target())
+		target, err := reader.GetByID(ctx, evt.Target)
 
 		if err != nil {
 			return err
 		}
 
-		target.ExposeEntrypoints(evt.ID.AppID(), evt.Config.Environment(), evt.State.Services().Get(nil))
+		target.ExposeEntrypoints(evt.ID.AppID(), evt.Environment, evt.State.Services().Get(nil))
 
 		return writer.Write(ctx, &target)
 	}

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/YuukanOO/seelf/pkg/monad"
@@ -61,5 +62,35 @@ func Array[T any](prefix string, values []T) Statement {
 		}
 
 		builder.Apply(prefix+" ("+placeholders+")", args...)
+	}
+}
+
+// Add an ON CONFLICT clause to the builder which will update values on column conflict.
+// Column names in the ignore slice and the column itself will be ignored
+// from the DO UPDATE statement.
+func OnConflictDoUpdate(column string, values Values, ignore ...string) Statement {
+	return func(builder Builder) {
+		var (
+			b          strings.Builder
+			size                = len(values) - (len(ignore) + 1) // + 1 since the column itself will be ignored too
+			i                   = 0
+			statements []string = make([]string, size)
+			args       []any    = make([]any, size)
+		)
+
+		for field, value := range values {
+			if field == column || slices.Contains(ignore, field) {
+				continue
+			}
+
+			statements[i] = field + " = ?"
+			args[i] = value
+			i++
+		}
+
+		b.WriteString("ON CONFLICT (" + column + ") DO UPDATE SET ")
+		b.WriteString(strings.Join(statements, ","))
+
+		builder.Apply(b.String(), args...)
 	}
 }

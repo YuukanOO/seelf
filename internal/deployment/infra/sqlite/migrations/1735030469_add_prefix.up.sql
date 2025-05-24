@@ -289,7 +289,7 @@ BEGIN
         message_name = 'deployment.command.deploy'
         AND message_data ->> '$.app_id' = NEW.app_id
         AND message_data ->> '$.deployment_number' = NEW.deployment_number
-        AND retrieved = 0;
+        AND state_status = 0;
 END;
 
 -- When a target is configured, no need to keep old configure jobs since they are outdated.
@@ -301,7 +301,7 @@ BEGIN
   WHERE
       message_name = 'deployment.command.configure_target'
       AND (message_data ->> '$.target_id') = (NEW.message_data ->> '$.target_id')
-      AND retrieved = 0;
+      AND state_status = 0;
 END;
 
 -- CLEANUP OLD TABLES
